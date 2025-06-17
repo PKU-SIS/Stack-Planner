@@ -19,6 +19,7 @@ from src.tools import (
     get_web_search_tool,
     get_retriever_tool,
     python_repl_tool,
+    search_docs_tool
 )
 
 from src.config.agents import AGENT_LLM_MAP
@@ -51,6 +52,7 @@ def background_investigation_node(
     logger.info("background investigation node is running.")
     configurable = Configuration.from_runnable_config(config)
     query = state["messages"][-1].content
+
     if SELECTED_SEARCH_ENGINE == SearchEngine.TAVILY.value:
         searched_content = LoggedTavilySearch(
             max_results=configurable.max_search_results
@@ -69,6 +71,9 @@ def background_investigation_node(
         background_investigation_results = get_web_search_tool(
             configurable.max_search_results
         ).invoke(query)
+
+    # background_investigation_results = search_docs_tool.invoke(query)
+    # background_investigation_results = []
     return Command(
         update={
             "background_investigation_results": json.dumps(
@@ -483,11 +488,14 @@ async def researcher_node(
 ) -> Command[Literal["research_team"]]:
     """Researcher node that do research"""
     logger.info("Researcher node is researching.")
+
     configurable = Configuration.from_runnable_config(config)
     tools = [get_web_search_tool(configurable.max_search_results), crawl_tool]
     retriever_tool = get_retriever_tool(state.get("resources", []))
     if retriever_tool:
         tools.insert(0, retriever_tool)
+
+    # tools = [search_docs_tool]
     logger.info(f"Researcher tools: {tools}")
     return await _setup_and_execute_agent_step(
         state,
