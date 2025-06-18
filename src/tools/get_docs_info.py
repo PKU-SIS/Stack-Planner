@@ -1,5 +1,6 @@
 import requests
 from langchain_core.tools import tool
+from typing import Annotated
 
 def search_docs(question, top_k = 5):
     docs = []
@@ -38,11 +39,13 @@ def search_docs(question, top_k = 5):
 
 @tool
 def search_docs_tool(
-    question: str,
+    question: Annotated[str, "检索的问题，使用语义相似度匹配"],
 ) -> dict:
     """
-    查询知识库，返回相关文档内容。
+    查询本地存储的领域知识库，检索方式为语义相似度匹配，返回与question相关的文档内容。
     """
     docs = search_docs(question, 10)
     print(docs)
     return {"query": question, "docs": docs}
+
+#todo 知识库的领域分类如何注册到工具调用中？如何根据问题+领域分类，自适应的选择知识库去检索
