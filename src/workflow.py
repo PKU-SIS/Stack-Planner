@@ -3,7 +3,7 @@
 
 import asyncio
 import logging
-from src.graph import build_graph
+from src.graph import build_graph_sp
 
 # Configure logging
 logging.basicConfig(
@@ -20,7 +20,7 @@ def enable_debug_logging():
 logger = logging.getLogger(__name__)
 
 # Create the graph
-graph = build_graph()
+graph = build_graph_sp()
 
 
 async def run_agent_workflow_async(
