@@ -52,3 +52,11 @@ pydantic==2.9.2
 pydantic-settings
 httpx-sse
 watchfiles==1.0.5
+InquirerPy
+langgraph
+langchain_mcp_adapters
+langchain_openai
+markdownify
+readabilipy
+langchain_experimental
+json_repair
