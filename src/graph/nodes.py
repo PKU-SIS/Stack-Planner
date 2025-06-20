@@ -19,7 +19,7 @@ from src.tools import (
     get_web_search_tool,
     get_retriever_tool,
     python_repl_tool,
-    search_docs_tool
+    search_docs_tool,
 )
 
 from src.config.agents import AGENT_LLM_MAP
@@ -158,6 +158,7 @@ def planner_node(
         goto="human_feedback",
     )
 
+
 def sp_planner_node(
     state: State, config: RunnableConfig
 ) -> Command[Literal["reporter"]]:
@@ -232,6 +233,7 @@ def sp_planner_node(
         },
         goto="research_team",
     )
+
 
 def human_feedback_node(
     state,

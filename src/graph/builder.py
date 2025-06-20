@@ -51,6 +51,7 @@ def build_graph():
     builder = _build_base_graph()
     return builder.compile()
 
+
 def build_graph_sp():
     """Build and return the agent workflow graph without memory."""
     # build state graph
