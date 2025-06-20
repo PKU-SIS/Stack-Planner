@@ -5,10 +5,10 @@ from typing import Annotated
 
 def search_docs(question, top_k=5):
     docs = []
-    api_url = "http://60.28.106.46:8551/knowledge_base/search_docs"
+    api_url = "http://localhost:8401/knowledge_base/search_docs"
     query = {
         "query": question,
-        "knowledge_base_name": "协和知识库",
+        "knowledge_base_name": "国家安全部知识库",
         "score_threshold": 1,
         "file_name": "",
         "metadata": {},

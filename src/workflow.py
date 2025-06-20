@@ -3,13 +3,35 @@
 
 import asyncio
 import logging
-from src.graph import build_graph_sp
+from src.graph import graph
+import os
+from datetime import datetime
+
+# Ensure the logs directory exists
+os.makedirs("logs", exist_ok=True)
+
+# Generate the time log file name based on the current datetime
+time_log_file = f"logs/{datetime.now().strftime('%Y%m%d%H%M%S')}.log"
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,  # Default level is INFO
+    level=logging.DEBUG,  # Set the base level to DEBUG
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
+
+# Create a file handler that logs DEBUG and higher level messages
+file_handler = logging.FileHandler(time_log_file)
+file_handler.setLevel(logging.DEBUG)  # Set the level to DEBUG
+
+# Define a formatter with custom time format
+file_formatter = logging.Formatter(
+    "%(asctime)s - %(name)s - %(levelname)s - %(message)s", datefmt="%Y%m%d%H%M%S"
+)
+file_handler.setFormatter(file_formatter)
+
+# Add the file handler to the logger
+logger = logging.getLogger(__name__)
+logger.addHandler(file_handler)
 
 
 def enable_debug_logging():
@@ -17,10 +39,13 @@ def enable_debug_logging():
     logging.getLogger("src").setLevel(logging.DEBUG)
 
 
-logger = logging.getLogger(__name__)
+# Example usage
+logger.info("This is an info message that will appear in the console and the log file.")
+logger.debug("This is a debug message that will appear in the log file.")
+
 
 # Create the graph
-graph = build_graph_sp()
+# graph = build_graph_sp()
 
 
 async def run_agent_workflow_async(
@@ -54,6 +79,7 @@ async def run_agent_workflow_async(
         "messages": [{"role": "user", "content": user_input}],
         "auto_accepted_plan": True,
         "enable_background_investigation": enable_background_investigation,
+        "user_query": user_input,
     }
     config = {
         "configurable": {

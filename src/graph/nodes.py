@@ -53,27 +53,27 @@ def background_investigation_node(
     configurable = Configuration.from_runnable_config(config)
     query = state["messages"][-1].content
 
-    if SELECTED_SEARCH_ENGINE == SearchEngine.TAVILY.value:
-        searched_content = LoggedTavilySearch(
-            max_results=configurable.max_search_results
-        ).invoke(query)
-        background_investigation_results = None
-        if isinstance(searched_content, list):
-            background_investigation_results = [
-                {"title": elem["title"], "content": elem["content"]}
-                for elem in searched_content
-            ]
-        else:
-            logger.error(
-                f"Tavily search returned malformed response: {searched_content}"
-            )
-    else:
-        background_investigation_results = get_web_search_tool(
-            configurable.max_search_results
-        ).invoke(query)
+    # if SELECTED_SEARCH_ENGINE == SearchEngine.TAVILY.value:
+    #     searched_content = LoggedTavilySearch(
+    #         max_results=configurable.max_search_results
+    #     ).invoke(query)
+    #     background_investigation_results = None
+    #     if isinstance(searched_content, list):
+    #         background_investigation_results = [
+    #             {"title": elem["title"], "content": elem["content"]}
+    #             for elem in searched_content
+    #         ]
+    #     else:
+    #         logger.error(
+    #             f"Tavily search returned malformed response: {searched_content}"
+    #         )
+    # else:
+    #     background_investigation_results = get_web_search_tool(
+    #         configurable.max_search_results
+    #     ).invoke(query)
 
-    # background_investigation_results = search_docs_tool.invoke(query)
-    # background_investigation_results = []
+    background_investigation_results = search_docs_tool.invoke(query)
+    background_investigation_results = []
     return Command(
         update={
             "background_investigation_results": json.dumps(
@@ -571,7 +571,7 @@ async def researcher_node(
     if retriever_tool:
         tools.insert(0, retriever_tool)
 
-    # tools = [search_docs_tool]
+    tools = [search_docs_tool]
     logger.info(f"Researcher tools: {tools}")
     return await _setup_and_execute_agent_step(
         state,
@@ -592,3 +592,42 @@ async def coder_node(
         "coder",
         [python_repl_tool],
     )
+
+
+def speech_node(state: State):
+    """Speech node that write a governor speech."""
+    logger.info("Speech write a speech")
+    current_plan = state.get("current_plan")
+    user_query = state.get("user_query")
+    input_ = {
+        "messages": [
+            HumanMessage(
+                f"# 讲话稿生成要求\n\n##用户完整需求\n\n{user_query}\n\n## Task\n\n{current_plan.title}\n\n## Description\n\n{current_plan.thought}"
+            )
+        ],
+        "locale": state.get("locale", "en-US"),
+    }
+    invoke_messages = apply_prompt_template("speech_zh", input_)
+    observations = state.get("observations", [])
+
+    # Add a reminder about the new report format, citation style, and table usage
+    invoke_messages.append(
+        HumanMessage(
+            content="注意: 根据prompt中的约束生成讲话稿",
+            name="system",
+        )
+    )
+
+    for observation in observations:
+        invoke_messages.append(
+            HumanMessage(
+                content=f"以下是之前的检索信息和分析后的结果:\n\n{observation}",
+                name="observation",
+            )
+        )
+    logger.debug(f"Current invoke messages: {invoke_messages}")
+    response = get_llm_by_type(AGENT_LLM_MAP["reporter"]).invoke(invoke_messages)
+    response_content = response.content
+    logger.info(f"reporter response: {response_content}")
+
+    return {"final_report": response_content}
