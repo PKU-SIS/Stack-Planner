@@ -12,7 +12,7 @@ from langchain_core.tools import tool
 from langgraph.types import Command, interrupt
 from langchain_mcp_adapters.client import MultiServerMCPClient
 
-from src.agents import create_agent
+from src.agents.CommonReactAgent import CommonReactAgent
 from src.tools.search import LoggedTavilySearch
 from src.tools import (
     crawl_tool,
@@ -549,11 +549,11 @@ async def _setup_and_execute_agent_step(
                         f"Powered by '{enabled_tools[tool.name]}'.\n{tool.description}"
                     )
                     loaded_tools.append(tool)
-            agent = create_agent(agent_type, agent_type, loaded_tools, agent_type)
+            agent = CommonReactAgent(agent_name=agent_type, tools=loaded_tools, system_prompt = agent_type)
             return await _execute_agent_step(state, agent, agent_type)
     else:
         # Use default tools if no MCP servers are configured
-        agent = create_agent(agent_type, agent_type, default_tools, agent_type)
+        agent = CommonReactAgent(agent_name=agent_type, tools=default_tools, system_prompt = agent_type)
         return await _execute_agent_step(state, agent, agent_type)
 
 
