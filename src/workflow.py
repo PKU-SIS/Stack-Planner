@@ -3,8 +3,8 @@
 
 import asyncio
 import logging
-from src.graph import build_graph_sp
-
+#from src.graph import build_graph_sp
+from src.graph import graph
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,  # Default level is INFO
@@ -20,7 +20,7 @@ def enable_debug_logging():
 logger = logging.getLogger(__name__)
 
 # Create the graph
-graph = build_graph_sp()
+#graph = build_graph_sp()
 
 
 async def run_agent_workflow_async(
@@ -54,6 +54,7 @@ async def run_agent_workflow_async(
         "messages": [{"role": "user", "content": user_input}],
         "auto_accepted_plan": True,
         "enable_background_investigation": enable_background_investigation,
+        "user_query":user_input
     }
     config = {
         "configurable": {

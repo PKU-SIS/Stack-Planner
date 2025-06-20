@@ -15,7 +15,11 @@ from .nodes import (
     human_feedback_node,
     background_investigation_node,
     sp_planner_node,
+    speech_node,
 )
+
+
+
 
 
 def _build_base_graph():
@@ -66,5 +70,20 @@ def build_graph_sp():
     builder.add_edge("reporter", END)
     return builder.compile()
 
+def build_graph_xxqg():
+    """Build and return the agent workflow graph without memory."""
+    # build state graph
+    builder = StateGraph(State)
+    builder.add_edge(START, "coordinator")
+    builder.add_node("coordinator", coordinator_node)
+    builder.add_node("background_investigator", background_investigation_node)
+    builder.add_node("planner", sp_planner_node)
+    builder.add_node("reporter", speech_node)
+    builder.add_node("research_team", research_team_node)
+    builder.add_node("researcher", researcher_node)
+    builder.add_node("coder", coder_node)
+    builder.add_edge("reporter", END)
+    return builder.compile()
 
-graph = build_graph()
+
+graph = build_graph_xxqg()
