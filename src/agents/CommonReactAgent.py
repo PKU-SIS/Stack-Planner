@@ -6,6 +6,7 @@ import asyncio
 from pydantic import BaseModel,Field, model_validator
 from langchain_core.messages import AnyMessage
 from langchain.tools import BaseTool
+from langgraph.types import Command
 from abc import ABCMeta, abstractmethod
 from langgraph.prebuilt import create_react_agent
 
@@ -36,14 +37,20 @@ class CommonReactAgent(BaseModel, metaclass=ABCMeta):
     current_step: int = Field(default=0, description="Current step in execution")
 
 
-    def __post_init__(self):
+    def model_post_init(self, __context) -> None:
         self._agent = create_react_agent(
-        name=self.agent_name,
-        model=get_llm_by_type(AGENT_LLM_MAP[self.agent_name]),
-        tools=self.tools,
-        prompt=lambda state: apply_prompt_template(self.system_prompt, state),
-    )
-        
-    def __getattr__(self, name):
-        # 将未找到的属性/方法代理到内部_agent
-        return getattr(self._agent, name)
+            name=self.agent_name,
+            model=get_llm_by_type(AGENT_LLM_MAP[self.agent_name]),
+            tools=self.tools,
+            prompt=lambda state: apply_prompt_template(self.system_prompt, state),
+        )
+    
+    async def ainvoke(self, *args, **kwargs):
+        return await self._agent.ainvoke(*args, **kwargs)
+
+    @abstractmethod
+    def execute_agent_step(self, state) -> Command:
+        """
+        Execute a single step of the agent's logic.
+        This method should be implemented by subclasses to define the agent's behavior.
+        """

@@ -1,11 +1,11 @@
 # Copyright (c) 2025 Bytedance Ltd. and/or its affiliates
 # SPDX-License-Identifier: MIT
 
-import logging
+from src.utils.logger import logger
 import json
 import json_repair
 
-logger = logging.getLogger(__name__)
+
 
 
 def repair_json_output(content: str) -> str:

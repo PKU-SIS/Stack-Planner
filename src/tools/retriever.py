@@ -1,7 +1,7 @@
 # Copyright (c) 2025 Bytedance Ltd. and/or its affiliates
 # SPDX-License-Identifier: MIT
 
-import logging
+from src.utils.logger import logger
 from typing import List, Optional, Type
 from langchain_core.tools import BaseTool
 from langchain_core.callbacks import (
@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 from src.config.tools import SELECTED_RAG_PROVIDER
 from src.rag import Document, Retriever, Resource, build_retriever
 
-logger = logging.getLogger(__name__)
+
 
 
 class RetrieverInput(BaseModel):

@@ -1,7 +1,7 @@
 # Copyright (c) 2025 Bytedance Ltd. and/or its affiliates
 # SPDX-License-Identifier: MIT
 
-import logging
+from src.utils.logger import logger
 
 from langchain.schema import HumanMessage, SystemMessage
 
@@ -12,7 +12,7 @@ from src.prompts.template import get_prompt_template
 from ..types import Script
 from .state import PodcastState
 
-logger = logging.getLogger(__name__)
+
 
 
 def script_writer_node(state: PodcastState):

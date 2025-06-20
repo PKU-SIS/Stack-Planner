@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 import asyncio
-import logging
+from src.utils.logger import logger
 from langgraph.graph import END, START, StateGraph
 
 from src.prose.graph.prose_continue_node import prose_continue_node
@@ -63,5 +63,4 @@ if __name__ == "__main__":
     from dotenv import load_dotenv
 
     load_dotenv()
-    logging.basicConfig(level=logging.INFO)
     asyncio.run(_test_workflow())

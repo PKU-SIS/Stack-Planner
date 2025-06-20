@@ -3,7 +3,7 @@
 
 import base64
 import json
-import logging
+from src.utils.logger import logger
 import os
 from typing import Annotated, List, cast
 from uuid import uuid4
@@ -38,7 +38,7 @@ from src.server.rag_request import (
 )
 from src.tools import VolcengineTTS
 
-logger = logging.getLogger(__name__)
+
 
 app = FastAPI(
     title="DeerFlow API",

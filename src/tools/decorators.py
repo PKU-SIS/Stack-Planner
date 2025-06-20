@@ -1,11 +1,11 @@
 # Copyright (c) 2025 Bytedance Ltd. and/or its affiliates
 # SPDX-License-Identifier: MIT
 
-import logging
+from src.utils.logger import logger
 import functools
 from typing import Any, Callable, Type, TypeVar
 
-logger = logging.getLogger(__name__)
+
 
 T = TypeVar("T")
 

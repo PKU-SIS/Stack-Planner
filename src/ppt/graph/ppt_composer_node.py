@@ -1,7 +1,7 @@
 # Copyright (c) 2025 Bytedance Ltd. and/or its affiliates
 # SPDX-License-Identifier: MIT
 
-import logging
+from src.utils.logger import logger
 import os
 import uuid
 
@@ -13,7 +13,7 @@ from src.prompts.template import get_prompt_template
 
 from .state import PPTState
 
-logger = logging.getLogger(__name__)
+
 
 
 def ppt_composer_node(state: PPTState):
