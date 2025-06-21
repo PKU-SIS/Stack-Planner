@@ -60,3 +60,4 @@ markdownify
 readabilipy
 langchain_experimental
 json_repair
+loguru
