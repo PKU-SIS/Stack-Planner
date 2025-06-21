@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 import json
-import logging
+from src.utils.logger import logger
 import os
 from typing import Annotated, Literal
 
@@ -12,7 +12,9 @@ from langchain_core.tools import tool
 from langgraph.types import Command, interrupt
 from langchain_mcp_adapters.client import MultiServerMCPClient
 
-from src.agents import create_agent
+from src.agents.CommonReactAgent import CommonReactAgent
+from src.agents.CoderAgent import CoderAgent
+from src.agents.ResearcherAgent import ResearcherAgent
 from src.tools.search import LoggedTavilySearch
 from src.tools import (
     crawl_tool,
@@ -31,8 +33,6 @@ from src.utils.json_utils import repair_json_output
 
 from .types import State
 from ..config import SELECTED_SEARCH_ENGINE, SearchEngine
-
-logger = logging.getLogger(__name__)
 
 
 @tool
@@ -551,11 +551,15 @@ async def _setup_and_execute_agent_step(
                         f"Powered by '{enabled_tools[tool.name]}'.\n{tool.description}"
                     )
                     loaded_tools.append(tool)
-            agent = create_agent(agent_type, agent_type, loaded_tools, agent_type)
+            agent = CommonReactAgent(
+                agent_name=agent_type, tools=loaded_tools, system_prompt=agent_type
+            )
             return await _execute_agent_step(state, agent, agent_type)
     else:
         # Use default tools if no MCP servers are configured
-        agent = create_agent(agent_type, agent_type, default_tools, agent_type)
+        agent = CommonReactAgent(
+            agent_name=agent_type, tools=default_tools, system_prompt=agent_type
+        )
         return await _execute_agent_step(state, agent, agent_type)
 
 
@@ -573,12 +577,10 @@ async def researcher_node(
 
     tools = [search_docs_tool]
     logger.info(f"Researcher tools: {tools}")
-    return await _setup_and_execute_agent_step(
-        state,
-        config,
-        "researcher",
-        tools,
+    research_agent = ResearcherAgent(
+        config=config, agent_type="researcher", default_tools=tools
     )
+    return await research_agent.execute_agent_step(state)
 
 
 async def coder_node(
@@ -586,12 +588,10 @@ async def coder_node(
 ) -> Command[Literal["research_team"]]:
     """Coder node that do code analysis."""
     logger.info("Coder node is coding.")
-    return await _setup_and_execute_agent_step(
-        state,
-        config,
-        "coder",
-        [python_repl_tool],
+    code_agent = CoderAgent(
+        config=config, agent_type="coder", default_tools=[python_repl_tool]
     )
+    return await code_agent.execute_agent_step(state)
 
 
 def speech_node(state: State):

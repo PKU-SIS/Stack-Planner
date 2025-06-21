@@ -1,7 +1,7 @@
 # Copyright (c) 2025 Bytedance Ltd. and/or its affiliates
 # SPDX-License-Identifier: MIT
 
-import logging
+from src.utils.logger import logger
 
 from langchain.schema import HumanMessage, SystemMessage
 
@@ -9,8 +9,6 @@ from src.config.agents import AGENT_LLM_MAP
 from src.llms.llm import get_llm_by_type
 from src.prompts.template import get_prompt_template
 from src.prose.graph.state import ProseState
-
-logger = logging.getLogger(__name__)
 
 
 def prose_zap_node(state: ProseState):

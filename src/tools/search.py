@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 import json
-import logging
+from src.utils.logger import logger
 import os
 
 from langchain_community.tools import BraveSearch, DuckDuckGoSearchResults
@@ -16,7 +16,6 @@ from src.tools.tavily_search.tavily_search_results_with_images import (
 
 from src.tools.decorators import create_logged_tool
 
-logger = logging.getLogger(__name__)
 
 # Create logged versions of the search tools
 LoggedTavilySearch = create_logged_tool(TavilySearchResultsWithImages)

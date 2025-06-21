@@ -7,11 +7,9 @@ Text-to-Speech module using volcengine TTS API.
 
 import json
 import uuid
-import logging
+from src.utils.logger import logger
 import requests
 from typing import Optional, Dict, Any
-
-logger = logging.getLogger(__name__)
 
 
 class VolcengineTTS:

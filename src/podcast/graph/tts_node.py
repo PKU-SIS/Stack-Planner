@@ -2,13 +2,11 @@
 # SPDX-License-Identifier: MIT
 
 import base64
-import logging
+from src.utils.logger import logger
 import os
 
 from src.podcast.graph.state import PodcastState
 from src.tools.tts import VolcengineTTS
-
-logger = logging.getLogger(__name__)
 
 
 def tts_node(state: PodcastState):
