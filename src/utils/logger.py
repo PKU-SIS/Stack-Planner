@@ -38,7 +38,7 @@ class Logger:
         frame = inspect.currentframe().f_back.f_back.f_back
         filename = frame.f_code.co_filename
         lineno = frame.f_lineno
-        content = content.replace('\n', '2f2f2f')
+        #content = content.replace('\n', '2f2f2f')
         formatted_content = f"{filename}:{lineno}|{content}"
         getattr(self.logger, level)(formatted_content)
     
