@@ -73,7 +73,7 @@ def background_investigation_node(
     #     ).invoke(query)
 
     background_investigation_results = search_docs_tool.invoke(query)
-    background_investigation_results = []
+    # background_investigation_results = []
     return Command(
         update={
             "background_investigation_results": json.dumps(
@@ -303,7 +303,7 @@ def coordinator_node(
 
     goto = "__end__"
     locale = state.get("locale", "en-US")  # Default locale if not specified
-
+    logger.debug(f"Coordinator response: {response}")
     if len(response.tool_calls) > 0:
         goto = "planner"
         if state.get("enable_background_investigation"):

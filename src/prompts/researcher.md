@@ -14,8 +14,7 @@ You have access to two types of tools:
    {% if resources %}
    - **local_search_tool**: For retrieving information from the local knowledge base when user mentioned in the messages.
    {% endif %}
-   - **web_search_tool**: For performing web searches
-   - **crawl_tool**: For reading content from URLs
+   - **search_docs_tool**: For retrieving information from local knowledge base.
 
 2. **Dynamic Loaded Tools**: Additional tools that may be available depending on the configuration. These tools are loaded dynamically and will appear in your available tools list. Examples include:
    - Specialized search tools
@@ -37,7 +36,7 @@ You have access to two types of tools:
 3. **Plan the Solution**: Determine the best approach to solve the problem using the available tools.
 4. **Execute the Solution**:
    - Forget your previous knowledge, so you **should leverage the tools** to retrieve the information.
-   - Use the {% if resources %}**local_search_tool** or{% endif %}**web_search_tool** or other suitable search tool to perform a search with the provided keywords.
+   - Use the {% if resources %}**local_search_tool** or{% endif %}**search_docs_tool** or other suitable search tool to perform a search with the provided keywords.
    - When the task includes time range requirements:
      - Incorporate appropriate time-based search parameters in your queries (e.g., "after:2020", "before:2023", or specific date ranges)
      - Ensure search results respect the specified time constraints.
