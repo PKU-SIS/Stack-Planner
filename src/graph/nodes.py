@@ -210,6 +210,7 @@ def sp_planner_node(
 
     try:
         curr_plan = json.loads(repair_json_output(full_response))
+        plan_iterations += 1
     except json.JSONDecodeError:
         logger.warning("Planner response is not a valid JSON")
         if plan_iterations > 0:
