@@ -62,6 +62,7 @@ class ResearcherAgent(CommonReactAgent):
         """Helper function to execute a step using the specified agent."""
         current_plan = state.get("current_plan")
         observations = state.get("observations", [])
+        data_collections = state.get("data_collections", [])
 
         # Find the first unexecuted step
         current_step = None
@@ -161,6 +162,7 @@ class ResearcherAgent(CommonReactAgent):
                     )
                 ],
                 "observations": observations + [response_content],
+                "data_collections":data_collections + self.tool_results
             },
             goto="research_team",
         )

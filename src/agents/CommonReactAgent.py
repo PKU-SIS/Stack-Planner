@@ -13,6 +13,7 @@ from langgraph.prebuilt import create_react_agent
 from src.prompts import apply_prompt_template
 from src.llms.llm import get_llm_by_type
 from src.config.agents import AGENT_LLM_MAP
+from src.agents.ReActHandler import ReactAgentCallbackHandler,ToolResultCallbackHandler
 
 from typing import (
     Optional,
@@ -31,6 +32,7 @@ class CommonReactAgent(BaseModel, metaclass=ABCMeta):
     tools: List[BaseTool] = Field(default=[])
 
     tool_names: List[str] = Field(default=[])
+    tool_results:List[str] = Field(default=[])
 
     # Execution control
     max_steps: int = Field(default=10, description="Maximum steps before termination")
@@ -44,8 +46,24 @@ class CommonReactAgent(BaseModel, metaclass=ABCMeta):
             tools=self.tools,
             prompt=lambda state: apply_prompt_template(self.system_prompt, state),
         )
+        self._handler = ToolResultCallbackHandler(self)
     
     async def ainvoke(self, *args, **kwargs):
+        from copy import deepcopy
+
+        # 获取已有的 config 或创建一个新的 dict
+        config = deepcopy(kwargs.get("config", {}))
+
+        # 合并 callbacks
+        if "callbacks" in config:
+            config["callbacks"] = config["callbacks"] + [self._handler]
+        else:
+            config["callbacks"] = [self._handler]
+
+        # 替换 kwargs 中的 config
+        kwargs["config"] = config
+
+        # 再调用 ainvoke
         return await self._agent.ainvoke(*args, **kwargs)
 
     @abstractmethod

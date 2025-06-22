@@ -13,6 +13,7 @@ static/browser_history/*.gif
 .venv
 venv/
 logs/
+reports/
 
 # Environment variables
 .env
