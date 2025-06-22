@@ -16,6 +16,7 @@ from .nodes import (
     background_investigation_node,
     sp_planner_node,
     speech_node,
+    zip_data,
 )
 
 
@@ -81,7 +82,9 @@ def build_graph_xxqg():
     builder.add_node("research_team", research_team_node)
     builder.add_node("researcher", researcher_node)
     builder.add_node("coder", coder_node)
-    builder.add_edge("reporter", END)
+    builder.add_node("zip_data", zip_data)
+    builder.add_edge("reporter", "zip_data")
+    builder.add_edge("zip_data", END)
     return builder.compile()
 
 

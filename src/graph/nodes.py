@@ -33,6 +33,7 @@ from src.utils.json_utils import repair_json_output
 
 from .types import State
 from ..config import SELECTED_SEARCH_ENGINE, SearchEngine
+import datetime
 
 
 @tool
@@ -209,6 +210,7 @@ def sp_planner_node(
 
     try:
         curr_plan = json.loads(repair_json_output(full_response))
+        plan_iterations += 1
     except json.JSONDecodeError:
         logger.warning("Planner response is not a valid JSON")
         if plan_iterations > 0:
@@ -631,3 +633,26 @@ def speech_node(state: State):
     logger.info(f"reporter response: {response_content}")
 
     return {"final_report": response_content}
+
+
+def zip_data(state: State):
+    final_report = state.get("final_report")
+    user_query = state.get("user_query")
+    plan = state.get("current_plan")
+    # Ensure the reports directory exists
+    os.makedirs("./reports", exist_ok=True)
+
+    # Prepare data to save
+    data = {
+        "user_query": user_query,
+        "plan": plan.model_dump() if hasattr(plan, "model_dump") else str(plan),
+        "final_report": final_report,
+    }
+
+    # Generate filename with current timestamp
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"./reports/report_{timestamp}.json"
+
+    # Save data as JSON
+    with open(filename, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=4)

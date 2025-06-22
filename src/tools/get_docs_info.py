@@ -47,7 +47,7 @@ def search_docs_tool(
     查询本地存储的领域知识库，检索方式为语义相似度匹配，返回与question相关的文档内容。
     """
     docs = search_docs(question, 10)
-    print(docs)
+    # print(docs)
     return {"query": question, "docs": docs}
 
 
