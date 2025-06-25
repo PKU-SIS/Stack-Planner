@@ -362,6 +362,14 @@ def reporter_node(state: State):
                 name="observation",
             )
         )
+    data_collections = state.get("data_collections", [])
+    for data_collection in data_collections:
+        invoke_messages.append(
+            HumanMessage(
+                content=f"Below are data collected in previous tasks:\n\n{data_collection}",
+                name="observation",
+            )
+        )
     logger.debug(f"Current invoke messages: {invoke_messages}")
     response = get_llm_by_type(AGENT_LLM_MAP["reporter"]).invoke(invoke_messages)
     response_content = response.content
@@ -616,6 +624,14 @@ def speech_node(state: State):
         invoke_messages.append(
             HumanMessage(
                 content=f"以下是之前的检索信息和分析后的结果:\n\n{observation}",
+                name="observation",
+            )
+        )
+    data_collections = state.get("data_collections", [])
+    for data_collection in data_collections:
+        invoke_messages.append(
+            HumanMessage(
+                content=f"以下是之前的完整检索信息:\n\n{data_collection}",
                 name="observation",
             )
         )
