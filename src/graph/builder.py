@@ -5,19 +5,35 @@ from langgraph.graph import StateGraph, START, END
 from langgraph.checkpoint.memory import MemorySaver
 
 from .types import State
-from .nodes import (
-    coordinator_node,
-    planner_node,
-    reporter_node,
-    research_team_node,
-    researcher_node,
-    coder_node,
-    human_feedback_node,
-    background_investigation_node,
-    sp_planner_node,
-    speech_node,
-    zip_data,
-)
+
+# from .nodes import (
+#     coordinator_node,
+#     planner_node,
+#     reporter_node,
+#     research_team_node,
+#     researcher_node,
+#     coder_node,
+#     human_feedback_node,
+#     background_investigation_node,
+#     sp_planner_node,
+#     speech_node,
+#     zip_data,
+#     sp_center_agent_node,
+# )
+
+from .sp_nodes import *
+
+# 定义可用的子Agent名称
+NODE_NAMES = [
+    "planner",
+    "researcher",
+    "coder",
+    "reporter",
+    "background_investigator",
+    "coordinator",
+    "research_team",
+    "zip_data",
+]
 
 
 def _build_base_graph():
@@ -88,4 +104,25 @@ def build_graph_xxqg():
     return builder.compile()
 
 
-graph = build_graph_xxqg()
+# 简化的状态图构建函数
+def build_graph_central_agent():
+    """构建以中枢Agent为核心的动态编排状态图"""
+
+    builder = StateGraph(State)
+    builder.add_edge(START, "sp_center_agent")  # 起始节点指向中枢Agent
+
+    # 添加中枢Agent节点
+    builder.add_node("sp_center_agent", sp_center_agent_node)
+
+    # 中枢Agent可以跳转到所有子节点
+    for agent_name in [agent.value for agent in SubAgentType]:
+        builder.add_edge("sp_center_agent", agent_name)
+        builder.add_edge(agent_name, "sp_center_agent")  # 子节点执行后返回中枢
+
+    # 完成节点指向结束
+    builder.add_edge("sp_center_agent", END)
+
+    return builder.compile()
+
+
+# graph = build_graph_xxqg()

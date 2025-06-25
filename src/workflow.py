@@ -2,7 +2,9 @@
 # SPDX-License-Identifier: MIT
 
 import asyncio
-from src.graph import graph
+from src.graph import (
+    graph,
+)  # 在builder中创建graph，这一块的代码就是不断异步执行，所以可以不用管
 import os
 from datetime import datetime
 from src.utils.logger import logger
@@ -17,6 +19,7 @@ def enable_debug_logging():
 # graph = build_graph_sp()
 
 
+# NOTE JXK main code直接进入到这里
 async def run_agent_workflow_async(
     user_input: str,
     debug: bool = False,
