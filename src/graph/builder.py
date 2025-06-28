@@ -126,3 +126,44 @@ def build_graph_central_agent():
 
 
 # graph = build_graph_xxqg()
+
+
+# -------------------------
+# 状态图构建
+# -------------------------
+def build_multi_agent_graph():
+    """
+    构建多Agent系统状态图，定义系统状态转移逻辑
+
+    Returns:
+        编译后的状态图对象
+    """
+    from langgraph.graph import StateGraph, START, END
+
+    builder = StateGraph(State)
+
+    # 添加center planner agent
+    builder.add_node("central_agent", central_agent_node)
+
+    # 添加sub agent
+    builder.add_node("researcher", researcher_node)
+    builder.add_node("coder", coder_node)
+    builder.add_node("reporter", reporter_node)
+
+    # 定义状态转移
+    builder.add_edge(START, "central_agent")
+    # builder.add_edge("central_agent", "researcher")
+    # builder.add_edge("central_agent", "coder")
+    # builder.add_edge("central_agent", "reporter")
+
+    # builder.add_edge("researcher", "central_agent")
+    # builder.add_edge("coder", "central_agent")
+    # builder.add_edge("reporter", "central_agent")
+
+    builder.add_edge("central_agent", END)
+
+    return builder.compile()
+
+
+# 生成最终的多Agent系统图
+graph = build_multi_agent_graph()

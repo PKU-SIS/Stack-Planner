@@ -35,7 +35,10 @@ def get_prompt_template(prompt_name: str) -> str:
 
 
 def apply_prompt_template(
-    prompt_name: str, state: AgentState, configurable: Configuration = None
+    prompt_name: str,
+    state: AgentState,
+    configurable: Configuration = None,
+    extra_context: dict = None,
 ) -> list:
     """
     Apply template variables to a prompt template and return formatted messages.
@@ -56,6 +59,9 @@ def apply_prompt_template(
     # Add configurable variables
     if configurable:
         state_vars.update(dataclasses.asdict(configurable))
+
+    if extra_context:
+        state_vars.update(extra_context)
 
     try:
         template = env.get_template(f"{prompt_name}.md")

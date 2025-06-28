@@ -21,7 +21,7 @@ class CommonReactAgent(BaseModel, metaclass=ABCMeta):
     agent_name: str = Field(..., description="Unique name of the agent")
     description: Optional[str] = Field(None, description="Optional agent description")
     system_prompt: Optional[str] = Field(None, description="System instruction prompt")
-    model_config_name: str = Field(
+    llm_config_name: str = Field(
         default="gpt-4o-mini", description="model wrapper name"
     )
     tools: List[BaseTool] = Field(default=[])

@@ -60,41 +60,35 @@ class ResearcherAgent(CommonReactAgent):
 
     async def execute_agent_step(self, state) -> Command:
         """Helper function to execute a step using the specified agent."""
-        current_plan = state.get("current_plan")
         observations = state.get("observations", [])
         data_collections = state.get("data_collections", [])
 
-        # Find the first unexecuted step
-        current_step = None
-        completed_steps = []
-        for step in current_plan.steps:
-            if not step.execution_res:
-                current_step = step
-                break
-            else:
-                completed_steps.append(step)
+        # 从 params 中获取任务描述
+        params = state.get("params", {})
+        task_description = params.get("task_description", "")
 
-        if not current_step:
-            logger.warning("No unexecuted step found")
-            return Command(goto="research_team")
+        if not task_description:
+            logger.warning("No task description found in params")
+            return Command(
+                update={
+                    "messages": [
+                        HumanMessage(
+                            content="错误: 未找到任务描述",
+                            name=self.agent_name,
+                        )
+                    ],
+                    "observations": observations + ["任务描述缺失"],
+                },
+                goto="research_team",
+            )
 
-        logger.info(f"Executing step: {current_step.title}, agent: {self.agent_name}")
+        logger.info(f"Executing task: {task_description}, agent: {self.agent_name}")
 
-        # Format completed steps information
-        completed_steps_info = ""
-        if completed_steps:
-            completed_steps_info = "# Existing Research Findings\n\n"
-            for i, step in enumerate(completed_steps):
-                completed_steps_info += f"## Existing Finding {i + 1}: {step.title}\n\n"
-                completed_steps_info += (
-                    f"<finding>\n{step.execution_res}\n</finding>\n\n"
-                )
-
-        # Prepare the input for the agent with completed steps info
+        # 准备 agent 输入，使用任务描述
         agent_input = {
             "messages": [
                 HumanMessage(
-                    content=f"{completed_steps_info}# Current Task\n\n## Title\n\n{current_step.title}\n\n## Description\n\n{current_step.description}\n\n## Locale\n\n{state.get('locale', 'en-US')}"
+                    content=f"# Current Task\n\n## Description\n\n{task_description}\n\n## Locale\n\n{state.get('locale', 'en-US')}"
                 )
             ]
         }
@@ -155,11 +149,7 @@ class ResearcherAgent(CommonReactAgent):
             f"{self.agent_name.capitalize()} full response: {response_content}"
         )
 
-        # Update the step with the execution result
-        current_step.execution_res = response_content
-        logger.info(
-            f"Step '{current_step.title}' execution completed by {self.agent_name}"
-        )
+        logger.info(f"Task execution completed by {self.agent_name}")
 
         return Command(
             update={
