@@ -403,8 +403,10 @@ class CentralAgent:
         action_options: List[CentralAgentAction],
     ) -> List[Union[AIMessage, HumanMessage]]:
         """构建统一的中枢Agent决策提示词"""
-        # 加载统一的central_agent prompt模板
+        # 修正模板名称：从 "center_agent" 改为 "central_agent"
         prompt_template = get_prompt_template("center_agent")
+
+        print(context)
 
         # 格式化prompt（移除json_example变量）
         context_with_actions = {
@@ -453,7 +455,7 @@ class CentralAgent:
 
         # 使用统一的central_agent prompt（通过instruction参数区分动作）
         messages = apply_prompt_template(
-            "central_agent", context, Configuration.from_runnable_config(config)
+            "center_agent", context, Configuration.from_runnable_config(config)
         )
 
         llm = get_llm_by_type(AGENT_LLM_MAP.get("center_agent", "default"))
@@ -495,7 +497,7 @@ class CentralAgent:
 
         # 使用统一的central_agent prompt
         messages = apply_prompt_template(
-            "central_agent", context, Configuration.from_runnable_config(config)
+            "center_agent", context, Configuration.from_runnable_config(config)
         )
 
         llm = get_llm_by_type(AGENT_LLM_MAP.get("center_agent", "default"))
@@ -535,7 +537,7 @@ class CentralAgent:
 
         # 使用统一的central_agent prompt
         messages = apply_prompt_template(
-            "central_agent", context, Configuration.from_runnable_config(config)
+            "center_agent", context, Configuration.from_runnable_config(config)
         )
 
         llm = get_llm_by_type(AGENT_LLM_MAP.get("center_agent", "default"))
