@@ -2,16 +2,15 @@
 # SPDX-License-Identifier: MIT
 
 import json
-from src.utils.logger import logger
 import os
-from typing import Annotated, Literal, Dict, List, Optional, Any, Union
+from typing import Annotated, Literal, Dict, List, Optional, Any, Union, Type, cast
 from dataclasses import dataclass, field
 from enum import Enum
 import datetime
+from dataclasses_json import DataClassJsonMixin
 
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.runnables import RunnableConfig
-from langchain_core.tools import tool
 from langgraph.types import Command, interrupt
 from langchain_mcp_adapters.client import MultiServerMCPClient
 
@@ -26,7 +25,7 @@ from src.tools import (
     python_repl_tool,
     search_docs_tool,
 )
-
+from src.utils.logger import logger
 from src.config.agents import AGENT_LLM_MAP
 from src.config.configuration import Configuration
 from src.llms.llm import get_llm_by_type
@@ -38,75 +37,106 @@ from .types import State
 from ..config import SELECTED_SEARCH_ENGINE, SearchEngine
 
 
-# 定义中枢Agent动作类型
+# -------------------------
+# 核心枚举定义
+# -------------------------
 class CentralAgentAction(Enum):
-    THINK = "think"  # 思考下一步行动
-    REFLECT = "reflect"  # 反思当前状态
-    SUMMARIZE = "summarize"  # 总结已有信息
-    DELEGATE = "delegate"  # 委派子Agent
-    FINISH = "finish"  # 完成任务
+    """中枢Agent动作枚举，定义系统核心决策类型"""
+
+    THINK = "think"  # 分析当前状态并思考下一步行动
+    REFLECT = "reflect"  # 反思之前的动作和结果
+    SUMMARIZE = "summarize"  # 总结当前已获得的信息
+    DELEGATE = "delegate"  # 委派子Agent执行专项任务
+    FINISH = "finish"  # 判断任务完成并生成最终报告
 
 
-# 定义可用的子Agent类型
 class SubAgentType(Enum):
-    RESEARCHER = "researcher"
-    CODER = "coder"
-    REPORTER = "reporter"
+    """子Agent类型枚举，定义可委派的专项Agent"""
+
+    RESEARCHER = "researcher"  # 负责信息检索与研究
+    CODER = "coder"  # 负责代码生成与执行
+    REPORTER = "reporter"  # 负责结果整理与报告生成
 
 
-# 记忆栈条目
+# -------------------------
+# 数据模型定义
+# -------------------------
 @dataclass
-class MemoryStackEntry:
-    timestamp: str
-    action: str
-    agent_type: Optional[str] = None  # central or sub-agent
-    content: str = ""
-    result: Optional[Dict[str, Any]] = None
+class MemoryStackEntry(DataClassJsonMixin):
+    """记忆栈条目数据模型，记录系统执行历史"""
 
+    timestamp: str  # 时间戳
+    action: str  # 执行动作
+    agent_type: Optional[str] = None  # 代理类型(central/sub-agent)
+    content: str = ""  # 动作内容
+    result: Optional[Dict[str, Any]] = None  # 执行结果
+
+    # FIXME check 这里有没有bugs
     def to_dict(self) -> Dict[str, Any]:
+        """转换为字典格式，确保所有消息对象都被正确序列化"""
+
+        def convert_messages(obj):
+            if isinstance(obj, (HumanMessage, AIMessage)):
+                return {
+                    "type": obj.__class__.__name__,
+                    "content": obj.content,
+                    "additional_kwargs": obj.additional_kwargs,
+                }
+            elif isinstance(obj, dict):
+                return {k: convert_messages(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [convert_messages(item) for item in obj]
+            return obj
+
         return {
             "timestamp": self.timestamp,
             "action": self.action,
             "agent_type": self.agent_type,
-            "content": self.content,
-            "result": self.result,
+            "content": convert_messages(self.content),
+            "result": convert_messages(self.result),
         }
 
 
-# 记忆栈管理器
+# -------------------------
+# 记忆管理模块
+# -------------------------
 class MemoryStack:
+    """记忆栈管理器，负责存储和管理系统执行历史"""
+
     def __init__(self, max_size: int = 50):
         self.stack: List[MemoryStackEntry] = []
         self.max_size = max_size
 
-    def push(self, entry: MemoryStackEntry):
-        """添加新条目到栈顶"""
+    def push(self, entry: MemoryStackEntry) -> None:
+        """添加新条目到栈顶，并维护栈大小限制"""
         self.stack.append(entry)
         self._maintain_stack_size()
 
-    def push_with_pop(self, entry: MemoryStackEntry):
-        """先弹出栈顶，再推入新条目 - 用于反思和总结动作"""
+    def push_with_pop(self, entry: MemoryStackEntry) -> None:
+        """先弹出栈顶再推入新条目，用于更新最新记忆"""
         if self.stack:
             self.stack.pop()
-        self.stack.append(entry)
-        self._maintain_stack_size()
+        self.push(entry)
 
     def peek(self) -> Optional[MemoryStackEntry]:
-        """查看栈顶条目但不弹出"""
-        if self.stack:
-            return self.stack[-1]
-        return None
+        """查看栈顶条目但不弹出，返回None如果栈为空"""
+        return self.stack[-1] if self.stack else None
 
     def get_recent(self, count: int = 5) -> List[MemoryStackEntry]:
-        """获取最近的N个条目"""
-        return self.stack[-count:] if len(self.stack) >= count else self.stack
+        """获取最近的N个条目，不足时返回全部"""
+        return self.stack[-count:] if len(self.stack) >= count else self.stack.copy()
 
     def get_all(self) -> List[MemoryStackEntry]:
-        """获取所有条目"""
+        """获取所有记忆条目，返回副本避免修改原始数据"""
         return self.stack.copy()
 
     def get_summary(self, include_full_history: bool = False) -> str:
-        """获取记忆栈摘要，支持获取全部历史信息"""
+        """
+        获取记忆栈摘要，支持返回完整历史或最近操作摘要
+
+        Args:
+            include_full_history: 是否返回完整历史，默认为False返回最近操作
+        """
         if not self.stack:
             return "记忆栈为空"
 
@@ -116,7 +146,7 @@ class MemoryStack:
                 [entry.to_dict() for entry in self.stack], ensure_ascii=False, indent=2
             )
 
-        # 返回最近操作摘要
+        # 生成最近操作摘要
         recent_entries = self.get_recent(3)
         summary_parts = []
         for entry in recent_entries:
@@ -125,59 +155,76 @@ class MemoryStack:
                 if entry.agent_type
                 else entry.action
             )
+            content_preview = (
+                entry.content[:100] + "..."
+                if len(entry.content) > 100
+                else entry.content
+            )
             summary_parts.append(
-                f"[{entry.timestamp[:19]}] {action_desc}: {entry.content[:100]}..."
+                f"[{entry.timestamp[:19]}] {action_desc}: {content_preview}"
             )
 
         return "最近执行:\n" + "\n".join(summary_parts)
 
     def to_dict(self) -> List[Dict[str, Any]]:
-        """转换为字典格式"""
+        """将记忆栈转换为字典列表，便于序列化存储"""
         return [entry.to_dict() for entry in self.stack]
 
     def size(self) -> int:
-        """获取栈大小"""
+        """获取当前记忆栈大小"""
         return len(self.stack)
 
     def is_empty(self) -> bool:
-        """检查栈是否为空"""
+        """检查记忆栈是否为空"""
         return len(self.stack) == 0
 
-    def _maintain_stack_size(self):
-        """保持栈大小限制"""
+    def _maintain_stack_size(self) -> None:
+        """维护栈大小在限制范围内，超出时移除最早的条目"""
         if len(self.stack) > self.max_size:
             self.stack.pop(0)
 
 
+# -------------------------
+# 子Agent管理模块
+# -------------------------
 class SubAgentManager:
-    """子Agent管理器"""
+    """子Agent管理器，负责创建和执行各类专项子Agent"""
 
     def __init__(self, central_agent: "CentralAgent"):
         self.central_agent = central_agent
 
     async def execute_researcher(self, state: State, config: RunnableConfig) -> Command:
-        """执行研究Agent"""
+        """
+        执行研究Agent，负责信息检索与分析
+
+        Args:
+            state: 当前系统状态
+            config: 运行配置
+
+        Returns:
+            执行结果Command对象
+        """
         logger.info("研究Agent开始执行...")
 
         delegation_context = state.get("delegation_context", {})
         task_description = delegation_context.get("task_description", "未知研究任务")
 
-        # 配置研究工具
+        # 配置研究工具链
         tools = [get_web_search_tool(10), crawl_tool, search_docs_tool]
         retriever_tool = get_retriever_tool(state.get("resources", []))
         if retriever_tool:
             tools.insert(0, retriever_tool)
 
-        # 创建研究Agent
+        # 实例化研究Agent
         research_agent = ResearcherAgent(
             config=config, agent_type="researcher", default_tools=tools
         )
 
-        # 执行研究
+        # 执行研究任务并处理异常
         try:
-            result = await research_agent.execute_agent_step(state)
+            await research_agent.execute_agent_step(state)
         except Exception as e:
-            logger.error(f"研究Agent执行失败: {e}")
+            logger.error(f"研究Agent执行失败: {str(e)}")
             return Command(
                 update={
                     "messages": [
@@ -211,22 +258,31 @@ class SubAgentManager:
         )
 
     async def execute_coder(self, state: State, config: RunnableConfig) -> Command:
-        """执行编码Agent"""
+        """
+        执行编码Agent，负责代码生成与执行
+
+        Args:
+            state: 当前系统状态
+            config: 运行配置
+
+        Returns:
+            执行结果Command对象
+        """
         logger.info("编码Agent开始执行...")
 
         delegation_context = state.get("delegation_context", {})
         task_description = delegation_context.get("task_description", "未知编码任务")
 
-        # 创建编码Agent
+        # 实例化编码Agent
         code_agent = CoderAgent(
             config=config, agent_type="coder", default_tools=[python_repl_tool]
         )
 
-        # 执行编码
+        # 执行编码任务并处理异常
         try:
-            result = await code_agent.execute_agent_step(state)
+            await code_agent.execute_agent_step(state)
         except Exception as e:
-            logger.error(f"编码Agent执行失败: {e}")
+            logger.error(f"编码Agent执行失败: {str(e)}")
             return Command(
                 update={
                     "messages": [
@@ -260,29 +316,37 @@ class SubAgentManager:
         )
 
     def execute_reporter(self, state: State, config: RunnableConfig) -> Command:
-        """执行报告Agent"""
+        """
+        执行报告Agent，负责结果整理与报告生成
+
+        Args:
+            state: 当前系统状态
+            config: 运行配置
+
+        Returns:
+            执行结果Command对象
+        """
         logger.info("报告Agent开始执行...")
 
         delegation_context = state.get("delegation_context", {})
         task_description = delegation_context.get("task_description", "生成最终报告")
 
-        # 收集所有信息
+        # 收集报告生成所需上下文
         context = {
             "user_query": state.get("user_query", ""),
             "memory_history": self.central_agent.memory_stack.get_all(),
             "task_description": task_description,
         }
 
-        # 生成报告（使用子Agent独立的prompt）
+        # 生成报告并处理异常
+        final_report = "报告生成失败: 未知错误"
         try:
-            messages = apply_prompt_template(
-                "reporter", context, Configuration.from_runnable_config(config)
-            )
+            messages = apply_prompt_template("reporter", context, state)
             llm = get_llm_by_type(AGENT_LLM_MAP.get("reporter", "default"))
             response = llm.invoke(messages)
             final_report = response.content
         except Exception as e:
-            logger.error(f"报告Agent执行失败: {e}")
+            logger.error(f"报告Agent执行失败: {str(e)}")
             final_report = f"报告生成失败: {str(e)}"
 
         # 记录到中枢Agent记忆栈
@@ -308,23 +372,32 @@ class SubAgentManager:
         )
 
 
-# 中枢Agent Action决策结果
+# -------------------------
+# 中枢Agent核心模块
+# -------------------------
 @dataclass
 class CentralDecision:
-    action: CentralAgentAction
-    reasoning: str
-    params: Dict[str, Any] = field(default_factory=dict)
-    instruction: Optional[str] = None  # 新增：动作对应的指令
+    """中枢Agent决策结果数据模型"""
+
+    action: CentralAgentAction  # 决策动作
+    reasoning: str  # 决策推理过程
+    params: Dict[str, Any] = field(default_factory=dict)  # 动作参数
+    instruction: Optional[str] = None  # 动作对应的指令说明
 
 
 class CentralAgent:
-    """中枢Agent - 负责动态编排和决策"""
+    """
+    中枢Agent核心类，负责系统整体决策与任务编排
+
+    采用基于记忆栈的决策机制，通过状态分析动态委派子Agent执行专项任务，
+    并最终整合结果生成完成报告
+    """
 
     def __init__(self):
         self.memory_stack = MemoryStack()
         self.sub_agent_manager = SubAgentManager(self)
 
-        # 注册动作处理器
+        # 动作处理器映射表
         self.action_handlers = {
             CentralAgentAction.THINK: self._handle_think,
             CentralAgentAction.REFLECT: self._handle_reflect,
@@ -333,7 +406,7 @@ class CentralAgent:
             CentralAgentAction.FINISH: self._handle_finish,
         }
 
-        # 动作类型对应的指令模板（统一使用central_agent prompt）
+        # 动作类型对应的指令模板
         self.action_instructions = {
             CentralAgentAction.THINK: "分析当前状态并思考下一步行动",
             CentralAgentAction.REFLECT: "反思之前的动作和结果",
@@ -343,24 +416,34 @@ class CentralAgent:
         }
 
     def make_decision(self, state: State, config: RunnableConfig) -> CentralDecision:
-        """中枢Agent决策逻辑"""
+        """
+        中枢Agent决策核心逻辑，分析当前状态生成决策结果
+
+        Args:
+            state: 当前系统状态
+            config: 运行配置
+
+        Returns:
+            决策结果对象
+        """
         logger.info("中枢Agent正在进行决策...")
 
         # 构建决策上下文
         context = self._build_decision_context(state)
 
-        # 构建决策提示（使用统一的central_agent prompt）
+        # 构建决策提示
         action_options = list(CentralAgentAction)
         messages = self._build_decision_prompt(context, config, action_options)
 
-        # 获取LLM决策
+        print(messages)
+
+        # 获取LLM决策并处理异常
         try:
-            llm = get_llm_by_type(AGENT_LLM_MAP.get("center_agent", "default"))
+            llm = get_llm_by_type(AGENT_LLM_MAP.get("central_agent", "default"))
             response = llm.invoke(messages)
 
             # 解析决策结果
             decision_data = json.loads(repair_json_output(response.content))
-
             action = CentralAgentAction(decision_data["action"])
             reasoning = decision_data.get("reasoning", "")
             params = decision_data.get("params", {})
@@ -374,8 +457,8 @@ class CentralAgent:
             )
 
         except Exception as e:
-            logger.error(f"决策解析失败: {e}")
-            # 默认决策：思考
+            logger.error(f"决策解析失败: {str(e)}")
+            # 异常情况下返回默认决策
             return CentralDecision(
                 action=CentralAgentAction.THINK,
                 reasoning="决策解析失败，默认选择思考动作",
@@ -384,7 +467,30 @@ class CentralAgent:
             )
 
     def _build_decision_context(self, state: State) -> Dict[str, Any]:
-        """构建决策上下文（包含完整记忆栈）"""
+        """
+        构建决策上下文，包含系统当前状态的完整信息
+
+        Args:
+            state: 当前系统状态
+
+        Returns:
+            决策上下文字典
+        """
+        # 转换messages_history中的消息对象
+        messages_history = state.get("messages", [])
+        converted_messages = []
+        for msg in messages_history:
+            if isinstance(msg, (HumanMessage, AIMessage)):
+                converted_messages.append(
+                    {
+                        "role": msg.type,
+                        "content": msg.content,
+                        "additional_kwargs": getattr(msg, "additional_kwargs", {}),
+                    }
+                )
+            else:
+                converted_messages.append(msg)
+
         return {
             "user_query": state.get("user_query", ""),
             "current_node": state.get("current_node", "central_agent"),
@@ -393,7 +499,7 @@ class CentralAgent:
             "available_sub_agents": [agent.value for agent in SubAgentType],
             "task_completed": state.get("task_completed", False),
             "recent_observations": state.get("observations", [])[-3:],
-            "messages_history": state.get("messages", [])[-3:],
+            "messages_history": converted_messages,  # 使用转换后的消息
         }
 
     def _build_decision_prompt(
@@ -402,27 +508,52 @@ class CentralAgent:
         config: RunnableConfig,
         action_options: List[CentralAgentAction],
     ) -> List[Union[AIMessage, HumanMessage]]:
-        """构建统一的中枢Agent决策提示词"""
-        # 修正模板名称：从 "center_agent" 改为 "central_agent"
-        prompt_template = get_prompt_template("center_agent")
+        """
+        构建中枢Agent决策提示词，使用统一的prompt模板
 
-        print(context)
+        Args:
+            context: 决策上下文
+            config: 运行配置
+            action_options: 可用动作选项
 
-        # 格式化prompt（移除json_example变量）
+        Returns:
+            格式化的提示词消息列表
+        """
+        # 加载正确的模板名称("central_agent"修正之前的"center_agent")
+        prompt_template = get_prompt_template("central_agent")
+
+        # 格式化prompt内容
         context_with_actions = {
             **context,
             "available_actions": ", ".join([a.value for a in action_options]),
         }
         formatted_prompt = prompt_template.format(**context_with_actions)
+
+        # 打印上下文用于调试
+        logger.debug(
+            f"Decision context: {json.dumps(context, ensure_ascii=False, indent=2)}"
+        )
+
         return [HumanMessage(content=formatted_prompt)]
 
     def execute_action(
         self, decision: CentralDecision, state: State, config: RunnableConfig
     ) -> Command:
-        """执行决策动作（使用统一的prompt逻辑）"""
+        """
+        执行决策动作，调度对应的动作处理器
+
+        Args:
+            decision: 决策结果
+            state: 当前系统状态
+            config: 运行配置
+
+        Returns:
+            动作执行结果Command对象
+        """
         handler = self.action_handlers.get(decision.action)
         if not handler:
-            logger.error(f"未知动作: {decision.action}")
+            error_msg = f"未知动作: {decision.action}"
+            logger.error(error_msg)
             return Command(
                 update={
                     "messages": [
@@ -442,7 +573,7 @@ class CentralAgent:
     def _handle_think(
         self, decision: CentralDecision, state: State, config: RunnableConfig
     ) -> Command:
-        """处理思考动作（使用统一prompt）"""
+        """处理思考动作，分析当前状态生成下一步计划"""
         logger.info("中枢Agent正在思考...")
 
         context = {
@@ -450,18 +581,17 @@ class CentralAgent:
             "user_query": state.get("user_query", ""),
             "current_progress": state.get("observations", []),
             "decision_reasoning": decision.reasoning,
-            "instruction": decision.instruction,  # 传递统一指令
+            "instruction": decision.instruction,
         }
+        print(config)
 
-        # 使用统一的central_agent prompt（通过instruction参数区分动作）
-        messages = apply_prompt_template(
-            "center_agent", context, Configuration.from_runnable_config(config)
-        )
+        # 应用统一的决策提示模板
+        messages = apply_prompt_template("central_agent", context, state)
 
-        llm = get_llm_by_type(AGENT_LLM_MAP.get("center_agent", "default"))
+        llm = get_llm_by_type(AGENT_LLM_MAP.get("central_agent", "default"))
         response = llm.invoke(messages)
 
-        # 记录到记忆栈
+        # 记录思考过程到记忆栈
         memory_entry = MemoryStackEntry(
             timestamp=datetime.datetime.now().isoformat(),
             action="think",
@@ -481,10 +611,10 @@ class CentralAgent:
     def _handle_reflect(
         self, decision: CentralDecision, state: State, config: RunnableConfig
     ) -> Command:
-        """处理反思动作（使用统一prompt）"""
+        """处理反思动作，评估之前的动作执行效果"""
         logger.info("中枢Agent正在反思...")
 
-        # 获取之前的动作信息用于反思
+        # 获取最近动作用于反思
         previous_actions = self.memory_stack.get_recent(1)
 
         context = {
@@ -492,18 +622,16 @@ class CentralAgent:
             "current_progress": state.get("observations", []),
             "original_query": state.get("user_query", ""),
             "reflection_target": decision.reasoning,
-            "instruction": decision.instruction,  # 传递统一指令
+            "instruction": decision.instruction,
         }
 
-        # 使用统一的central_agent prompt
-        messages = apply_prompt_template(
-            "center_agent", context, Configuration.from_runnable_config(config)
-        )
+        # 应用统一的反思提示模板
+        messages = apply_prompt_template("central_agent", context, state)
 
-        llm = get_llm_by_type(AGENT_LLM_MAP.get("center_agent", "default"))
+        llm = get_llm_by_type(AGENT_LLM_MAP.get("central_agent", "default"))
         response = llm.invoke(messages)
 
-        # 先弹出再推入，更新记忆栈
+        # 更新记忆栈，替换最新的反思结果
         new_entry = MemoryStackEntry(
             timestamp=datetime.datetime.now().isoformat(),
             action="reflect",
@@ -526,24 +654,22 @@ class CentralAgent:
     def _handle_summarize(
         self, decision: CentralDecision, state: State, config: RunnableConfig
     ) -> Command:
-        """处理总结动作（使用统一prompt）"""
+        """处理总结动作，归纳当前已获得的信息"""
         logger.info("中枢Agent正在总结...")
 
         context = {
             "memory_history": self.memory_stack.get_all(),
             "summarization_focus": decision.reasoning,
-            "instruction": decision.instruction,  # 传递统一指令
+            "instruction": decision.instruction,
         }
 
-        # 使用统一的central_agent prompt
-        messages = apply_prompt_template(
-            "center_agent", context, Configuration.from_runnable_config(config)
-        )
+        # 应用统一的总结提示模板
+        messages = apply_prompt_template("central_agent", context, state)
 
-        llm = get_llm_by_type(AGENT_LLM_MAP.get("center_agent", "default"))
+        llm = get_llm_by_type(AGENT_LLM_MAP.get("central_agent", "default"))
         response = llm.invoke(messages)
 
-        # 先弹出再推入，更新记忆栈
+        # 更新记忆栈，替换最新的总结结果
         new_entry = MemoryStackEntry(
             timestamp=datetime.datetime.now().isoformat(),
             action="summarize",
@@ -567,12 +693,16 @@ class CentralAgent:
     def _handle_delegate(
         self, decision: CentralDecision, state: State, config: RunnableConfig
     ) -> Command:
-        """处理委派动作"""
+        """处理委派动作，调度子Agent执行专项任务"""
         agent_type = decision.params.get("agent_type")
         task_description = decision.params.get("task_description", "未指定任务")
 
+        # 验证子Agent类型有效性
         if not agent_type or agent_type not in [agent.value for agent in SubAgentType]:
-            error_msg = f"无效的子Agent类型: {agent_type}，可用类型: {[agent.value for agent in SubAgentType]}"
+            error_msg = (
+                f"无效的子Agent类型: {agent_type}，可用类型: "
+                f"{[agent.value for agent in SubAgentType]}"
+            )
             logger.error(error_msg)
             return Command(
                 update={
@@ -584,7 +714,7 @@ class CentralAgent:
 
         logger.info(f"中枢Agent委派 {agent_type} 执行任务: {task_description}")
 
-        # 记录到记忆栈
+        # 记录委派动作到记忆栈
         memory_entry = MemoryStackEntry(
             timestamp=datetime.datetime.now().isoformat(),
             action="delegate",
@@ -593,7 +723,7 @@ class CentralAgent:
         )
         self.memory_stack.push(memory_entry)
 
-        # 准备子Agent执行上下文
+        # 构建子Agent执行上下文
         delegation_context = {
             "task_description": task_description,
             "agent_type": agent_type,
@@ -619,11 +749,12 @@ class CentralAgent:
     def _handle_finish(
         self, decision: CentralDecision, state: State, config: RunnableConfig
     ) -> Command:
-        """处理完成动作"""
+        """处理完成动作，生成最终报告并结束任务"""
         logger.info("中枢Agent完成任务...")
 
         final_report = state.get("final_report", "任务已完成，但未生成详细报告")
 
+        # 构建执行摘要
         execution_summary = {
             "user_query": state.get("user_query", "未知查询"),
             "execution_history": self.memory_stack.get_all(),
@@ -631,7 +762,7 @@ class CentralAgent:
             "completion_time": datetime.datetime.now().isoformat(),
         }
 
-        # 保存到文件
+        # 保存执行摘要到文件
         os.makedirs("./reports", exist_ok=True)
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"./reports/execution_report_{timestamp}.json"
@@ -641,13 +772,13 @@ class CentralAgent:
                 json.dump(execution_summary, f, ensure_ascii=False, indent=4)
             report_msg = f"任务完成，报告已保存: {filename}"
         except Exception as e:
-            logger.error(f"报告保存失败: {e}")
+            logger.error(f"报告保存失败: {str(e)}")
             report_msg = f"任务完成，但报告保存失败: {str(e)}"
             execution_summary["error"] = str(e)
 
         logger.info(report_msg)
 
-        # 记录到记忆栈
+        # 记录完成动作到记忆栈
         memory_entry = MemoryStackEntry(
             timestamp=datetime.datetime.now().isoformat(),
             action="finish",
@@ -667,64 +798,66 @@ class CentralAgent:
         )
 
 
+# -------------------------
+# 全局实例与节点定义
+# -------------------------
 global_central_agent = CentralAgent()
 sub_agent_manager = SubAgentManager(global_central_agent)
 
 
-# 节点处理函数
+# 节点处理函数定义
 async def central_agent_node(state: State, config: RunnableConfig) -> Command:
-    """中枢Agent节点 - 动态决策和编排"""
+    """中枢Agent节点处理函数，触发决策流程"""
     logger.info("中枢Agent节点激活")
 
-    # 进行决策
+    # 执行决策流程
     decision = global_central_agent.make_decision(state, config)
-
-    # 执行决策动作
     return global_central_agent.execute_action(decision, state, config)
 
 
 async def researcher_node(state: State, config: RunnableConfig) -> Command:
-    """研究Agent节点"""
+    """研究Agent节点处理函数"""
     return await sub_agent_manager.execute_researcher(state, config)
 
 
 async def coder_node(state: State, config: RunnableConfig) -> Command:
-    """编码Agent节点"""
+    """编码Agent节点处理函数"""
     return await sub_agent_manager.execute_coder(state, config)
 
 
 def reporter_node(state: State, config: RunnableConfig) -> Command:
-    """报告Agent节点"""
+    """报告Agent节点处理函数"""
     return sub_agent_manager.execute_reporter(state, config)
 
 
+# -------------------------
+# 状态图构建
+# -------------------------
 def build_multi_agent_graph():
-    """构建多Agent系统状态图"""
-    # 修复导入问题
+    """
+    构建多Agent系统状态图，定义系统状态转移逻辑
+
+    Returns:
+        编译后的状态图对象
+    """
     from langgraph.graph import StateGraph, START, END
 
     builder = StateGraph(State)
 
-    # 添加节点
+    # 添加系统节点
     builder.add_node("central_agent", central_agent_node)
     builder.add_node("researcher", researcher_node)
     builder.add_node("coder", coder_node)
     builder.add_node("reporter", reporter_node)
 
-    # 设置起始节点
+    # 定义状态转移
     builder.add_edge(START, "central_agent")
-
-    # 中枢Agent可以跳转到任何子Agent
     builder.add_edge("central_agent", "researcher")
     builder.add_edge("central_agent", "coder")
     builder.add_edge("central_agent", "reporter")
-
-    # 所有子Agent完成后必须返回中枢Agent
     builder.add_edge("researcher", "central_agent")
     builder.add_edge("coder", "central_agent")
     builder.add_edge("reporter", "central_agent")
-
-    # 中枢Agent可以结束流程
     builder.add_edge("central_agent", END)
 
     return builder.compile()
