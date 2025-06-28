@@ -69,7 +69,7 @@ class MemoryStackEntry(DataClassJsonMixin):
     action: str  # 执行动作
     agent_type: Optional[str] = None  # 代理类型(central/sub-agent)
     content: str = ""  # 动作内容
-    result: Optional[Dict[str, Any]] = None  # 执行结果
+    result: Optional[Dict[str, Any]] = None  # Sub-Agent的执行结果
 
     # FIXME check 这里有没有bugs
     def to_dict(self) -> Dict[str, Any]:
@@ -186,6 +186,7 @@ class MemoryStack:
 
 # -------------------------
 # 子Agent管理模块
+# TODO: check sub-agent bugs
 # -------------------------
 class SubAgentManager:
     """子Agent管理器，负责创建和执行各类专项子Agent"""
@@ -373,7 +374,7 @@ class SubAgentManager:
 
 
 # -------------------------
-# 中枢Agent核心模块
+# 中枢Agent核心模块--中枢Agent的action
 # -------------------------
 @dataclass
 class CentralDecision:
@@ -381,7 +382,7 @@ class CentralDecision:
 
     action: CentralAgentAction  # 决策动作
     reasoning: str  # 决策推理过程
-    params: Dict[str, Any] = field(default_factory=dict)  # 动作参数
+    params: Dict[str, Any] = field(default_factory=dict)  # 动作参数=>delegate有参数
     instruction: Optional[str] = None  # 动作对应的指令说明
 
 
@@ -844,8 +845,10 @@ def build_multi_agent_graph():
 
     builder = StateGraph(State)
 
-    # 添加系统节点
+    # 添加center planner agent
     builder.add_node("central_agent", central_agent_node)
+
+    # 添加sub agent
     builder.add_node("researcher", researcher_node)
     builder.add_node("coder", coder_node)
     builder.add_node("reporter", reporter_node)
@@ -855,9 +858,11 @@ def build_multi_agent_graph():
     builder.add_edge("central_agent", "researcher")
     builder.add_edge("central_agent", "coder")
     builder.add_edge("central_agent", "reporter")
+
     builder.add_edge("researcher", "central_agent")
     builder.add_edge("coder", "central_agent")
     builder.add_edge("reporter", "central_agent")
+
     builder.add_edge("central_agent", END)
 
     return builder.compile()
