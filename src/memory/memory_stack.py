@@ -9,9 +9,10 @@ import json
 class MemoryStack:
     """记忆栈管理器，负责存储和管理系统执行历史"""
 
-    def __init__(self, max_size: int = 50):
+    def __init__(self, max_size: int = 50, horizon_topk=1):
         self.stack: List[MemoryStackEntry] = []
         self.max_size = max_size
+        self.horizon_topk = horizon_topk
 
     def push(self, entry: MemoryStackEntry) -> None:
         """添加新条目到栈顶，并维护栈大小限制"""
@@ -21,7 +22,8 @@ class MemoryStack:
     def push_with_pop(self, entry: MemoryStackEntry) -> None:
         """先弹出栈顶再推入新条目，用于更新最新记忆"""
         if self.stack:
-            self.stack.pop()
+            for i in range(self.horizon_topk):
+                self.stack.pop()
         self.push(entry)
 
     def peek(self) -> Optional[MemoryStackEntry]:
@@ -30,6 +32,7 @@ class MemoryStack:
 
     def get_recent(self, count: int = 5) -> List[MemoryStackEntry]:
         """获取最近的N个条目，不足时返回全部"""
+        count = self.horizon_topk
         return self.stack[-count:] if len(self.stack) >= count else self.stack.copy()
 
     def get_all(self) -> List[MemoryStackEntry]:

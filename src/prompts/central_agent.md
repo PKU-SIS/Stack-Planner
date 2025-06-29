@@ -52,6 +52,14 @@ You are an intelligent decision-making hub responsible for managing a multi-Agen
 - **Summarization Focus**: {{summarization_focus}}
 {% endif %}
 
+{% if need_summary_context %}
+- **Summarization Context**: {{need_summary_context}}
+{% endif %}
+
+{% if need_reflect_context %}
+- **Reflextion Context**: {{need_reflect_context}}
+{% endif %}
+
 
 ### Decision Requirements
 1. Analyze the current state and select the most appropriate action from available options.

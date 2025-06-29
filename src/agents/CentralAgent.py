@@ -307,6 +307,7 @@ class CentralAgent:
             "original_query": state.get("user_query", ""),
             "reflection_target": decision.reasoning,
             "instruction": decision.instruction,
+            "need_reflect_context": self.memory_stack.get_recent(),
         }
 
         # 应用统一的反思提示模板
@@ -349,6 +350,7 @@ class CentralAgent:
             ],
             "summarization_focus": decision.reasoning,
             "instruction": decision.instruction,
+            "need_summary_context": self.memory_stack.get_recent(),
         }
 
         # 应用统一的总结提示模板
