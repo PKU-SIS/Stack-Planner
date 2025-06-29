@@ -63,7 +63,7 @@ class CoderAgent(CommonReactAgent):
         observations = state.get("observations", [])
 
         # 从 params 中获取任务描述
-        params = state.get("params", {})
+        params = state.get("delegation_context", {})
         task_description = params.get("task_description", "")
 
         if not task_description:
@@ -140,5 +140,6 @@ class CoderAgent(CommonReactAgent):
                 ],
                 "observations": observations + [response_content],
             },
-            goto="research_team",
         )
+        #     goto="central_agent",
+        # )

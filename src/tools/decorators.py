@@ -25,15 +25,30 @@ def log_io(func: Callable) -> Callable:
         # Log input parameters
         func_name = func.__name__
         params = ", ".join(
-            [*(str(arg) for arg in args), *(f"{k}={v}" for k, v in kwargs.items())]
+            [
+                *(
+                    str(arg)[:100] + "..." if len(str(arg)) > 100 else str(arg)
+                    for arg in args
+                ),
+                *(
+                    f"{k}={str(v)[:100] + '...' if len(str(v)) > 100 else str(v)}"
+                    for k, v in kwargs.items()
+                ),
+            ]
         )
         logger.info(f"Tool {func_name} called with parameters: {params}")
 
         # Execute the function
         result = func(*args, **kwargs)
 
-        # Log the output
-        logger.info(f"Tool {func_name} returned: {result}")
+        # Log the output with truncation for long content
+        result_str = str(result)
+        if len(result_str) > 500:
+            logger.info(
+                f"Tool {func_name} returned: {result_str[:500]}...[输出已截断，总长度: {len(result_str)}]"
+            )
+        else:
+            logger.info(f"Tool {func_name} returned: {result}")
 
         return result
 
@@ -55,9 +70,15 @@ class LoggedToolMixin:
         """Override _run method to add logging."""
         self._log_operation("_run", *args, **kwargs)
         result = super()._run(*args, **kwargs)
-        logger.debug(
-            f"Tool {self.__class__.__name__.replace('Logged', '')} returned: {result}"
-        )
+        result_str = str(result)
+        if len(result_str) > 500:
+            logger.debug(
+                f"Tool {self.__class__.__name__.replace('Logged', '')} returned: {result_str[:500]}...[输出已截断，总长度: {len(result_str)}]"
+            )
+        else:
+            logger.debug(
+                f"Tool {self.__class__.__name__.replace('Logged', '')} returned: {result}"
+            )
         return result
 
 

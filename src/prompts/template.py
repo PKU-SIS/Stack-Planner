@@ -17,7 +17,7 @@ env = Environment(
 )
 
 
-def get_prompt_template(prompt_name: str) -> str:
+def get_prompt_template(prompt_name: str, context: dict = None) -> str:
     """
     Load and return a prompt template using Jinja2.
 
@@ -29,7 +29,7 @@ def get_prompt_template(prompt_name: str) -> str:
     """
     try:
         template = env.get_template(f"{prompt_name}.md")
-        return template.render()
+        return template.render(**(context or {}))
     except Exception as e:
         raise ValueError(f"Error loading template {prompt_name}: {e}")
 

@@ -30,6 +30,8 @@ from ..config import SELECTED_SEARCH_ENGINE, SearchEngine
 # -------------------------
 # 子Agent管理模块
 # TODO: check sub-agent bugs
+# TODO: 搜索太多时会超过输入限制或者缓冲区溢出，需要限制搜索到的内容长度或者做一个简单的摘要
+# TODO: 需要处理搜索敏感词（以“985大学最多的五个城市”为例，AI就无法处理信息，返回Error）
 # -------------------------
 class SubAgentManager:
     """子Agent管理器，负责创建和执行各类专项子Agent"""
@@ -49,7 +51,6 @@ class SubAgentManager:
             执行结果Command对象
         """
         logger.info("研究Agent开始执行...")
-
         delegation_context = state.get("delegation_context", {})
         task_description = delegation_context.get("task_description", "未知研究任务")
 
@@ -66,7 +67,18 @@ class SubAgentManager:
 
         # 执行研究任务并处理异常
         try:
-            await research_agent.execute_agent_step(state)
+            result_command = await research_agent.execute_agent_step(state)
+
+            # 从结果中提取数据用于记忆栈
+            result_observations = []
+            result_data_collections = []
+
+            if result_command and result_command.update:
+                result_observations = result_command.update.get("observations", [])
+                result_data_collections = result_command.update.get(
+                    "data_collections", []
+                )
+
         except Exception as e:
             logger.error(f"研究Agent执行失败: {str(e)}")
             return Command(
@@ -86,7 +98,10 @@ class SubAgentManager:
             action="delegate",
             agent_type="researcher",
             content=f"研究任务: {task_description}",
-            result={"observations": state.get("observations", [])},
+            result={
+                "observations": result_observations,
+                # "data_collections": result_data_collections,
+            },
         )
         self.central_agent.memory_stack.push(memory_entry)
 
@@ -124,7 +139,11 @@ class SubAgentManager:
 
         # 执行编码任务并处理异常
         try:
-            await code_agent.execute_agent_step(state)
+            result_command = await code_agent.execute_agent_step(state)
+            # 从结果中提取数据用于记忆栈
+            result_observations = []
+            if result_command and result_command.update:
+                result_observations = result_command.update.get("observations", [])
         except Exception as e:
             logger.error(f"编码Agent执行失败: {str(e)}")
             return Command(
@@ -144,7 +163,7 @@ class SubAgentManager:
             action="delegate",
             agent_type="coder",
             content=f"编码任务: {task_description}",
-            result={"observations": state.get("observations", [])},
+            result={"observations": result_observations},
         )
         self.central_agent.memory_stack.push(memory_entry)
 
@@ -185,7 +204,9 @@ class SubAgentManager:
         # 生成报告并处理异常
         final_report = "报告生成失败: 未知错误"
         try:
-            messages = apply_prompt_template("reporter", context, state)
+            messages = apply_prompt_template(
+                "reporter", state, extra_context=context
+            )  # 修复：参数顺序
             llm = get_llm_by_type(AGENT_LLM_MAP.get("reporter", "default"))
             response = llm.invoke(messages)
             final_report = response.content

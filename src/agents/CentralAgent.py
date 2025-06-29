@@ -54,7 +54,8 @@ class CentralDecision:
     instruction: Optional[str] = None  # 动作对应的指令说明
 
 
-# TODO: central agent没有生成current_plan导致子Agent跑不通
+# TODO: 总结和反思动作没有总结到精华，导致需要重新research，又陷入了死循环
+# TODO: prompt的参数和传入的参数没有对齐，需要尽快统一传入的参数
 # 上下文没有传进agent
 # 为什么只有思考和决策两个个动作
 class CentralAgent:
@@ -109,7 +110,7 @@ class CentralAgent:
         action_options = list(CentralAgentAction)
         messages = self._build_decision_prompt(context, config, action_options)
 
-        print(messages[0].content[:300])
+        # print(messages[0].content[:500])
 
         # 获取LLM决策并处理异常
         try:
@@ -169,10 +170,11 @@ class CentralAgent:
         return {
             "user_query": state.get("user_query", ""),
             "current_node": state.get("current_node", "central_agent"),
-            "memory_summary": self.memory_stack.get_summary(include_full_history=True),
+            "memory_history": self.memory_stack.get_summary(include_full_history=True),
             "available_actions": [action.value for action in CentralAgentAction],
             "available_sub_agents": [agent.value for agent in SubAgentType],
-            "task_completed": state.get("task_completed", False),
+            # 这个参数似乎没啥必要，先删了试试
+            # "task_completed": state.get("task_completed", False),
             "recent_observations": state.get("observations", [])[-3:],
             "messages_history": converted_messages,  # 使用转换后的消息
         }
@@ -195,19 +197,20 @@ class CentralAgent:
             格式化的提示词消息列表
         """
         # 加载正确的模板名称("central_agent"修正之前的"center_agent")
-        prompt_template = get_prompt_template("central_agent")
 
         # 格式化prompt内容
         context_with_actions = {
             **context,
             "available_actions": ", ".join([a.value for a in action_options]),
         }
-        formatted_prompt = prompt_template.format(**context_with_actions)
+        formatted_prompt = get_prompt_template("central_agent", context_with_actions)
 
-        # 打印上下文用于调试
-        logger.debug(
-            f"Decision context: {json.dumps(context, ensure_ascii=False, indent=2)}"
-        )
+        # logger.debug(f"Formatted prompt: {formatted_prompt.split("### Decision Requirements", 1)[0]}")
+
+        # # 打印上下文用于调试
+        # logger.debug(
+        #     f"Decision context: {json.dumps(context, ensure_ascii=False, indent=2)}"
+        # )
 
         return [HumanMessage(content=formatted_prompt)]
 
@@ -252,8 +255,11 @@ class CentralAgent:
         logger.info("中枢Agent正在思考...")
 
         context = {
-            "memory_history": self.memory_stack.get_all(),
             "user_query": state.get("user_query", ""),
+            "current_node": state.get("current_node", "central_agent"),
+            "memory_history": [
+                entry.to_dict() for entry in self.memory_stack.get_all()
+            ],
             "current_progress": state.get("observations", []),
             "decision_reasoning": decision.reasoning,
             "instruction": decision.instruction,
@@ -294,6 +300,8 @@ class CentralAgent:
         previous_actions = self.memory_stack.get_recent(1)
 
         context = {
+            "user_query": state.get("user_query", ""),
+            "current_node": state.get("current_node", "central_agent"),
             "recent_actions": [entry.to_dict() for entry in previous_actions],
             "current_progress": state.get("observations", []),
             "original_query": state.get("user_query", ""),
@@ -302,7 +310,7 @@ class CentralAgent:
         }
 
         # 应用统一的反思提示模板
-        messages = apply_prompt_template("central_agent", context, state)
+        messages = apply_prompt_template("central_agent", state, extra_context=context)
 
         llm = get_llm_by_type(AGENT_LLM_MAP.get("central_agent", "default"))
         response = llm.invoke(messages)
@@ -334,13 +342,17 @@ class CentralAgent:
         logger.info("中枢Agent正在总结...")
 
         context = {
-            "memory_history": self.memory_stack.get_all(),
+            "user_query": state.get("user_query", ""),
+            "current_node": state.get("current_node", "central_agent"),
+            "memory_history": [
+                entry.to_dict() for entry in self.memory_stack.get_all()
+            ],
             "summarization_focus": decision.reasoning,
             "instruction": decision.instruction,
         }
 
         # 应用统一的总结提示模板
-        messages = apply_prompt_template("central_agent", context, state)
+        messages = apply_prompt_template("central_agent", state, extra_context=context)
 
         llm = get_llm_by_type(AGENT_LLM_MAP.get("central_agent", "default"))
         response = llm.invoke(messages)
@@ -433,7 +445,9 @@ class CentralAgent:
         # 构建执行摘要
         execution_summary = {
             "user_query": state.get("user_query", "未知查询"),
-            "execution_history": self.memory_stack.get_all(),
+            "execution_history": [
+                entry.to_dict() for entry in self.memory_stack.get_all()
+            ],
             "final_report": final_report,
             "completion_time": datetime.datetime.now().isoformat(),
         }
@@ -466,7 +480,7 @@ class CentralAgent:
         return Command(
             update={
                 "messages": [AIMessage(content=report_msg, name="central_finish")],
-                "task_completed": True,
+                # "task_completed": True,
                 "execution_summary": execution_summary,
                 "current_node": "central_agent",
             },

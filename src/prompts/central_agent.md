@@ -5,7 +5,7 @@ You are an intelligent decision-making hub responsible for managing a multi-Agen
 - **User Query**: {{user_query}}
 - **Current Node**: {{current_node}}
 - **Memory History**: 
-{{memory_summary}}
+{{memory_history}}
 
 - **Available Actions**: {{available_actions}}
   (Description: 
@@ -21,8 +21,36 @@ You are an intelligent decision-making hub responsible for managing a multi-Agen
     CODER = Coding agent, 
     REPORTER = Reporting agent)
 
-- **Task Completion Status**: {{task_completed}}
 - **Recent Observations**: {{recent_observations}}
+
+### Additional Context (if applicable)
+{% if current_progress %}
+- **Current Progress**: {{current_progress}}
+{% endif %}
+
+{% if decision_reasoning %}
+- **Decision Reasoning**: {{decision_reasoning}}
+{% endif %}
+
+{% if instruction %}
+- **Current Instruction**: {{instruction}}
+{% endif %}
+
+{% if recent_actions %}
+- **Recent Actions**: {{recent_actions}}
+{% endif %}
+
+{% if original_query %}
+- **Original Query**: {{original_query}}
+{% endif %}
+
+{% if reflection_target %}
+- **Reflection Target**: {{reflection_target}}
+{% endif %}
+
+{% if summarization_focus %}
+- **Summarization Focus**: {{summarization_focus}}
+{% endif %}
 
 
 ### Decision Requirements

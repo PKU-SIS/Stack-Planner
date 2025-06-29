@@ -64,7 +64,8 @@ class ResearcherAgent(CommonReactAgent):
         data_collections = state.get("data_collections", [])
 
         # 从 params 中获取任务描述
-        params = state.get("params", {})
+        params = state.get("delegation_context", {})
+        logger.debug(f"Delegate context: {params}")
         task_description = params.get("task_description", "")
 
         if not task_description:
@@ -151,6 +152,7 @@ class ResearcherAgent(CommonReactAgent):
 
         logger.info(f"Task execution completed by {self.agent_name}")
 
+        # 后续goto操作在subagentmanager处理
         return Command(
             update={
                 "messages": [
@@ -162,5 +164,6 @@ class ResearcherAgent(CommonReactAgent):
                 "observations": observations + [response_content],
                 "data_collections": data_collections + self.tool_results,
             },
-            goto="research_team",
         )
+        #     goto="central_agent",
+        # )
