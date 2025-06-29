@@ -41,6 +41,3 @@ async def coder_node(state: State, config: RunnableConfig) -> Command:
 def reporter_node(state: State, config: RunnableConfig) -> Command:
     """报告Agent节点处理函数"""
     return sub_agent_manager.execute_reporter(state, config)
-
-
-# 将图的构建函数移到builder.py统一代码规范
