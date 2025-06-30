@@ -168,13 +168,14 @@ class CentralAgent:
             "available_actions": [action.value for action in CentralAgentAction],
             "available_sub_agents": [agent.value for agent in SubAgentType],
             "recent_observations": state.get("observations", [])[-3:],
+            "current_action": "decision",
             "messages_history": converted_messages,
-            # 新增关键上下文参数（覆盖各动作需求）
-            "need_think_context": self.memory_stack.get_recent(),
-            "need_reflect_context": self.memory_stack.get_recent(5),
-            "need_summary_context": self.memory_stack.get_summary(
-                include_full_history=True
-            ),
+            # # 新增关键上下文参数（覆盖各动作需求）
+            # "need_think_context": self.memory_stack.get_recent(),
+            # "need_reflect_context": self.memory_stack.get_recent(5),
+            # "need_summary_context": self.memory_stack.get_summary(
+            #     include_full_history=True
+            # ),
             "memory_stack_entries": [
                 entry.to_dict() for entry in self.memory_stack.get_all()
             ],
@@ -247,6 +248,7 @@ class CentralAgent:
         logger.info("中枢Agent正在思考...")
 
         context = {
+            "current_action": "think",
             "user_query": state.get("user_query", ""),
             "current_node": state.get("current_node", "central_agent"),
             "memory_history": [
@@ -294,6 +296,7 @@ class CentralAgent:
         previous_actions = self.memory_stack.get_recent(1)
 
         context = {
+            "current_action": "reflect",
             "user_query": state.get("user_query", ""),
             "current_node": state.get("current_node", "central_agent"),
             "recent_actions": [entry.to_dict() for entry in previous_actions],
@@ -340,6 +343,7 @@ class CentralAgent:
         logger.info("中枢Agent正在总结...")
 
         context = {
+            "current_action": "summarize",
             "user_query": state.get("user_query", ""),
             "current_node": state.get("current_node", "central_agent"),
             "memory_history": [
@@ -367,17 +371,11 @@ class CentralAgent:
         llm = get_llm_by_type(AGENT_LLM_MAP.get("central_agent", "default"))
         response = llm.invoke(messages)
 
-        # print("*"*100)
-        # print("MESSAGES", messages)
-        # print("*"*100)
-        # print("RESPONSE", response)
-        # print("*"*100)
-
         # 更新记忆栈，替换最新的总结结果
         new_entry = MemoryStackEntry(
             timestamp=datetime.datetime.now().isoformat(),
             action="summarize",
-            content=response.content,
+            content=context.get("summarization_focus", ""),
             result={"summary_result": response.content},
         )
 
@@ -460,7 +458,48 @@ class CentralAgent:
         """处理完成动作，生成最终报告并结束任务"""
         logger.info("中枢Agent完成任务...")
 
-        final_report = state.get("final_report", "任务已完成，但未生成详细报告")
+        final_report = state.get("final_report", None)
+        if not final_report:
+            logger.info("未找到最终报告，委派Reporter Agent生成报告...")
+
+            # 记录委派动作到记忆栈
+            memory_entry = MemoryStackEntry(
+                timestamp=datetime.datetime.now().isoformat(),
+                action="delegate",
+                agent_type="reporter",
+                content="未生成最终报告，委派Reporter Agent生成最终报告",
+            )
+            self.memory_stack.push(memory_entry)
+
+            # 构建Reporter执行上下文
+            delegation_context = {
+                "task_description": "根据所有收集到的信息生成完整的最终报告",
+                "agent_type": "reporter",
+                "memory_context": self.memory_stack.get_summary(
+                    include_full_history=True
+                ),
+                "original_query": state.get("user_query", ""),
+                "report_type": "final_report",
+                "execution_history": [
+                    entry.to_dict() for entry in self.memory_stack.get_all()
+                ],
+            }
+
+            return Command(
+                update={
+                    "messages": [
+                        AIMessage(
+                            content="委派Reporter Agent生成最终报告",
+                            name="central_delegate_reporter",
+                        )
+                    ],
+                    "delegation_context": delegation_context,
+                    "current_node": "central_agent",
+                    "memory_stack": self.memory_stack.to_dict(),
+                    "pending_finish": True,  # 标记等待报告完成后再finish
+                },
+                goto="reporter",
+            )
 
         # 构建执行摘要（包含完整记忆栈历史）
         execution_summary = {
