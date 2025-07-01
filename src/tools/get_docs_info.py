@@ -1,13 +1,14 @@
 import requests
 from langchain_core.tools import tool
 from typing import Annotated
-
+# 8509 学习强国
+# 8401 国家安全部知识库
 def search_docs(question, top_k = 5):
     docs = []
-    api_url = "http://localhost:8401/knowledge_base/search_docs"
+    api_url = "http://localhost:8509/knowledge_base/search_docs"
     query = {
         "query": question,
-        "knowledge_base_name": "国家安全部知识库",
+        "knowledge_base_name": "学习强国",
         "score_threshold": 1,
         "file_name": "",
         "metadata": {},
@@ -49,3 +50,5 @@ def search_docs_tool(
     return {"query": question, "docs": docs}
 
 #todo 知识库的领域分类如何注册到工具调用中？如何根据问题+领域分类，自适应的选择知识库去检索
+
+#print(search_docs_tool("习近平总书记关于全面从严治党的重要论述有哪些？"))

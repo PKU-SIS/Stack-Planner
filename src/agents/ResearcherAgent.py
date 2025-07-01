@@ -110,9 +110,15 @@ class ResearcherAgent(CommonReactAgent):
                 )
             )
 
+        # agent_input["messages"].append(
+        #     HumanMessage(
+        #         content="IMPORTANT: DO NOT include inline citations in the text. Instead, track all sources and include a References section at the end using link reference format. Include an empty line between each citation for better readability. Use this format for each reference:\n- [Source Title](URL)\n\n- [Another Source](URL)",
+        #         name="system",
+        #     )
+        # )
         agent_input["messages"].append(
             HumanMessage(
-                content="IMPORTANT: DO NOT include inline citations in the text. Instead, track all sources and include a References section at the end using link reference format. Include an empty line between each citation for better readability. Use this format for each reference:\n- [Source Title](URL)\n\n- [Another Source](URL)",
+                content="IMPORTANT: DO NOT include inline citations in the text. Instead, track all sources and include a References section at the end using link reference format. Include an empty line between each citation for better readability. Use this format for each reference:\n- [Source Title]\n\n- [Another Source]",
                 name="system",
             )
         )
@@ -152,7 +158,7 @@ class ResearcherAgent(CommonReactAgent):
         # Update the step with the execution result
         current_step.execution_res = response_content
         logger.info(f"Step '{current_step.title}' execution completed by {self.agent_name}")
-
+        logger.debug(f"Step tool results: {self.tool_results}")
         return Command(
             update={
                 "messages": [

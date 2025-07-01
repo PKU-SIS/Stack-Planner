@@ -377,6 +377,52 @@ def reporter_node(state: State):
 
     return {"final_report": response_content}
 
+def reporter_xxqg_node(state: State):
+    """Reporter node that write a final report."""
+    logger.info("Reporter write final report")
+    current_plan = state.get("current_plan")    
+    user_query = state.get("user_query")
+    input_ = {
+        "messages": [
+            HumanMessage(
+                f"# Research Requirements\n\n##User Query\n\n{user_query}\n\n## Task\n\n{current_plan.title}\n\n## Description\n\n{current_plan.thought}"
+            )
+        ],
+        "locale": state.get("locale", "en-US"),
+    }
+    invoke_messages = apply_prompt_template("reporter_xxqg", input_)
+    observations = state.get("observations", [])
+
+    # Add a reminder about the new report format, citation style, and table usage
+    invoke_messages.append(
+        HumanMessage(
+            content="IMPORTANT: Structure your report according to the format in the prompt. Remember to include:\n\n1. Key Points - A bulleted list of the most important findings\n2. Overview - A brief introduction to the topic\n3. Detailed Analysis - Organized into logical sections\n4. Survey Note (optional) - For more comprehensive reports\n5. Key Citations - List all references at the end\n\nFor citations, DO NOT include inline citations in the text. Instead, place all citations in the 'Key Citations' section at the end using the format: `- [Source Title]`. Include an empty line between each citation for better readability.\n\nPRIORITIZE USING MARKDOWN TABLES for data presentation and comparison. Use tables whenever presenting comparative data, statistics, features, or options. Structure tables with clear headers and aligned columns. Example table format:\n\n| Feature | Description | Pros | Cons |\n|---------|-------------|------|------|\n| Feature 1 | Description 1 | Pros 1 | Cons 1 |\n| Feature 2 | Description 2 | Pros 2 | Cons 2 |",
+            name="system",
+        )
+    )
+
+    for observation in observations:
+        invoke_messages.append(
+            HumanMessage(
+                content=f"Below are some observations for the research task:\n\n{observation}",
+                name="observation",
+            )
+        )
+    data_collections = state.get("data_collections", [])
+    for data_collection in data_collections:
+        invoke_messages.append(
+            HumanMessage(
+                content=f"Below are data collected in previous tasks:\n\n{data_collection}",
+                name="observation",
+            )
+        )
+    logger.debug(f"Current invoke messages: {invoke_messages}")
+    response = get_llm_by_type(AGENT_LLM_MAP["reporter"]).invoke(invoke_messages)
+    response_content = response.content
+    logger.info(f"reporter response: {response_content}")
+
+    return {"final_report": response_content}
+
 
 def research_team_node(
     state: State,
@@ -453,9 +499,15 @@ async def _execute_agent_step(
                 )
             )
 
+        # agent_input["messages"].append(
+        #     HumanMessage(
+        #         content="IMPORTANT: DO NOT include inline citations in the text. Instead, track all sources and include a References section at the end using link reference format. Include an empty line between each citation for better readability. Use this format for each reference:\n- [Source Title](URL)\n\n- [Another Source](URL)",
+        #         name="system",
+        #     )
+        # )
         agent_input["messages"].append(
             HumanMessage(
-                content="IMPORTANT: DO NOT include inline citations in the text. Instead, track all sources and include a References section at the end using link reference format. Include an empty line between each citation for better readability. Use this format for each reference:\n- [Source Title](URL)\n\n- [Another Source](URL)",
+                content="IMPORTANT: DO NOT include inline citations in the text. Instead, track all sources and include a References section at the end using link reference format. Include an empty line between each citation for better readability. Use this format for each reference:\n- [Source Title]\n\n- [Another Source]",
                 name="system",
             )
         )
@@ -584,6 +636,17 @@ async def researcher_node(
     tools = [search_docs_tool]
     logger.info(f"Researcher tools: {tools}")
     research_agent = ResearcherAgent(config = config, agent_type = "researcher", default_tools = tools)
+    return await research_agent.execute_agent_step(state)
+
+async def researcher_xxqg_node(
+    state: State, config: RunnableConfig
+) -> Command[Literal["research_team"]]:
+    """Researcher node that do research"""
+    logger.info("Researcher node is researching.")
+
+    tools = [search_docs_tool]
+    logger.info(f"Researcher tools: {tools}")
+    research_agent = ResearcherAgent(config = config, agent_type = "researcher_xxqg", default_tools = tools)
     return await research_agent.execute_agent_step(state)
 
 

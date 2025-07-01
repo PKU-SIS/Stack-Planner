@@ -11,6 +11,8 @@ from .nodes import (
     reporter_node,
     research_team_node,
     researcher_node,
+    researcher_xxqg_node,
+    reporter_xxqg_node,
     coder_node,
     human_feedback_node,
     background_investigation_node,
@@ -79,9 +81,9 @@ def build_graph_xxqg():
     builder.add_node("coordinator", coordinator_node)
     builder.add_node("background_investigator", background_investigation_node)
     builder.add_node("planner", sp_planner_node)
-    builder.add_node("reporter", speech_node)
+    builder.add_node("reporter", reporter_xxqg_node)
     builder.add_node("research_team", research_team_node)
-    builder.add_node("researcher", researcher_node)
+    builder.add_node("researcher", researcher_xxqg_node)
     builder.add_node("coder", coder_node)
     builder.add_node("zip_data",zip_data)
     builder.add_edge("reporter","zip_data")
