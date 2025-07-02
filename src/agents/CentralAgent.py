@@ -257,10 +257,6 @@ class CentralAgent:
             "current_progress": state.get("observations", []),
             "decision_reasoning": decision.reasoning,
             "instruction": decision.instruction,
-            # 显式传递思考所需上下文
-            "need_think_context": self.memory_stack.get_recent(
-                include_full_history=True
-            ),
         }
 
         # 应用统一的决策提示模板
@@ -500,6 +496,7 @@ class CentralAgent:
                 },
                 goto="reporter",
             )
+        print(final_report)
 
         # 构建执行摘要（包含完整记忆栈历史）
         execution_summary = {
