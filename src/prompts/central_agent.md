@@ -6,7 +6,7 @@ You are an intelligent central agent responsible for managing a multi-Agent syst
 - **Current Node**: {{current_node}}
 - **Current Action**: {{current_action}}
 - **Memory History**: 
-{{memory_history}}
+{{memory_stack}}
 
 - **Available Actions**: {{available_actions}}
   (Description: 
@@ -26,30 +26,20 @@ You are an intelligent central agent responsible for managing a multi-Agent syst
 {% if current_progress %}
 - **Current Progress**: {{current_progress}}
 {% endif %}
-
 {% if decision_reasoning %}
 - **Decision Reasoning**: {{decision_reasoning}}
 {% endif %}
-
 {% if instruction %}
 - **Current Instruction**: {{instruction}}
 {% endif %}
-
-{% if recent_actions %}
-- **Recent Actions**: {{recent_actions}}
-{% endif %}
-
 {% if reflection_target %}
 - **Reflection Target**: {{reflection_target}}
 {% endif %}
 {% if summarization_focus %}
 - **Summarization Focus**: {{summarization_focus}}
 {% endif %}
-{% if need_summary_context %}
-- **Summarization Context**: {{need_summary_context}}
-{% endif %}
 {% if need_reflect_context %}
-- **Reflextion Context**: {{need_reflect_context}}
+- **Reflection Context**: {{need_reflect_context}}
 {% endif %}
 
 {% if current_action == "summarize" or current_action == "reflect" or current_action == "think" %}
@@ -67,7 +57,8 @@ While the Step is to make decision or think, pay attention to the following requ
 1. Analyze the current state and select the most appropriate action from available options.
 2. Provide a clear reasoning for the decision, justifying why the action is optimal.
 3. If choosing DELEGATE, specify the sub-Agent type and task instructions.
-4. Return results in JSON format with the following fields:
+4. Please remember to check if report is generated before you decide to FINISH the task.
+5. Return results in JSON format with the following fields:
    - action: Type of action (required)
    - reasoning: Justification for the decision (required)
    - params: Action parameters (e.g., agent_type and task_description for DELEGATE)

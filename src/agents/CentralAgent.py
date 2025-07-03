@@ -99,12 +99,8 @@ class CentralAgent:
         """
         logger.info("中枢Agent正在进行决策...")
 
-        # 构建决策上下文
-        context = self._build_decision_context(state)
-
-        # 构建决策提示
-        action_options = list(CentralAgentAction)
-        messages = self._build_decision_prompt(context, config, action_options)
+        # 构建决策prompt
+        messages = self._build_decision_prompt(state, config)
 
         # 获取LLM决策并处理异常
         try:
@@ -136,17 +132,22 @@ class CentralAgent:
                 instruction=self.action_instructions[CentralAgentAction.THINK],
             )
 
-    def _build_decision_context(self, state: State) -> Dict[str, Any]:
+    def _build_decision_prompt(
+        self,
+        state: State,
+        config: RunnableConfig,
+    ) -> List[Union[AIMessage, HumanMessage]]:
         """
-        构建决策上下文，包含系统当前状态的完整信息
+        构建中枢Agent决策提示词，使用统一的prompt模板
 
         Args:
-            state: 当前系统状态
+            context: 决策上下文（已包含所有关键参数）
+            config: 运行配置
+            action_options: 可用动作选项
 
         Returns:
-            决策上下文字典（包含所有关键上下文参数）
+            格式化的提示词消息列表
         """
-        # 转换messages_history中的消息对象
         messages_history = state.get("messages", [])
         converted_messages = []
         for msg in messages_history:
@@ -161,51 +162,23 @@ class CentralAgent:
             else:
                 converted_messages.append(msg)
 
-        return {
-            "user_query": state.get("user_query", ""),
+        context = {
             "current_node": state.get("current_node", "central_agent"),
-            "memory_history": self.memory_stack.get_summary(include_full_history=True),
             "available_actions": [action.value for action in CentralAgentAction],
             "available_sub_agents": [agent.value for agent in SubAgentType],
-            "recent_observations": state.get("observations", [])[-3:],
             "current_action": "decision",
             "messages_history": converted_messages,
-            # # 新增关键上下文参数（覆盖各动作需求）
-            # "need_think_context": self.memory_stack.get_recent(),
-            # "need_reflect_context": self.memory_stack.get_recent(5),
-            # "need_summary_context": self.memory_stack.get_summary(
-            #     include_full_history=True
-            # ),
-            "memory_stack_entries": [
-                entry.to_dict() for entry in self.memory_stack.get_all()
-            ],
         }
-
-    def _build_decision_prompt(
-        self,
-        context: Dict[str, Any],
-        config: RunnableConfig,
-        action_options: List[CentralAgentAction],
-    ) -> List[Union[AIMessage, HumanMessage]]:
-        """
-        构建中枢Agent决策提示词，使用统一的prompt模板
-
-        Args:
-            context: 决策上下文（已包含所有关键参数）
-            config: 运行配置
-            action_options: 可用动作选项
-
-        Returns:
-            格式化的提示词消息列表
-        """
+        action_options = list(CentralAgentAction)
         # 加载正确的模板名称并合并动作选项
         context_with_actions = {
             **context,
+            **config,
             "available_actions": ", ".join([a.value for a in action_options]),
         }
-        formatted_prompt = get_prompt_template("central_agent", context_with_actions)
-
-        return [HumanMessage(content=formatted_prompt)]
+        return apply_prompt_template(
+            "central_agent", state, extra_context=context_with_actions
+        )
 
     def execute_action(
         self, decision: CentralDecision, state: State, config: RunnableConfig
@@ -249,11 +222,7 @@ class CentralAgent:
 
         context = {
             "current_action": "think",
-            "user_query": state.get("user_query", ""),
             "current_node": state.get("current_node", "central_agent"),
-            "memory_history": [
-                entry.to_dict() for entry in self.memory_stack.get_all()
-            ],
             "current_progress": state.get("observations", []),
             "decision_reasoning": decision.reasoning,
             "instruction": decision.instruction,
@@ -277,7 +246,9 @@ class CentralAgent:
             update={
                 "messages": [AIMessage(content=response.content, name="central_think")],
                 "current_node": "central_agent",
-                "memory_stack": self.memory_stack.to_dict(),
+                "memory_stack": json.dumps(
+                    [entry.to_dict() for entry in self.memory_stack.get_all()]
+                ),
             },
             goto="central_agent",
         )
@@ -295,15 +266,11 @@ class CentralAgent:
             "current_action": "reflect",
             "user_query": state.get("user_query", ""),
             "current_node": state.get("current_node", "central_agent"),
-            "recent_actions": [entry.to_dict() for entry in previous_actions],
             "current_progress": state.get("observations", []),
-            "original_query": state.get("user_query", ""),
             "reflection_target": decision.reasoning,
             "instruction": decision.instruction,
             # 显式传递反思所需上下文（最近5条记录）
-            "need_reflect_context": self.memory_stack.get_recent(
-                5, include_full_history=True
-            ),
+            "need_reflect_context": self.memory_stack.get_recent(5),
         }
 
         # 应用统一的反思提示模板
@@ -327,7 +294,9 @@ class CentralAgent:
                 ],
                 "reflection": response.content,
                 "current_node": "central_agent",
-                "memory_stack": self.memory_stack.to_dict(),
+                "memory_stack": json.dumps(
+                    [entry.to_dict() for entry in self.memory_stack.get_all()]
+                ),
             },
             goto="central_agent",
         )
@@ -340,20 +309,9 @@ class CentralAgent:
 
         context = {
             "current_action": "summarize",
-            "user_query": state.get("user_query", ""),
             "current_node": state.get("current_node", "central_agent"),
-            "memory_history": [
-                entry.to_dict() for entry in self.memory_stack.get_all()
-            ],
             "summarization_focus": decision.reasoning,
             "instruction": decision.instruction,
-            # 显式传递总结所需上下文（完整记忆栈摘要）
-            "need_summary_context": self.memory_stack.get_summary(
-                include_full_history=True
-            ),
-            "memory_stack_entries": [
-                entry.to_dict() for entry in self.memory_stack.get_all()
-            ],
         }
 
         # 打印上下文用于调试
@@ -387,7 +345,9 @@ class CentralAgent:
                 ],
                 "summary": response.content,
                 "current_node": "central_agent",
-                "memory_stack": self.memory_stack.to_dict(),
+                "memory_stack": json.dumps(
+                    [entry.to_dict() for entry in self.memory_stack.get_all()]
+                ),
             },
             goto="central_agent",
         )
@@ -443,7 +403,9 @@ class CentralAgent:
                 ],
                 "delegation_context": delegation_context,
                 "current_node": "central_agent",
-                "memory_stack": self.memory_stack.to_dict(),
+                "memory_stack": json.dumps(
+                    [entry.to_dict() for entry in self.memory_stack.get_all()]
+                ),
             },
             goto=agent_type,
         )
@@ -491,7 +453,9 @@ class CentralAgent:
                     ],
                     "delegation_context": delegation_context,
                     "current_node": "central_agent",
-                    "memory_stack": self.memory_stack.to_dict(),
+                    "memory_stack": json.dumps(
+                        [entry.to_dict() for entry in self.memory_stack.get_all()]
+                    ),
                     "pending_finish": True,  # 标记等待报告完成后再finish
                 },
                 goto="reporter",

@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 import os
+import json
 import dataclasses
 from datetime import datetime
 from jinja2 import Environment, FileSystemLoader, select_autoescape
@@ -55,6 +56,8 @@ def apply_prompt_template(
         "CURRENT_TIME": datetime.now().strftime("%a %b %d %Y %H:%M:%S %z"),
         **state,
     }
+    if "memory_stack" in state_vars and isinstance(state_vars["memory_stack"], str):
+        state_vars["memory_stack"] = json.loads(state_vars["memory_stack"])
 
     # Add configurable variables
     if configurable:

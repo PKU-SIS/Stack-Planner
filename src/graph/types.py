@@ -24,4 +24,4 @@ class State(MessagesState):
 
     delegation_context: dict = None
     current_node: str = None
-    memory_stack: list[dict] = None
+    memory_stack: str = None
