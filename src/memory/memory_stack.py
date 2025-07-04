@@ -91,3 +91,13 @@ class MemoryStack:
         """维护栈大小在限制范围内，超出时移除最早的条目"""
         if len(self.stack) > self.max_size:
             self.stack.pop(0)
+
+    def pop(self, count: int = 1) -> List[MemoryStackEntry]:
+        """
+        从栈顶弹出指定数量的条目
+        """
+        if count <= 0:
+            return
+        for _ in range(min(count, len(self.stack))):
+            print(f"Popping entry: {self.stack[-1]}")
+            self.stack.pop()

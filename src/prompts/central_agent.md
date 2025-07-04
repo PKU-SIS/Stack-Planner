@@ -11,7 +11,7 @@ You are an intelligent central agent responsible for managing a multi-Agent syst
 - **Available Actions**: {{available_actions}}
   (Description: 
     THINK = Reason about the current situation, analyze it, and clarify what should be done next, 
-    REFLECT = Reflect on previous step, 
+    REFLECT = Reflect on previous step and POP several nolonger_used items from the memory stack, 
     SUMMARIZE = Condense long histories, 
     DELEGATE = Assign to sub-Agent, 
     FINISH = Complete task & generate report)
@@ -53,7 +53,7 @@ While the Step is to think, summarize or reflect, provide detailed analysis in n
 
 {% if current_action == "decision" %}
 ### Decision Requirements
-While the Step is to make decision or think, pay attention to the following requirements and you MUST return the results in JSON format with the following fields:
+While the Step is to make decision, pay attention to the following requirements and you MUST return the results in JSON format with the following fields:
 1. Analyze the current state and select the most appropriate action from available options.
 2. Provide a clear reasoning for the decision, justifying why the action is optimal.
 3. If choosing DELEGATE, specify the sub-Agent type and task instructions.
@@ -137,26 +137,30 @@ if the **current action** is **THINK**, DO NOT give the json output, provide com
 {% endif %}
 {% if current_action == "reflect"%}
 ### Output Key Points For REFLECT
-if the **current action** is **REFLECT**, DO NOT give the json output, analyze the previous action based on {{reflection_target}} and {{need_reflect_context}}:
+if the **current action** is **REFLECT**, return JSON format with reflection analysis and memory cleanup decision:
 
-When reflecting on a **DELEGATE** action:
-- Evaluate if the sub-agent completed the task successfully
-- Check if the output quality meets requirements
-- Assess whether the task instructions were clear enough
-- Determine if additional information or refinement is needed
-- Consider if a different sub-agent would be more suitable
+```json
+{
+  "analysis": "Detailed reflection analysis here",
+  "pop_count": 2,
+  "reasoning": "Explain why these items should be removed and what the reflection concluded"
+}
+```
 
-When reflecting on a **THINK** action:
-- Review the reasoning process and conclusions drawn
-- Verify if the planned steps are still relevant
-- Check if new information has emerged that changes the approach
-- Assess if the thinking was comprehensive enough
+**Reflection Guidelines**:
+- **analysis**: Provide comprehensive reflection on the previous action
+- **pop_count**: Number (0 or positive integer) indicating how many recent memory stack items to remove
+- **reasoning**: Explain the reflection conclusion and memory cleanup decision
 
-When reflecting on a **SUMMARIZE** action:
-- Evaluate if the summary captured all key information
-- Check if important details were lost in condensation
-- Assess if the summary is at the right level of detail
-- Determine if further summarization or expansion is needed
+
+**Memory Stack Management Criteria**:
+- Remove duplicate or redundant information
+- Remove outdated information that no longer applies
+- Keep essential information supporting ongoing work
+- Remove failed attempts or incorrect reasoning
+- DO NOT REMOVE any history that made progress towards the final goal or decision
+- Only remove the most recent memory stack items. Older items should not be removed unless all recent items are cleared first.
+
 {% endif %}
 
 {% if current_action == "summarize" %}

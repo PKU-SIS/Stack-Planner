@@ -86,7 +86,9 @@ class CentralAgent:
             CentralAgentAction.FINISH: "判断是否可以完成任务并生成最终报告",
         }
 
-    def make_decision(self, state: State, config: RunnableConfig) -> CentralDecision:
+    def make_decision(
+        self, state: State, config: RunnableConfig, retry_count: int = 0
+    ) -> CentralDecision:
         """
         中枢Agent决策核心逻辑，分析当前状态生成决策结果
 
@@ -97,6 +99,7 @@ class CentralAgent:
         Returns:
             决策结果对象
         """
+        max_retries = 3
         logger.info("中枢Agent正在进行决策...")
 
         # 构建决策prompt
@@ -123,7 +126,11 @@ class CentralAgent:
             )
 
         except Exception as e:
-            logger.error(f"决策解析失败: {str(e)}")
+            logger.error(
+                f"决策解析失败:  (尝试 {retry_count + 1}/{max_retries}): {str(e)}"
+            )
+            if retry_count < max_retries - 1:
+                return self.make_decision(state, config, retry_count + 1)
             # 异常情况下返回默认决策
             return CentralDecision(
                 action=CentralAgentAction.THINK,
@@ -163,7 +170,6 @@ class CentralAgent:
                 converted_messages.append(msg)
 
         context = {
-            "current_node": state.get("current_node", "central_agent"),
             "available_actions": [action.value for action in CentralAgentAction],
             "available_sub_agents": [agent.value for agent in SubAgentType],
             "current_action": "decision",
@@ -222,7 +228,6 @@ class CentralAgent:
 
         context = {
             "current_action": "think",
-            "current_node": state.get("current_node", "central_agent"),
             "current_progress": state.get("observations", []),
             "decision_reasoning": decision.reasoning,
             "instruction": decision.instruction,
@@ -256,43 +261,80 @@ class CentralAgent:
     def _handle_reflect(
         self, decision: CentralDecision, state: State, config: RunnableConfig
     ) -> Command:
-        """处理反思动作，评估之前的动作执行效果"""
+        """处理反思动作，评估之前的步骤并清理记忆栈"""
         logger.info("中枢Agent正在反思...")
 
-        # 获取最近动作用于反思
-        previous_actions = self.memory_stack.get_recent(1)
+        # 获取反思目标和上下文
+        reflection_target = decision.params.get("reflection_target", decision.reasoning)
+        recent_memory = self.memory_stack.get_recent(5)  # 获取最近5条记忆
 
         context = {
             "current_action": "reflect",
-            "user_query": state.get("user_query", ""),
-            "current_node": state.get("current_node", "central_agent"),
-            "current_progress": state.get("observations", []),
-            "reflection_target": decision.reasoning,
+            "reflection_target": reflection_target,
+            "need_reflect_context": json.dumps(
+                [entry.to_dict() for entry in recent_memory]
+            ),
+            "decision_reasoning": decision.reasoning,
             "instruction": decision.instruction,
-            # 显式传递反思所需上下文（最近5条记录）
-            "need_reflect_context": self.memory_stack.get_recent(5),
         }
 
-        # 应用统一的反思提示模板
+        # 应用反思提示模板
         messages = apply_prompt_template("central_agent", state, extra_context=context)
 
         llm = get_llm_by_type(AGENT_LLM_MAP.get("central_agent", "default"))
         response = llm.invoke(messages)
 
-        # 更新记忆栈，替换最新的反思结果
-        new_entry = MemoryStackEntry(
+        # 解析反思结果JSON
+        try:
+            reflection_data = json.loads(repair_json_output(response.content))
+            analysis = reflection_data.get("analysis", "反思分析")
+            pop_count = reflection_data.get("pop_count", 0)
+            reasoning = reflection_data.get("reasoning", "反思完成")
+
+            # 验证pop_count是有效数字
+            if not isinstance(pop_count, int) or pop_count < 0:
+                logger.warning(f"无效的pop_count: {pop_count}，设置为0")
+                pop_count = 0
+
+        except Exception as e:
+            logger.error(f"反思结果解析失败: {e}")
+            analysis = response.content
+            pop_count = 0
+            reasoning = "JSON解析失败，保持现有记忆栈"
+
+        # 执行记忆栈清理
+        removed_items = []
+        if pop_count > 0:
+            self.memory_stack.pop(pop_count)
+            logger.info(
+                f"从记忆栈中移除了 {len(removed_items)} 项: {[item.get('action', 'unknown') for item in removed_items]}"
+            )
+        else:
+            logger.info("不移除任何记忆栈项目")
+
+        # 记录反思过程到记忆栈
+        memory_entry = MemoryStackEntry(
             timestamp=datetime.datetime.now().isoformat(),
             action="reflect",
-            content=response.content,
+            content=f"反思分析: {reasoning}",
+            metadata={
+                "reflection_target": reflection_target,
+                "pop_count": len(removed_items),
+                "removed_items": removed_items,
+                "analysis": analysis,
+            },
         )
-        self.memory_stack.push_with_pop(new_entry)
+        self.memory_stack.push(memory_entry)
 
         return Command(
             update={
-                "messages": [
-                    AIMessage(content=response.content, name="central_reflect")
-                ],
-                "reflection": response.content,
+                "messages": [AIMessage(content=analysis, name="central_reflect")],
+                "reflection": {
+                    "analysis": analysis,
+                    "pop_count": len(removed_items),
+                    "reasoning": reasoning,
+                    "removed_items": removed_items,
+                },
                 "current_node": "central_agent",
                 "memory_stack": json.dumps(
                     [entry.to_dict() for entry in self.memory_stack.get_all()]
@@ -309,7 +351,6 @@ class CentralAgent:
 
         context = {
             "current_action": "summarize",
-            "current_node": state.get("current_node", "central_agent"),
             "summarization_focus": decision.reasoning,
             "instruction": decision.instruction,
         }
