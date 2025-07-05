@@ -6,18 +6,15 @@ Server script for running the DeerFlow API.
 """
 
 import argparse
-import logging
+from src.utils.logger import logger
 import signal
 import sys
 import uvicorn
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
+def enable_debug_logging():
+    """Enable debug level logging."""
+    logger.set_log_level(log_level="DEBUG")
 
-logger = logging.getLogger(__name__)
 
 
 def handle_shutdown(signum, frame):
@@ -65,6 +62,8 @@ if __name__ == "__main__":
     if args.reload:
         reload = True
 
+    if args.log_level.lower() == "debug":
+        enable_debug_logging()
     try:
         logger.info(f"Starting DeerFlow API server on {args.host}:{args.port}")
         uvicorn.run(

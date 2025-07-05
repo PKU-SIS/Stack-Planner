@@ -5,6 +5,7 @@ from langgraph.graph import MessagesState
 
 from src.prompts.planner_model import Plan
 from src.rag import Resource
+from typing import Any
 
 
 class State(MessagesState):
@@ -13,6 +14,7 @@ class State(MessagesState):
     # Runtime Variables
     locale: str = "en-US"
     observations: list[str] = []
+    data_collections:list[Any] = []
     resources: list[Resource] = []
     plan_iterations: int = 0
     current_plan: Plan | str = None
@@ -25,3 +27,4 @@ class State(MessagesState):
     delegation_context: dict = None
     current_node: str = None
     memory_stack: str = None
+

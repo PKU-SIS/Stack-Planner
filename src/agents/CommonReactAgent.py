@@ -52,7 +52,7 @@ class CommonReactAgent(BaseModel, metaclass=ABCMeta):
         if "callbacks" in config:
             config["callbacks"] = config["callbacks"] + [self._handler]
         else:
-            config["callbacks"] = [self._handler]
+            config["callbacks"] = self._handler
 
         # 替换 kwargs 中的 config
         kwargs["config"] = config

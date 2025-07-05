@@ -5,35 +5,16 @@ from langgraph.graph import StateGraph, START, END
 from langgraph.checkpoint.memory import MemorySaver
 
 from .types import State
+from .nodes import (
+    coordinator_xxqg_node,
+    researcher_xxqg_node,
+    reporter_xxqg_node,
+    speech_node,
+    zip_data
+)
 
-# from .nodes import (
-#     coordinator_node,
-#     planner_node,
-#     reporter_node,
-#     research_team_node,
-#     researcher_node,
-#     coder_node,
-#     human_feedback_node,
-#     background_investigation_node,
-#     sp_planner_node,
-#     speech_node,
-#     zip_data,
-#     sp_center_agent_node,
-# )
 
-from .sp_nodes import *
 
-# 定义可用的子Agent名称
-NODE_NAMES = [
-    "planner",
-    "researcher",
-    "coder",
-    "reporter",
-    "background_investigator",
-    "coordinator",
-    "research_team",
-    "zip_data",
-]
 
 
 def _build_base_graph():
@@ -91,12 +72,12 @@ def build_graph_xxqg():
     # build state graph
     builder = StateGraph(State)
     builder.add_edge(START, "coordinator")
-    builder.add_node("coordinator", coordinator_node)
+    builder.add_node("coordinator", coordinator_xxqg_node)
     builder.add_node("background_investigator", background_investigation_node)
     builder.add_node("planner", sp_planner_node)
-    builder.add_node("reporter", speech_node)
+    builder.add_node("reporter", reporter_xxqg_node)
     builder.add_node("research_team", research_team_node)
-    builder.add_node("researcher", researcher_node)
+    builder.add_node("researcher", researcher_xxqg_node)
     builder.add_node("coder", coder_node)
     builder.add_node("zip_data", zip_data)
     builder.add_edge("reporter", "zip_data")
