@@ -6,7 +6,7 @@ from .decorators import log_io
 # 8401 国家安全部知识库
 def search_docs(question, top_k = 5):
     docs = []
-    api_url = "http://localhost:8509/knowledge_base/search_docs"
+    api_url = "http://60.28.106.46:8509/knowledge_base/search_docs"
     query = {
         "query": question,
         "knowledge_base_name": "学习强国",
