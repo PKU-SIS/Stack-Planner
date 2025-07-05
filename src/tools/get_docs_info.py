@@ -1,6 +1,7 @@
 import requests
 from langchain_core.tools import tool
 from typing import Annotated
+from .decorators import log_io
 # 8509 学习强国
 # 8401 国家安全部知识库
 def search_docs(question, top_k = 5):
@@ -39,16 +40,17 @@ def search_docs(question, top_k = 5):
 
 
 @tool
+@log_io
 def search_docs_tool(
     question: Annotated[str, "检索的问题，使用语义相似度匹配"],
 ) -> dict:
     """
-    查询本地存储的领域知识库，检索方式为语义相似度匹配，返回与question相关的文档内容。
+    使用这个工具查询本地存储的领域知识库，检索方式为语义相似度匹配，返回与question相关的文档内容。
     """
-    docs = search_docs(question, 10)
+    docs = search_docs(question, 20)
     #print(docs)
     return {"query": question, "docs": docs}
 
 #todo 知识库的领域分类如何注册到工具调用中？如何根据问题+领域分类，自适应的选择知识库去检索
 
-#print(search_docs_tool("习近平总书记关于全面从严治党的重要论述有哪些？"))
+print(search_docs_tool("习近平总书记关于全面从严治党的重要论述有哪些？"))

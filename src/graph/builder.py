@@ -7,6 +7,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from .types import State
 from .nodes import (
     coordinator_node,
+    coordinator_xxqg_node,
     planner_node,
     reporter_node,
     research_team_node,
@@ -78,7 +79,7 @@ def build_graph_xxqg():
     # build state graph
     builder = StateGraph(State)
     builder.add_edge(START, "coordinator")
-    builder.add_node("coordinator", coordinator_node)
+    builder.add_node("coordinator", coordinator_xxqg_node)
     builder.add_node("background_investigator", background_investigation_node)
     builder.add_node("planner", sp_planner_node)
     builder.add_node("reporter", reporter_xxqg_node)
