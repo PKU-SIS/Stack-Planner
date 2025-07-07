@@ -1,0 +1,112 @@
+Enter your query: what is AI agent?
+2025-06-07 15:06:58,027 - src.workflow - INFO - Starting async workflow with user input: what is AI agent?
+================================ Human Message =================================
+
+what is AI agent?
+2025-06-07 15:06:58,028 - src.graph.nodes - INFO - Coordinator talking.
+2025-06-07 15:07:02,039 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-06-07 15:07:02,053 - src.graph.nodes - INFO - background investigation node is running.
+sync [
+  {
+    "type": "page",
+    "title": "What are AI Agents?- Agents in Artificial Intelligence Explained - AWS",
+    "url": "https://aws.amazon.com/what-is/ai-agents/",
+    "content": "An artificial intelligence (AI) agent is a software program that can interact with its environment, collect data, and use the data to perform self-determined tasks to meet predetermined goals. Humans set goals, but an AI agent independently chooses the best actions it needs to perform to achieve those goals. For example, consider a contact center AI agent that wants to resolves customer queries. The agent will automatically ask the customer different questions, look up information in internal [...] AI agents are autonomous intelligent systems performing specific tasks without human intervention. Organizations use AI agents to achieve specific goals and more efficient business outcomes. Business teams are more productive when they delegate repetitive tasks to AI agents. This way, they can divert their attention to mission-critical or creative activities, adding more value to their organization.\n\n### **Reduced costs** [...] AI agents are rational agents. They make rational decisions based on their perceptions and data to produce optimal performance and results. An AI agent senses its environment with physical or software interfaces.",
+    "score": 0.9407083
+  },
+  {
+    "type": "page",
+    "title": "What are AI agents? How they work and how to use them - Zapier",
+    "url": "https://zapier.com/blog/ai-agent/",
+    "content": "An AI agent is an entity that can act autonomously in an environment. It can take information from its surroundings, make decisions based on that data, and act to transform those circumstances—physical, digital, or mixed. More advanced systems can learn and update their behavior over time, constantly trying out new solutions to a problem until they achieve the goal. [...] *   [AI Agent](https://aiagent.app/) is a flexible app that lets you create your own agents, by picking a name, an objective, and the AI model it should use. After it initializes the goal and creates the first task list, you can edit and add your own tasks. Give it time to complete each step: it can take more than 20 minutes to complete advanced tasks.",
+    "score": 0.9387167
+  },
+  {
+    "type": "page",
+    "title": "What are AI agents? - GitHub",
+    "url": "https://github.com/resources/articles/ai/what-are-ai-agents",
+    "content": "### Frequently asked questions\n\n#### What is an AI agent?\n\nAn [AI agent](https://github.com/features/copilot) is an autonomous system designed to perform tasks, make decisions, and adapt based on data and user feedback. It operates independently, automating processes in various fields like software development and security.\n\n#### What do AI agents do? [...] What are AI agents?\n-------------------\n\nAI agents are autonomous software tools that perform tasks, make decisions, and interact with their environment intelligently and rationally. They use artificial intelligence to learn, adapt, and take action based on real-time feedback and changing conditions. AI agents can work on their own or as part of a bigger system, learning and changing based on the data they process. [...] #### What is the difference between an AI agent and an AI model?\n\nAn AI agent is an autonomous system that can make decisions and perform tasks, while an AI model is a mathematical representation of a problem used to make predictions or decisions. AI agents often use AI models as part of their decision-making processes.\n\n#### How are AI agents used in software development?",
+    "score": 0.93762916
+  }
+]
+2025-06-07 15:07:06,137 - src.graph.nodes - INFO - Planner generating full plan
+2025-06-07 15:07:07,765 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-06-07 15:07:07,782 - src.graph.nodes - INFO - Planner response: {
+    "locale": "en-US",
+    "has_enough_context": true,
+    "thought": "The available information provides comprehensive coverage on the concept of AI agents, detailing their functionalities, autonomy, and applications, with specific examples and distinctions between AI agents and models.",
+    "title": "Understanding AI Agents",
+    "steps": []
+}
+2025-06-07 15:07:07,782 - src.graph.nodes - INFO - Planner response has enough context.
+================================== Ai Message ==================================
+Name: planner
+
+{
+    "locale": "en-US",
+    "has_enough_context": true,
+    "thought": "The available information provides comprehensive coverage on the concept of AI agents, detailing their functionalities, autonomy, and applications, with specific examples and distinctions between AI agents and models.",
+    "title": "Understanding AI Agents",
+    "steps": []
+}
+2025-06-07 15:07:07,783 - src.graph.nodes - INFO - Reporter write final report
+2025-06-07 15:07:20,243 - openai._base_client - INFO - Retrying request to /chat/completions in 0.481672 seconds
+2025-06-07 15:07:34,837 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-06-07 15:07:34,853 - src.graph.nodes - INFO - reporter response: # Understanding AI Agents
+
+## Key Points
+
+- AI agents are autonomous systems that can perceive their environment and take actions to achieve specific goals.
+- Unlike standard AI models, AI agents possess a degree of autonomy, enabling them to make decisions without human intervention.
+- AI agents are widely used across various industries, including healthcare, finance, and robotics.      
+- The distinction between AI agents and models lies in their functionality: agents are interactive and autonomous, while models focus on data processing and pattern recognition.
+- Examples of AI agents include virtual assistants, autonomous vehicles, and customer service chatbots.  
+
+## Overview
+
+AI agents represent a significant advancement in artificial intelligence, characterized by their ability to operate autonomously within an environment. These agents are designed to perceive data, make decisions, and perform actions to achieve predefined objectives. This report explores the functionalities, applications, and distinctions of AI agents compared to traditional AI models, underscoring their transformative potential in various domains.
+
+AI agents differ from AI models primarily in their autonomy and interactivity. While AI models are typically designed to process data and generate insights, AI agents possess the capability to interact with the environment and perform tasks with minimal human guidance. This capability has made AI agents a crucial component in automating processes and enhancing efficiency across different sectors.
+
+## Detailed Analysis
+
+### Functionalities of AI Agents
+
+AI agents operate based on a combination of perceptual inputs and decision-making processes. They are equipped with sensors or data input mechanisms to gather information about their environment. The core functionalities of these agents include:
+
+- **Autonomous Decision-Making**: AI agents can make decisions based on real-time data without the need for constant human oversight.
+- **Adaptability**: They can adapt to changing environments by learning from new data inputs.
+- **Goal-Oriented**: Designed to achieve specific objectives, AI agents optimize their actions to meet desired outcomes.
+
+### Applications and Examples
+
+AI agents are deployed across various industries, serving diverse roles:
+
+| Application Sector | Example AI Agent    | Functionality                       |
+|--------------------|---------------------|-------------------------------------|
+| Healthcare         | Diagnostic Agent    | Analyzes medical data for diagnosis |
+| Finance            | Trading Agent       | Executes decisions in stock trading |
+| Robotics           | Autonomous Vehicles | Navigates environments independently |
+| Customer Service   | Chatbots            | Provides automated support          |
+
+### Distinction Between AI Agents and Models
+
+The primary difference between AI agents and AI models lies in their operational scope and autonomy level:
+
+| Aspect          | AI Agents                  | AI Models              |
+|-----------------|----------------------------|------------------------|
+| Autonomy        | High autonomy              | No autonomy            |
+| Interaction     | Engages interactively      | Data processing only   |
+| Decision-Making | Embedded decision-making   | No inherent decision-making |
+| Application     | Real-time interaction tasks| Data analysis and insights |
+
+AI agents bring interactivity and autonomy to AI systems, making them indispensable for tasks requiring dynamic adaptation and decision-making.
+
+## Key Citations
+
+- [Understanding AI Agents](URL)
+
+- [Applications of AI Agents in Industry](URL)
+
+- [Distinguishing AI Agents and Models](URL)
+2025-06-07 15:07:34,855 - src.workflow - INFO - Async workflow completed successfully
