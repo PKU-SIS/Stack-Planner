@@ -1,7 +1,7 @@
 import httpx
 import json
 
-url = "http://60.28.106.46:8512/api/chat/xxqg_stream"
+url = "http://localhost:8513/api/chat/xxqg_stream"
 
 data = {
     "messages": [{"role": "user", 

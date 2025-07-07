@@ -16,7 +16,7 @@ from langgraph.types import Command
 
 from src.config.tools import SELECTED_RAG_PROVIDER
 from src.graph.builder import build_graph_with_memory
-from src.graph.builder import graph as xxqg_graph
+from src.graph.builder import xxqg_graph
 from src.podcast.graph.builder import build_graph as build_podcast_graph
 from src.ppt.graph.builder import build_graph as build_ppt_graph
 from src.prose.graph.builder import build_graph as build_prose_graph
