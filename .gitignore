@@ -8,6 +8,7 @@ wheels/
 .coverage
 agent_history.gif
 static/browser_history/*.gif
+node_modules/
 
 # Virtual environments
 .venv
@@ -28,3 +29,4 @@ conf.yaml
 # coverage report
 coverage.xml
 coverage/
+
