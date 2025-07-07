@@ -247,6 +247,7 @@ class CentralAgent:
         )
         self.memory_stack.push(memory_entry)
 
+        logger.info(f"central_think: {response.content}")
         return Command(
             update={
                 "messages": [AIMessage(content=response.content, name="central_think")],
@@ -321,6 +322,7 @@ class CentralAgent:
         )
         self.memory_stack.push(memory_entry)
 
+        logger.info(f"central_reflect: {analysis}")
         return Command(
             update={
                 "messages": [AIMessage(content=analysis, name="central_reflect")],
@@ -374,6 +376,7 @@ class CentralAgent:
 
         self.memory_stack.push_with_pop(new_entry)
 
+        logger.info(f"central_summarize: {response.content}")
         return Command(
             update={
                 "messages": [
@@ -401,7 +404,7 @@ class CentralAgent:
                 f"无效的子Agent类型: {agent_type}，可用类型: "
                 f"{[agent.value for agent in SubAgentType]}"
             )
-            logger.error(error_msg)
+            logger.error(f"central_error: {error_msg}")
             return Command(
                 update={
                     "messages": [AIMessage(content=error_msg, name="central_error")],
@@ -429,6 +432,7 @@ class CentralAgent:
             "original_query": state.get("user_query", ""),
         }
 
+        logger.info(f"central_delegate: 委派{agent_type}执行: {task_description}")
         return Command(
             update={
                 "messages": [
@@ -479,6 +483,7 @@ class CentralAgent:
                 ],
             }
 
+            logger.info("central_delegate_reporter: 委派Reporter Agent生成最终报告")
             return Command(
                 update={
                     "messages": [

@@ -80,7 +80,7 @@ class SubAgentManager:
                 )
 
         except Exception as e:
-            logger.error(f"研究Agent执行失败: {str(e)}")
+            logger.error(f"Researcher Agent执行失败: {str(e)}")
             return Command(
                 update={
                     "messages": [
@@ -105,6 +105,7 @@ class SubAgentManager:
         )
         self.central_agent.memory_stack.push(memory_entry)
 
+        logger.info("研究任务完成，返回中枢Agent")
         return Command(
             update={
                 "messages": [
@@ -179,6 +180,7 @@ class SubAgentManager:
         )
         self.central_agent.memory_stack.push(memory_entry)
 
+        logger.info("研究任务完成，返回中枢Agent")
         return Command(
             update={
                 "messages": [
@@ -241,6 +243,7 @@ class SubAgentManager:
         )
         self.central_agent.memory_stack.push(memory_entry)
 
+        logger.info("编码任务完成，返回中枢Agent")
         return Command(
             update={
                 "messages": [
@@ -298,6 +301,7 @@ class SubAgentManager:
         )
         self.central_agent.memory_stack.push(memory_entry)
 
+        logger.info("报告生成完成，返回中枢Agent")
         return Command(
             update={
                 "messages": [
@@ -356,6 +360,7 @@ class SubAgentManager:
         )
         self.central_agent.memory_stack.push(memory_entry)
 
+        logger.info("报告生成完成，返回中枢Agent")
         return Command(
             update={
                 "messages": [

@@ -90,13 +90,13 @@ async def run_agent_workflow_async(
                 if isinstance(message, tuple):
                     logger.info(message)
                 else:
-                    message.pretty_logger.info()
+                    message.pretty_print()
             else:
                 # For any other output format
                 logger.info(f"Output: {s}")
         except Exception as e:
             logger.error(f"Error processing stream output: {e}")
-            logger.info(f"Error processing output: {str(e)}")
+            logger.error(f"Error processing output: {str(e)}")
 
     logger.info("Async workflow completed successfully")
 

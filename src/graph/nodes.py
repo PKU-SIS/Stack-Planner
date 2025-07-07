@@ -145,6 +145,7 @@ def planner_node(
     if curr_plan.get("has_enough_context"):
         logger.info("Planner response has enough context.")
         new_plan = Plan.model_validate(curr_plan)
+        logger.info(f"Planner: {full_response}")
         return Command(
             update={
                 "messages": [AIMessage(content=full_response, name="planner")],
@@ -152,6 +153,7 @@ def planner_node(
             },
             goto="reporter",
         )
+    logger.info(f"Planner: {full_response}")
     return Command(
         update={
             "messages": [AIMessage(content=full_response, name="planner")],
@@ -221,6 +223,7 @@ def sp_planner_node(
     if curr_plan.get("has_enough_context"):
         logger.info("Planner response has enough context.")
         new_plan = Plan.model_validate(curr_plan)
+        logger.info(f"Planner: {full_response}")
         return Command(
             update={
                 "messages": [AIMessage(content=full_response, name="planner")],

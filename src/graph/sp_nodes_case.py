@@ -321,6 +321,7 @@ class CentralAgent:
             if current_entry:
                 current_entry.result = {"thought_result": response.content}
 
+        logger.info(f"central_think: {response.content}")
         return Command(
             update={
                 "messages": [AIMessage(content=response.content, name="central_think")],
@@ -360,6 +361,7 @@ class CentralAgent:
                 current_entry.result = {"reflection_result": response.content}
                 current_entry.reflection = response.content
 
+        logger.info(f"central_reflect: {response.content}")
         return Command(
             update={
                 "messages": [
@@ -403,6 +405,7 @@ class CentralAgent:
             if current_entry:
                 current_entry.result = {"summary_result": response.content}
 
+        logger.info(f"central_summarize: {response.content}")
         return Command(
             update={
                 "messages": [
@@ -425,6 +428,7 @@ class CentralAgent:
         logger.info(f"中枢Agent委派 {agent_type} 执行任务: {task_description}")
 
         if not agent_type or agent_type not in [agent.value for agent in SubAgentType]:
+            logger.error(f"无效的子Agent类型: {agent_type}")
             return Command(
                 update={
                     "messages": [
@@ -453,6 +457,7 @@ class CentralAgent:
             "original_query": state.get("user_query", ""),
         }
 
+        logger.info(f"central_delegate: 委派 {agent_type} 执行任务: {task_description}")
         return Command(
             update={
                 "messages": [
@@ -502,6 +507,7 @@ class CentralAgent:
                     "report_file": filename,
                 }
 
+        logger.info(f"central_finish: 任务完成，报告已保存: {filename}")
         return Command(
             update={
                 "messages": [
@@ -556,6 +562,7 @@ class SubAgentManager:
         self.central_agent.memory_stack.push(memory_entry)
 
         # 确保返回中枢Agent
+        logger.info("Researcher Agent完成，返回中枢Agent")
         return Command(
             update={
                 "messages": [
@@ -593,6 +600,7 @@ class SubAgentManager:
         self.central_agent.memory_stack.push(memory_entry)
 
         # 确保返回中枢Agent
+        logger.info("Coder Agent完成，返回中枢Agent")
         return Command(
             update={
                 "messages": [
@@ -640,6 +648,7 @@ class SubAgentManager:
         self.central_agent.memory_stack.push(memory_entry)
 
         # 确保返回中枢Agent
+        logger.info("Reporter Agent完成，返回中枢Agent")
         return Command(
             update={
                 "messages": [
