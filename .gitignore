@@ -14,7 +14,7 @@ static/browser_history/*.gif
 venv/
 logs/
 reports/
-node_modules/
+/node_modules
 
 # Environment variables
 .env

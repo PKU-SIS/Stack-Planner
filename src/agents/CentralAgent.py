@@ -265,15 +265,10 @@ class CentralAgent:
         logger.info("中枢Agent正在反思...")
 
         # 获取反思目标和上下文
-        reflection_target = decision.params.get("reflection_target", decision.reasoning)
-        recent_memory = self.memory_stack.get_recent(5)  # 获取最近5条记忆
+        # recent_memory = self.memory_stack.get_recent(5)  # 获取最近5条记忆
 
         context = {
             "current_action": "reflect",
-            "reflection_target": reflection_target,
-            "need_reflect_context": json.dumps(
-                [entry.to_dict() for entry in recent_memory]
-            ),
             "decision_reasoning": decision.reasoning,
             "instruction": decision.instruction,
         }

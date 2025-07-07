@@ -32,15 +32,10 @@ You are an intelligent central agent responsible for managing a multi-Agent syst
 {% if instruction %}
 - **Current Instruction**: {{instruction}}
 {% endif %}
-{% if reflection_target %}
-- **Reflection Target**: {{reflection_target}}
-{% endif %}
 {% if summarization_focus %}
 - **Summarization Focus**: {{summarization_focus}}
 {% endif %}
-{% if need_reflect_context %}
-- **Reflection Context**: {{need_reflect_context}}
-{% endif %}
+
 
 {% if current_action == "summarize" or current_action == "reflect" or current_action == "think" %}
 While the Step is to think, summarize or reflect, provide detailed analysis in natural language format:
