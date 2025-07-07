@@ -14,7 +14,7 @@ from langchain_mcp_adapters.client import MultiServerMCPClient
 
 from src.agents.CommonReactAgent import CommonReactAgent
 from src.agents.CoderAgent import CoderAgent
-from StackPlanner.src.agents.ResearcherAgent_SP import ResearcherAgentSP
+from src.agents.ResearcherAgent_SP import ResearcherAgentSP
 from src.agents.ResearcherAgent import ResearcherAgent
 from src.tools.search import LoggedTavilySearch
 from src.tools import (

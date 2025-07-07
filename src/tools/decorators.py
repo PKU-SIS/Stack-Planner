@@ -43,12 +43,12 @@ def log_io(func: Callable) -> Callable:
 
         # Log the output with truncation for long content
         result_str = str(result)
-        if len(result_str) > 500:
-            logger.info(
-                f"Tool {func_name} returned: {result_str[:500]}...[输出已截断，总长度: {len(result_str)}]"
-            )
-        else:
-            logger.info(f"Tool {func_name} returned: {result}")
+        # if len(result_str) > 500:
+        #     logger.info(
+        #         f"Tool {func_name} returned: {result_str[:500]}...[输出已截断，总长度: {len(result_str)}]"
+        #     )
+        # else:
+        logger.info(f"Tool {func_name} returned: {result}")
 
         return result
 

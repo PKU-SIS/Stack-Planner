@@ -129,7 +129,7 @@ if __name__ == "__main__":
         help="Disable background investigation before planning",
     )
     parser.add_argument(
-        "--graph-fomat",
+        "--graph-format",
         type=str,
         default="sp",
         choices=["sp", "xxqg","sp_xxqg"],
@@ -145,7 +145,7 @@ if __name__ == "__main__":
             max_plan_iterations=args.max_plan_iterations,
             max_step_num=args.max_step_num,
             enable_background_investigation=args.enable_background_investigation,
-            graph_format=args.graph_fomat,
+            graph_format=args.graph_format,
         )
     else:
         # Parse user input from command line arguments or user input
@@ -161,5 +161,5 @@ if __name__ == "__main__":
             max_plan_iterations=args.max_plan_iterations,
             max_step_num=args.max_step_num,
             enable_background_investigation=args.enable_background_investigation,
-            graph_format=args.graph_fomat,
+            graph_format=args.graph_format,
         )

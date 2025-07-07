@@ -150,7 +150,7 @@ def build_multi_agent_graph():
     builder.add_node("researcher", sp_researcher_node)
     builder.add_node("coder", sp_coder_node)
     builder.add_node("reporter", sp_reporter_node)
-    builder.add_node("zip_data", zip_data)
+
 
     # 定义状态转移
     builder.add_edge(START, "central_agent")
@@ -178,6 +178,7 @@ def build_graph_sp_xxqg():
     builder.add_node("researcher", sp_xxqg_researcher_node)
     builder.add_node("coder", sp_coder_node)
     builder.add_node("reporter", sp_xxqg_reporter_node)
+    builder.add_node("zip_data", zip_data)
 
     # 定义状态转移
     builder.add_edge(START, "central_agent")
