@@ -9,6 +9,7 @@ from langchain_openai import ChatOpenAI
 
 from src.config import load_yaml_config
 from src.config.agents import LLMType
+from src.utils.logger import logger
 
 # Cache for LLM instances
 _llm_cache: dict[LLMType, ChatOpenAI] = {}
@@ -75,4 +76,4 @@ def get_llm_by_type(
 if __name__ == "__main__":
     # Initialize LLMs for different purposes - now these will be cached
     basic_llm = get_llm_by_type("basic")
-    print(basic_llm.invoke("Hello"))
+    logger.debug(basic_llm.invoke("Hello"))

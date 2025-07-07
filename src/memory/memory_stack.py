@@ -1,7 +1,7 @@
 from src.memory.memory_stack_entry import MemoryStackEntry
 from typing import Annotated, Literal, Dict, List, Optional, Any
 import json
-
+from src.utils.logger import logger
 
 # -------------------------
 # 记忆管理模块
@@ -99,5 +99,5 @@ class MemoryStack:
         if count <= 0:
             return
         for _ in range(min(count, len(self.stack))):
-            print(f"Popping entry: {self.stack[-1]}")
+            logger.info(f"Popping entry: {self.stack[-1]}")
             self.stack.pop()

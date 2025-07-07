@@ -2,6 +2,7 @@ import requests
 from langchain_core.tools import tool
 from typing import Annotated
 from .decorators import log_io
+from src.utils.logger import logger
 # 8509 学习强国
 # 8401 国家安全部知识库
 def search_docs(question, top_k = 5):
@@ -31,12 +32,12 @@ def search_docs(question, top_k = 5):
                         {"source": metadata.get("source", ""), "content": content}
                     )
         else:
-            print(
+            logger.error(
                 f"请求失败，状态码: {response.status_code}，错误信息: {response.text}"
             )
         return docs
     except requests.RequestException as e:
-        print(f"请求过程中出现异常: {e}")
+        logger.error(f"请求过程中出现异常: {e}")
         return docs
 
 
@@ -49,9 +50,9 @@ def search_docs_tool(
     使用这个工具查询本地存储的领域知识库，检索方式为语义相似度匹配，返回与question相关的文档内容。
     """
     docs = search_docs(question, 20)
-    #print(docs)
+    #logger.info(docs)
     return {"query": question, "docs": docs}
 
 #todo 知识库的领域分类如何注册到工具调用中？如何根据问题+领域分类，自适应的选择知识库去检索
 
-print(search_docs_tool("习近平总书记关于全面从严治党的重要论述有哪些？"))
+#logger.info(search_docs_tool("习近平总书记关于全面从严治党的重要论述有哪些？"))

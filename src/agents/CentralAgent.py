@@ -16,7 +16,7 @@ from src.llms.llm import get_llm_by_type
 from src.prompts.template import apply_prompt_template, get_prompt_template
 from src.utils.json_utils import repair_json_output
 from src.memory import MemoryStack, MemoryStackEntry
-
+from src.utils.logger import logger
 from ..graph.types import State
 
 
@@ -112,7 +112,7 @@ class CentralAgent:
 
             # 解析决策结果
             decision_data = json.loads(repair_json_output(response.content))
-            print(f"决策结果: {decision_data}")
+            logger.info(f"决策结果: {decision_data}")
             action = CentralAgentAction(decision_data["action"])
             reasoning = decision_data.get("reasoning", "")
             params = decision_data.get("params", {})
@@ -369,8 +369,8 @@ class CentralAgent:
             result={"summary_result": response.content},
         )
 
-        # print("NEW_ENTRY", new_entry)
-        # print("*"*100)
+        # logger.info("NEW_ENTRY", new_entry)
+        # logger.info("*"*100)
 
         self.memory_stack.push_with_pop(new_entry)
 
@@ -496,7 +496,7 @@ class CentralAgent:
                 },
                 goto="reporter",
             )
-        print(final_report)
+        logger.info(f"final_report: {final_report}")
 
         # 构建执行摘要（包含完整记忆栈历史）
         execution_summary = {

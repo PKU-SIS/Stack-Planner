@@ -88,18 +88,18 @@ async def run_agent_workflow_async(
                 last_message_cnt = len(s["messages"])
                 message = s["messages"][-1]
                 if isinstance(message, tuple):
-                    print(message)
+                    logger.info(message)
                 else:
-                    message.pretty_print()
+                    message.pretty_logger.info()
             else:
                 # For any other output format
-                print(f"Output: {s}")
+                logger.info(f"Output: {s}")
         except Exception as e:
             logger.error(f"Error processing stream output: {e}")
-            print(f"Error processing output: {str(e)}")
+            logger.info(f"Error processing output: {str(e)}")
 
     logger.info("Async workflow completed successfully")
 
 
 if __name__ == "__main__":
-    print(graph.get_graph(xray=True).draw_mermaid())
+    logger.info(graph.get_graph(xray=True).draw_mermaid())

@@ -8,6 +8,7 @@ from datetime import datetime
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from langgraph.prebuilt.chat_agent_executor import AgentState
 from src.config.configuration import Configuration
+from src.utils.logger import logger
 
 # Initialize Jinja2 environment
 env = Environment(
@@ -66,6 +67,7 @@ def apply_prompt_template(
     if extra_context:
         state_vars.update(extra_context)
 
+    logger.debug(f"Applying template {prompt_name} with state: {state_vars}")
     try:
         template = env.get_template(f"{prompt_name}.md")
         system_prompt = template.render(**state_vars)
