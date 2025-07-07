@@ -5,13 +5,26 @@ from langgraph.graph import StateGraph, START, END
 from langgraph.checkpoint.memory import MemorySaver
 
 from .types import State
+
 from .nodes import (
-    coordinator_xxqg_node,
-    researcher_xxqg_node,
-    reporter_xxqg_node,
+    coordinator_node,
+    planner_node,
+    reporter_node,
+    research_team_node,
+    researcher_node,
+    coder_node,
+    human_feedback_node,
+    background_investigation_node,
+    sp_planner_node,
     speech_node,
-    zip_data
+    zip_data,
+    sp_center_agent_node,
 )
+
+from .sp_nodes import reporter_node as sp_reporter_node
+from .sp_nodes import researcher_node as sp_researcher_node
+from .sp_nodes import coder_node as sp_coder_node
+from .sp_nodes import central_agent_node
 
 
 
@@ -127,9 +140,9 @@ def build_multi_agent_graph():
     builder.add_node("central_agent", central_agent_node)
 
     # 添加sub agent
-    builder.add_node("researcher", researcher_node)
-    builder.add_node("coder", coder_node)
-    builder.add_node("reporter", reporter_node)
+    builder.add_node("researcher", sp_researcher_node)
+    builder.add_node("coder", sp_coder_node)
+    builder.add_node("reporter", sp_reporter_node)
 
     # 定义状态转移
     builder.add_edge(START, "central_agent")
