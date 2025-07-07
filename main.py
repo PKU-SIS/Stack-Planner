@@ -20,6 +20,7 @@ def ask(
     max_plan_iterations=1,
     max_step_num=3,
     enable_background_investigation=True,
+    graph_format="sp",
 ):
     """Run the agent workflow with the given question.
 
@@ -37,6 +38,7 @@ def ask(
             max_plan_iterations=max_plan_iterations,
             max_step_num=max_step_num,
             enable_background_investigation=enable_background_investigation,
+            graph_format=graph_format,
         )
     )
 
@@ -46,6 +48,7 @@ def main(
     max_plan_iterations=1,
     max_step_num=3,
     enable_background_investigation=True,
+    graph_format="sp",
 ):
     """Interactive mode with built-in questions.
 
@@ -93,6 +96,7 @@ def main(
         max_plan_iterations=max_plan_iterations,
         max_step_num=max_step_num,
         enable_background_investigation=enable_background_investigation,
+        graph_format=graph_format,
     )
 
 
@@ -124,6 +128,13 @@ if __name__ == "__main__":
         dest="enable_background_investigation",
         help="Disable background investigation before planning",
     )
+    parser.add_argument(
+        "--graph-fomat",
+        type=str,
+        default="sp",
+        choices=["sp", "xxqg","sp_xxqg"],
+        help="Graph format to use (default: 'sp')",
+    )
 
     args = parser.parse_args()
 
@@ -134,6 +145,7 @@ if __name__ == "__main__":
             max_plan_iterations=args.max_plan_iterations,
             max_step_num=args.max_step_num,
             enable_background_investigation=args.enable_background_investigation,
+            graph_format=args.graph_fomat,
         )
     else:
         # Parse user input from command line arguments or user input
@@ -149,4 +161,5 @@ if __name__ == "__main__":
             max_plan_iterations=args.max_plan_iterations,
             max_step_num=args.max_step_num,
             enable_background_investigation=args.enable_background_investigation,
+            graph_format=args.graph_fomat,
         )
