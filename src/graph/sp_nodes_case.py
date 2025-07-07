@@ -18,7 +18,7 @@ from langgraph.graph import StateGraph, START, END
 
 from src.agents.CommonReactAgent import CommonReactAgent
 from src.agents.CoderAgent import CoderAgent
-from src.agents.ResearcherAgent import ResearcherAgent
+from StackPlanner.src.agents.ResearcherAgent_SP import ResearcherAgentSP
 from src.tools.search import LoggedTavilySearch
 from src.tools import (
     crawl_tool,
@@ -538,7 +538,7 @@ class SubAgentManager:
             tools.insert(0, retriever_tool)
 
         # 创建研究Agent
-        research_agent = ResearcherAgent(
+        research_agent = ResearcherAgentSP(
             config=config, agent_type="researcher", default_tools=tools
         )
 

@@ -8,7 +8,7 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.types import Command
 
 from src.agents.CoderAgent import CoderAgent
-from src.agents.ResearcherAgent import ResearcherAgent
+from StackPlanner.src.agents.ResearcherAgent_SP import ResearcherAgentSP
 from src.tools import (
     crawl_tool,
     get_web_search_tool,
@@ -61,7 +61,7 @@ class SubAgentManager:
             tools.insert(0, retriever_tool)
 
         # 实例化研究Agent
-        research_agent = ResearcherAgent(
+        research_agent = ResearcherAgentSP(
             config=config, agent_type="researcher", default_tools=tools
         )
 
@@ -135,7 +135,7 @@ class SubAgentManager:
         tools = [search_docs_tool]
 
         # 实例化研究Agent
-        research_agent = ResearcherAgent(
+        research_agent = ResearcherAgentSP(
             config=config, agent_type="researcher_xxqg", default_tools=tools
         )
 

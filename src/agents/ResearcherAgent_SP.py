@@ -7,7 +7,7 @@ from src.utils.logger import logger
 import os
 
 
-class ResearcherAgent(CommonReactAgent):
+class ResearcherAgentSP(CommonReactAgent):
     """Agent for conducting research and gathering information."""
 
     agent_name: str = "researcher"

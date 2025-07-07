@@ -14,7 +14,7 @@ from langchain_mcp_adapters.client import MultiServerMCPClient
 
 from src.agents.CommonReactAgent import CommonReactAgent
 from src.agents.CoderAgent import CoderAgent
-from src.agents.ResearcherAgent import ResearcherAgent
+from StackPlanner.src.agents.ResearcherAgent_SP import ResearcherAgentSP
 from src.tools.search import LoggedTavilySearch
 from src.tools import (
     crawl_tool,
@@ -690,7 +690,7 @@ async def researcher_node(
 
     tools = [search_docs_tool]
     logger.info(f"Researcher tools: {tools}")
-    research_agent = ResearcherAgent(
+    research_agent = ResearcherAgentSP(
         config=config, agent_type="researcher", default_tools=tools
     )
     return await research_agent.execute_agent_step(state)
@@ -703,7 +703,7 @@ async def researcher_xxqg_node(
 
     tools = [search_docs_tool]
     logger.info(f"Researcher tools: {tools}")
-    research_agent = ResearcherAgent(config = config, agent_type = "researcher_xxqg", default_tools = tools)
+    research_agent = ResearcherAgentSP(config = config, agent_type = "researcher_xxqg", default_tools = tools)
     return await research_agent.execute_agent_step(state)
 
 async def researcher_xxqg_node(
@@ -714,7 +714,7 @@ async def researcher_xxqg_node(
 
     tools = [search_docs_tool]
     logger.info(f"Researcher tools: {tools}")
-    research_agent = ResearcherAgent(config = config, agent_type = "researcher_xxqg", default_tools = tools)
+    research_agent = ResearcherAgentSP(config = config, agent_type = "researcher_xxqg", default_tools = tools)
     return await research_agent.execute_agent_step(state)
 
 
