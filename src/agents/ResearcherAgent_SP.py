@@ -4,15 +4,14 @@ from langgraph.types import Command
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langchain_core.messages import HumanMessage
 from src.utils.logger import logger
-import os   
+import os
 
 
-class ResearcherAgent(CommonReactAgent):
+class ResearcherAgentSP(CommonReactAgent):
     """Agent for conducting research and gathering information."""
 
     agent_name: str = "researcher"
     description: str = "Researcher agent for gathering information and resources."
-    
 
     def __init__(self, *args, **kwargs):
         agent_type = kwargs.pop("agent_type", "default_agent")
@@ -25,7 +24,9 @@ class ResearcherAgent(CommonReactAgent):
 
         # Extract MCP server configuration for this agent type
         if configurable.mcp_settings:
-            for server_name, server_config in configurable.mcp_settings["servers"].items():
+            for server_name, server_config in configurable.mcp_settings[
+                "servers"
+            ].items():
                 if (
                     server_config["enabled_tools"]
                     and agent_type in server_config["add_to_agents"]
@@ -48,11 +49,10 @@ class ResearcherAgent(CommonReactAgent):
             #                 f"Powered by '{enabled_tools[tool.name]}'.\n{tool.description}"
             #             )
             #             loaded_tools.append(tool)
-                self._initialize_common_agent(agent_type, default_tools)
+            self._initialize_common_agent(agent_type, default_tools)
         else:
             # Use default tools if no MCP servers are configured
             self._initialize_common_agent(agent_type, default_tools)
-
 
     def _initialize_common_agent(self, agent_type, tools):
         """Helper method to initialize the CommonReactAgent."""
@@ -60,39 +60,36 @@ class ResearcherAgent(CommonReactAgent):
 
     async def execute_agent_step(self, state) -> Command:
         """Helper function to execute a step using the specified agent."""
-        current_plan = state.get("current_plan")
         observations = state.get("observations", [])
         data_collections = state.get("data_collections", [])
 
-        # Find the first unexecuted step
-        current_step = None
-        completed_steps = []
-        for step in current_plan.steps:
-            if not step.execution_res:
-                current_step = step
-                break
-            else:
-                completed_steps.append(step)
+        # 从 params 中获取任务描述
+        params = state.get("delegation_context", {})
+        logger.debug(f"Delegate context: {params}")
+        task_description = params.get("task_description", "")
 
-        if not current_step:
-            logger.warning("No unexecuted step found")
-            return Command(goto="research_team")
+        if not task_description:
+            logger.warning("No task description found in params")
+            return Command(
+                update={
+                    "messages": [
+                        HumanMessage(
+                            content="错误: 未找到任务描述",
+                            name=self.agent_name,
+                        )
+                    ],
+                    "observations": observations + ["任务描述缺失"],
+                },
+                goto="research_team",
+            )
 
-        logger.info(f"Executing step: {current_step.title}, agent: {self.agent_name}")
+        logger.info(f"Executing task: {task_description}, agent: {self.agent_name}")
 
-        # Format completed steps information
-        completed_steps_info = ""
-        if completed_steps:
-            completed_steps_info = "# Existing Research Findings\n\n"
-            for i, step in enumerate(completed_steps):
-                completed_steps_info += f"## Existing Finding {i + 1}: {step.title}\n\n"
-                completed_steps_info += f"<finding>\n{step.execution_res}\n</finding>\n\n"
-
-        # Prepare the input for the agent with completed steps info
+        # 准备 agent 输入，使用任务描述
         agent_input = {
             "messages": [
                 HumanMessage(
-                    content=f"{completed_steps_info}# Current Task\n\n## Title\n\n{current_step.title}\n\n## Description\n\n{current_step.description}\n\n## Locale\n\n{state.get('locale', 'en-US')}"
+                    content=f"# Current Task\n\n## Description\n\n{task_description}\n\n## Locale\n\n{state.get('locale', 'en-US')}"
                 )
             ]
         }
@@ -110,23 +107,25 @@ class ResearcherAgent(CommonReactAgent):
                 )
             )
 
-        # agent_input["messages"].append(
-        #     HumanMessage(
-        #         content="IMPORTANT: DO NOT include inline citations in the text. Instead, track all sources and include a References section at the end using link reference format. Include an empty line between each citation for better readability. Use this format for each reference:\n- [Source Title](URL)\n\n- [Another Source](URL)",
-        #         name="system",
-        #     )
-        # )
         agent_input["messages"].append(
             HumanMessage(
-                content="IMPORTANT: **You have to use search tools** to complete task",
+                content="IMPORTANT: DO NOT include inline citations in the text. Instead, track all sources and include a References section at the end using link reference format. Include an empty line between each citation for better readability. Use this format for each reference:\n- [Source Title](URL)\n\n- [Another Source](URL)",
                 name="system",
             )
         )
+        # agent_input["messages"].append(
+        #     HumanMessage(
+        #         content="IMPORTANT: **You have to use search tools** to complete task",
+        #         name="system",
+        #     )
+        # )
 
         # Invoke the agent
         default_recursion_limit = 25
         try:
-            env_value_str = os.getenv("AGENT_RECURSION_LIMIT", str(default_recursion_limit))
+            env_value_str = os.getenv(
+                "AGENT_RECURSION_LIMIT", str(default_recursion_limit)
+            )
             parsed_limit = int(env_value_str)
 
             if parsed_limit > 0:
@@ -153,12 +152,13 @@ class ResearcherAgent(CommonReactAgent):
 
         # Process the result
         response_content = result["messages"][-1].content
-        logger.debug(f"{self.agent_name.capitalize()} full response: {response_content}")
+        logger.debug(
+            f"{self.agent_name.capitalize()} full response: {response_content}"
+        )
 
-        # Update the step with the execution result
-        current_step.execution_res = response_content
-        logger.info(f"Step '{current_step.title}' execution completed by {self.agent_name}")
-        logger.debug(f"Step tool results: {self.tool_results}")
+        logger.info(f"Task execution completed by {self.agent_name}")
+
+        # 后续goto操作在subagentmanager处理
         return Command(
             update={
                 "messages": [
@@ -168,7 +168,8 @@ class ResearcherAgent(CommonReactAgent):
                     )
                 ],
                 "observations": observations + [response_content],
-                "data_collections":data_collections + self.tool_results
+                "data_collections": data_collections + self.tool_results,
             },
-            goto="research_team",
         )
+        #     goto="central_agent",
+        # )

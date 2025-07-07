@@ -2,9 +2,6 @@
 # SPDX-License-Identifier: MIT
 
 import asyncio
-from src.graph import (
-    graph,
-)  # 在builder中创建graph，这一块的代码就是不断异步执行，所以可以不用管
 import os
 from datetime import datetime
 from src.utils.logger import logger
@@ -26,6 +23,7 @@ async def run_agent_workflow_async(
     max_plan_iterations: int = 1,
     max_step_num: int = 3,
     enable_background_investigation: bool = True,
+    graph_format: str = "sp",
 ):
     """Run the agent workflow asynchronously with the given user input.
 
@@ -44,6 +42,13 @@ async def run_agent_workflow_async(
 
     if debug:
         enable_debug_logging()
+
+    if graph_format == "sp":
+        from src.graph.builder import sp_graph as graph
+    elif graph_format == "xxqg":
+        from src.graph.builder import xxqg_graph as graph
+    elif graph_format == "sp_xxqg":
+        from src.graph.builder import sp_xxqg_graph as graph
 
     logger.info(f"Starting async workflow with user input: {user_input}")
     initial_state = {
