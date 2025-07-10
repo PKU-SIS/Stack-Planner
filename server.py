@@ -11,10 +11,10 @@ import signal
 import sys
 import uvicorn
 
+
 def enable_debug_logging():
     """Enable debug level logging."""
     logger.set_log_level(log_level="DEBUG")
-
 
 
 def handle_shutdown(signum, frame):

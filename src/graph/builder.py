@@ -31,12 +31,6 @@ from .sp_nodes import reporter_xxqg_node as sp_xxqg_reporter_node
 from .sp_nodes import researcher_xxqg_node as sp_xxqg_researcher_node
 
 
-
-
-
-
-
-
 def _build_base_graph():
     """Build and return the base state graph with all nodes and edges."""
     builder = StateGraph(State)
@@ -151,7 +145,6 @@ def build_multi_agent_graph():
     builder.add_node("coder", sp_coder_node)
     builder.add_node("reporter", sp_reporter_node)
 
-
     # 定义状态转移
     builder.add_edge(START, "central_agent")
 
@@ -185,9 +178,7 @@ def build_graph_sp_xxqg():
     builder.add_edge("central_agent", "zip_data")
     builder.add_edge("zip_data", END)
 
-
     return builder.compile()
-
 
 
 # 生成最终的多Agent系统图

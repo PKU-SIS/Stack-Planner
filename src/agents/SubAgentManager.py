@@ -117,7 +117,9 @@ class SubAgentManager:
             goto="central_agent",
         )
 
-    async def execute_xxqg_researcher(self, state: State, config: RunnableConfig) -> Command:
+    async def execute_xxqg_researcher(
+        self, state: State, config: RunnableConfig
+    ) -> Command:
         """
         执行研究Agent，负责信息检索与分析
 

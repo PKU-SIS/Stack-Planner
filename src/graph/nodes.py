@@ -432,10 +432,11 @@ def reporter_node(state: State):
 
     return {"final_report": response_content}
 
+
 def reporter_xxqg_node(state: State):
     """Reporter node that write a final report."""
     logger.info("Reporter write final report")
-    current_plan = state.get("current_plan")    
+    current_plan = state.get("current_plan")
     user_query = state.get("user_query")
     input_ = {
         "messages": [
@@ -699,6 +700,7 @@ async def researcher_node(
     )
     return await research_agent.execute_agent_step(state)
 
+
 async def researcher_xxqg_node(
     state: State, config: RunnableConfig
 ) -> Command[Literal["research_team"]]:
@@ -707,9 +709,10 @@ async def researcher_xxqg_node(
 
     tools = [search_docs_tool]
     logger.info(f"Researcher tools: {tools}")
-    research_agent = ResearcherAgent(config=config, agent_type="researcher_xxqg", default_tools=tools)
+    research_agent = ResearcherAgent(
+        config=config, agent_type="researcher_xxqg", default_tools=tools
+    )
     return await research_agent.execute_agent_step(state)
-
 
 
 async def coder_node(

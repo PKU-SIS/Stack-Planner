@@ -175,6 +175,7 @@ async def _astream_workflow_generator(
                 # AI Message - Raw message tokens
                 yield _make_event("message_chunk", event_stream_message)
 
+
 @app.post("/api/chat/xxqg_stream")
 async def chat_stream(request: ChatRequest):
     thread_id = request.thread_id
@@ -218,7 +219,7 @@ async def _astream_workflow_generator_xxqg(
         "auto_accepted_plan": auto_accepted_plan,
         "enable_background_investigation": enable_background_investigation,
         "user_query": messages[-1]["content"] if messages else "",
-        "data_collections":[]
+        "data_collections": [],
     }
     if not auto_accepted_plan and interrupt_feedback:
         resume_msg = f"[{interrupt_feedback}]"
@@ -293,6 +294,7 @@ async def _astream_workflow_generator_xxqg(
                 # AI Message - Raw message tokens
                 yield _make_event("message_chunk", event_stream_message)
 
+
 @app.post("/api/chat/sp_stream")
 async def chat_stream(request: ChatRequest):
     thread_id = request.thread_id
@@ -310,7 +312,7 @@ async def chat_stream(request: ChatRequest):
             request.interrupt_feedback,
             request.mcp_settings,
             request.enable_background_investigation,
-            request.graph_format,
+            # request.graph_format,
         ),
         media_type="text/event-stream",
     )
@@ -338,7 +340,7 @@ async def _astream_workflow_generator_sp(
         "auto_accepted_plan": auto_accepted_plan,
         "enable_background_investigation": enable_background_investigation,
         "user_query": messages[-1]["content"] if messages else "",
-        "data_collections":[]
+        "data_collections": [],
     }
     if not auto_accepted_plan and interrupt_feedback:
         resume_msg = f"[{interrupt_feedback}]"
@@ -353,6 +355,7 @@ async def _astream_workflow_generator_sp(
         from src.graph.builder import xxqg_graph as graph
     elif graph_format == "sp_xxqg":
         from src.graph.builder import sp_xxqg_graph as graph
+    last_known_agent = None
     async for agent, _, event_data in graph.astream(
         input_,
         config={
@@ -366,6 +369,16 @@ async def _astream_workflow_generator_sp(
         stream_mode=["messages", "updates"],
         subgraphs=True,
     ):
+        # 返回当前节点状态
+        if agent and agent != last_known_agent:
+            last_known_agent = agent
+            current_node_state = {
+                "thread_id": thread_id,
+                "current_node": agent,  # 当前节点名称
+                "status": "processing",  # 节点状态
+            }
+            yield _make_event("node_status", current_node_state)
+
         if isinstance(event_data, dict):
             if "__interrupt__" in event_data:
                 yield _make_event(

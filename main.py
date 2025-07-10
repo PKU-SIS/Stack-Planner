@@ -132,7 +132,7 @@ if __name__ == "__main__":
         "--graph-format",
         type=str,
         default="sp",
-        choices=["sp", "xxqg","sp_xxqg"],
+        choices=["sp", "xxqg", "sp_xxqg"],
         help="Graph format to use (default: 'sp')",
     )
 

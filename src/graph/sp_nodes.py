@@ -42,9 +42,11 @@ def reporter_node(state: State, config: RunnableConfig) -> Command:
     """报告Agent节点处理函数"""
     return sub_agent_manager.execute_reporter(state, config)
 
+
 def reporter_xxqg_node(state: State, config: RunnableConfig) -> Command:
     """报告Agent节点处理函数"""
     return sub_agent_manager.execute_xxqg_reporter(state, config)
+
 
 async def researcher_xxqg_node(state: State, config: RunnableConfig) -> Command:
     """研究Agent节点处理函数"""

@@ -4,9 +4,10 @@ import json
 url = "http://localhost:8513/api/chat/xxqg_stream"
 
 data = {
-    "messages": [{"role": "user", 
-                  "content": 
-                      '''新华社北京6月9日电
+    "messages": [
+        {
+            "role": "user",
+            "content": """新华社北京6月9日电
 
 中共中央办公厅 国务院办公厅关于进一步保障和改善民生 着力解决群众急难愁盼的意见
 （2025年3月2日）
@@ -45,8 +46,9 @@ data = {
 
 各地区各有关部门要在党中央集中统一领导下，把党的领导贯彻到民生工作的各领域全过程，结合实际抓好本意见贯彻落实。按照中央和地方财政事权和支出责任划分，发挥财政转移支付促进基本公共服务均等化作用。提高预算内投资支持社会事业比重。各地要强化责任落实，坚持尽力而为、量力而行，优化财政支出结构，强化基本民生财力保障，持续完善教育、卫生健康、社保、就业等重点民生领域支持政策，切实兜住兜牢民生底线。完善各级政府民生实事清单制度。加强重大民生政策跨部门统筹协调，在宏观政策取向一致性评估时注重从社会公平角度评估对社会预期的影响。科学评价民生政策实施效果，对全国层面的预期性民生指标，不搞层层分解和“一刀切”考核。
 
-请仿照以上内容的格式，写一段关于全面从严治党的《意见》，请多引用习近平总书记的讲话，请你多分几步进行搜索，请你一定要搜索，进入researcher_team'''
-                  }],
+请仿照以上内容的格式，写一段关于全面从严治党的《意见》，请多引用习近平总书记的讲话，请你多分几步进行搜索，请你一定要搜索，进入researcher_team""",
+        }
+    ],
     "resources": [],
     "thread_id": "__default__",
     "max_plan_iterations": 1,
@@ -55,14 +57,13 @@ data = {
     "auto_accepted_plan": True,
     "interrupt_feedback": "string",
     "mcp_settings": {},
-    "enable_background_investigation": True
+    "enable_background_investigation": True,
 }
-
-
 
 
 # 用于缓存 event 数据
 buffer = ""
+
 
 def process_event(event_type, event_data):
     """处理一个完整的 event"""
@@ -70,14 +71,15 @@ def process_event(event_type, event_data):
         content = event_data.get("content", "")
         print(content, end="", flush=True)
 
+
 with httpx.Client(timeout=None) as client:
     with client.stream("POST", url, json=data) as response:
         if response.status_code == 200:
             for chunk in response.iter_text():
                 buffer += chunk
                 # 按行分割
-                while '\n' in buffer:
-                    line, buffer = buffer.split('\n', 1)
+                while "\n" in buffer:
+                    line, buffer = buffer.split("\n", 1)
                     line = line.strip()
                     # 解析 event 和 data
                     if line.startswith("event:"):
