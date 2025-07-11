@@ -374,3 +374,94 @@ class SubAgentManager:
             },
             goto="central_agent",
         )
+
+    def execute_sp_planner(self, state: State, config: RunnableConfig) -> Command:
+        """
+        执行任务拆解Agent，负责将复杂任务拆解为可管理的子任务
+
+        Args:
+            state: 当前系统状态
+            config: 运行配置
+
+        Returns:
+            执行结果Command对象
+        """
+        logger.info("任务拆解Agent开始执行...")
+
+        delegation_context = state.get("delegation_context", {})
+        task_description = delegation_context.get("task_description", "将用户的任务拆解成2-5个子任务")
+
+        # 收集任务拆解所需上下文
+        context = {
+            "user_query": state.get("user_query", ""),
+            "memory_history": self.central_agent.memory_stack.get_all(),
+            "task_description": task_description,
+        }
+
+        # 生成任务拆解并处理异常
+        replan_result = "任务拆解失败: 未知错误"
+        try:
+            messages = apply_prompt_template(
+                "replanner", state, extra_context=context
+            )  # 修复：参数顺序
+            llm = get_llm_by_type(AGENT_LLM_MAP.get("replanner", "default"))
+            response = llm.invoke(messages)
+            replan_result = response.content
+
+            # 解析LLM返回的任务拆解结果
+            import json
+            try:
+                response_json = json.loads(replan_result)
+                if isinstance(response_json, list):
+                    response_json = {"DAG": response_json}
+            except json.JSONDecodeError as e:
+                logger.error(f"JSON decode error: {e}")
+                response_json ={"DAG": [(input, input)]}
+            if isinstance(response_json["DAG"], list):
+                new_dag = []
+                for item in response_json["DAG"]:
+                    if isinstance(item, dict):
+                        pairs = list(item.items())
+                        new_dag.append((pairs[0][1], pairs[1][1]) if len(pairs) > 1 else (pairs[0][1], pairs[0][1]))
+                    elif isinstance(item, list) and len(item) > 1:
+                        new_dag.append((item[0], item[1]))
+                    else:
+                        new_dag.append((item, item))
+                response_json["DAG"] = new_dag
+            
+            from src.utils.graph_utils import Graph
+            graph = Graph()
+            graph.load_dag_from_json(response_json)
+            sorted_nodes = graph.topological_sort()
+            # Generate a unique ID for each input using a hash
+            input_id = hash(input)
+            # replan_result = {"id":input_id,"plans":[{node_id: graph.nodes[node_id].question} for node_id in sorted_nodes],"status":["uncomplete" for node_id in sorted_nodes]}
+            replan_result = {"id":input_id,"plans":[{node_id: graph.nodes[node_id].question} for node_id in sorted_nodes]}
+        except Exception as e:
+            logger.error(f"任务拆解Agent执行失败: {str(e)}")
+            replan_result = f"任务拆解失败: {str(e)}"
+
+        
+
+        # 记录到中枢Agent记忆栈
+        memory_entry = MemoryStackEntry(
+            timestamp=datetime.datetime.now().isoformat(),
+            action="delegate",
+            agent_type="replanner",
+            content=f"任务拆解: {task_description}",
+            result={"replan_result": replan_result},
+        )
+        self.central_agent.memory_stack.push(memory_entry)
+
+        logger.info("任务拆解完成，返回中枢Agent")
+        return Command(
+            update={
+                "messages": [
+                    AIMessage(content="任务拆解完成，返回中枢Agent", name="planner")
+                ],
+                "replan_result": replan_result,
+                "current_node": "central_agent",
+                "memory_stack": self.central_agent.memory_stack.to_dict(),
+            },
+            goto="central_agent",
+        )

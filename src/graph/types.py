@@ -20,6 +20,7 @@ class State(MessagesState):
     current_plan: Plan | str = None
     user_query: str = ""
     final_report: str = ""
+    replan_result: str = ""
     auto_accepted_plan: bool = False
     enable_background_investigation: bool = True
     background_investigation_results: str = None

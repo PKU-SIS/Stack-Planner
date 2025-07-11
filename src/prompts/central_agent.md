@@ -8,20 +8,19 @@ You are an intelligent central agent responsible for managing a multi-Agent syst
 - **Memory History**: 
 {{memory_stack}}
 
+{% if current_action == "decision" %}
 - **Available Actions**: {{available_actions}}
   (Description: 
     THINK = Reason about the current situation, analyze it, and clarify what should be done next, 
     REFLECT = Reflect on previous step and POP several nolonger_used items from the memory stack, 
     SUMMARIZE = Condense long histories, 
     DELEGATE = Assign to sub-Agent, 
-    FINISH = Complete task & generate report)
+    FINISH = Terminate the task only when all subtasks are completed and user requirements are fully satisfied)
 
 - **Available Sub-Agents**: {{available_sub_agents}}
   (Description: 
-    RESEARCHER = Search agent, 
-    CODER = Coding agent, 
-    REPORTER = Reporting agent)
-
+    {{sub_agents_description}})
+{% endif %}
 
 {% if current_progress %}
 - **Current Progress**: {{current_progress}}
@@ -99,9 +98,9 @@ If the **current action** is **Decision**, determine the next step as follows.
 #### FINISH Action (Complete Task)
 ```json
   "action": "finish",
-  "reasoning": "All required data has been collected, analyzed, and summarized. The Reporter Agent can now generate the final report.",
+  "reasoning": "All required data has been collected, analyzed, and summarized. User's requirements have been statisfied.",
   "params": "None",
-  "instruction": "Evaluate if the task can be completed and generate a final report"
+  "instruction": "Task completed"
 ```
 {% endif %}
 {% if current_action == "think" %}

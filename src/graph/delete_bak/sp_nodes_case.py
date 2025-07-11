@@ -34,8 +34,8 @@ from src.llms.llm import get_llm_by_type
 from src.prompts.template import apply_prompt_template
 from src.utils.json_utils import repair_json_output
 
-from .types import State
-from ..config import SELECTED_SEARCH_ENGINE, SearchEngine
+from ..types import State
+from ...config import SELECTED_SEARCH_ENGINE, SearchEngine
 
 
 # 定义中枢Agent动作类型

@@ -18,6 +18,9 @@ from src.utils.json_utils import repair_json_output
 from src.memory import MemoryStack, MemoryStackEntry
 from src.utils.logger import logger
 from ..graph.types import State
+from src.agents.sub_agent_registry import get_sub_agents_by_global_type
+
+# from .SubAgentConfig import get_sub_agents_by_global_type
 
 
 # -------------------------
@@ -33,12 +36,11 @@ class CentralAgentAction(Enum):
     FINISH = "finish"  # 判断任务完成并生成最终报告
 
 
-class SubAgentType(Enum):
-    """子Agent类型枚举，定义可委派的专项Agent"""
-
-    RESEARCHER = "researcher"  # 负责信息检索与研究
-    CODER = "coder"  # 负责代码生成与执行
-    REPORTER = "reporter"  # 负责结果整理与报告生成
+# sub_agents = get_sub_agents_by_global_type(CURRENT_GRAPH_TYPE)
+# available_sub_agents = [agent['name'] for agent in sub_agents]
+# sub_agents_descrption = ""
+# for agent in sub_agents:
+#     sub_agents_descrption += f"- **{agent['name']}**: {agent['description']}\n"
 
 
 # -------------------------
@@ -62,11 +64,22 @@ class CentralAgent:
     并最终整合结果生成完成报告
     """
 
-    def __init__(self):
+    def __init__(self, graph_format: str = "sp"):
         self.memory_stack = MemoryStack()
         from src.agents.SubAgentManager import SubAgentManager
 
         self.sub_agent_manager = SubAgentManager(self)
+
+        sub_agents = get_sub_agents_by_global_type(graph_format)
+        logger.info(f"初始化中枢Agent，使用子Agent类型: {sub_agents}")
+
+        # 初始化子Agent相关信息
+        self.available_sub_agents = [agent["name"] for agent in sub_agents]
+        self.sub_agents_description = ""
+        for agent in sub_agents:
+            self.sub_agents_description += (
+                f"- **{agent['name']}**: {agent['description']}\n"
+            )
 
         # 动作处理器映射表
         self.action_handlers = {
@@ -104,6 +117,7 @@ class CentralAgent:
 
         # 构建决策prompt
         messages = self._build_decision_prompt(state, config)
+        logger.debug(f"决策prompt: {messages}")
 
         # 获取LLM决策并处理异常
         try:
@@ -126,9 +140,11 @@ class CentralAgent:
             )
 
         except Exception as e:
+            import traceback
             logger.error(
                 f"决策解析失败:  (尝试 {retry_count + 1}/{max_retries}): {str(e)}"
             )
+            logger.error("详细错误信息：\n" + traceback.format_exc())
             if retry_count < max_retries - 1:
                 return self.make_decision(state, config, retry_count + 1)
             # 异常情况下返回默认决策
@@ -171,7 +187,8 @@ class CentralAgent:
 
         context = {
             "available_actions": [action.value for action in CentralAgentAction],
-            "available_sub_agents": [agent.value for agent in SubAgentType],
+            "available_sub_agents": self.available_sub_agents,
+            "sub_agents_description": self.sub_agents_description,
             "current_action": "decision",
             "messages_history": converted_messages,
         }
@@ -301,7 +318,7 @@ class CentralAgent:
         # 执行记忆栈清理
         removed_items = []
         if pop_count > 0:
-            self.memory_stack.pop(pop_count)
+            removed_items = self.memory_stack.pop(pop_count)
             logger.info(
                 f"从记忆栈中移除了 {len(removed_items)} 项: {[item.get('action', 'unknown') for item in removed_items]}"
             )
@@ -314,7 +331,7 @@ class CentralAgent:
             action="reflect",
             content=f"反思分析: {reasoning}",
             metadata={
-                "reflection_target": reflection_target,
+                "reflection_target": decision.instruction,
                 "pop_count": len(removed_items),
                 "removed_items": removed_items,
                 "analysis": analysis,
@@ -399,10 +416,10 @@ class CentralAgent:
         task_description = decision.params.get("task_description", "未指定任务")
 
         # 验证子Agent类型有效性
-        if not agent_type or agent_type not in [agent.value for agent in SubAgentType]:
+        if not agent_type or agent_type not in self.available_sub_agents:
             error_msg = (
                 f"无效的子Agent类型: {agent_type}，可用类型: "
-                f"{[agent.value for agent in SubAgentType]}"
+                f"{self.available_sub_agents}"
             )
             logger.error(f"central_error: {error_msg}")
             return Command(
