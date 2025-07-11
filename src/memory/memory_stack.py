@@ -97,8 +97,11 @@ class MemoryStack:
         """
         从栈顶弹出指定数量的条目
         """
+        removed_items = []
         if count <= 0:
-            return
+            return removed_items
         for _ in range(min(count, len(self.stack))):
-            logger.info(f"Popping entry: {self.stack[-1]}")
+            removed_items.append(self.stack.pop())
+            # logger.info(f"Popping entry: {self.stack[-1]}")
             self.stack.pop()
+        return removed_items

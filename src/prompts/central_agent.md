@@ -8,6 +8,7 @@ You are an intelligent central agent responsible for managing a multi-Agent syst
 - **Memory History**: 
 {{memory_stack}}
 
+{% if current_action == "decision" %}
 - **Available Actions**: {{available_actions}}
   (Description: 
     THINK = Reason about the current situation, analyze it, and clarify what should be done next, 
@@ -18,10 +19,8 @@ You are an intelligent central agent responsible for managing a multi-Agent syst
 
 - **Available Sub-Agents**: {{available_sub_agents}}
   (Description: 
-    RESEARCHER = Search agent, 
-    CODER = Coding agent, 
-    REPORTER = Reporting agent)
-
+    {{sub_agents_description}})
+{% endif %}
 
 {% if current_progress %}
 - **Current Progress**: {{current_progress}}
