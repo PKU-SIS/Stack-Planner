@@ -4,6 +4,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 from typing import Annotated, Literal, Dict, List, Optional, Any
 from src.agents.sub_agent_registry import SubAgentType
 
+
 # -------------------------
 # 数据模型定义
 # -------------------------
@@ -16,10 +17,15 @@ class MemoryStackEntry(DataClassJsonMixin):
     agent_type: Optional[str] = None  # 代理类型(central/sub-agent)
     content: str = ""  # 动作内容
     result: Optional[Dict[str, Any]] = None  # Sub-Agent的执行结果
+
     def __post_init__(self):
-        allowed_agent_types = [agent.value for agent in SubAgentType] + ["central_agent"]
+        allowed_agent_types = [agent.value for agent in SubAgentType] + [
+            "central_agent"
+        ]
         if self.agent_type is not None:
-            assert self.agent_type in allowed_agent_types, f"agent_type must be one of {allowed_agent_types}, got '{self.agent_type}'"
+            assert (
+                self.agent_type in allowed_agent_types
+            ), f"agent_type must be one of {allowed_agent_types}, got '{self.agent_type}'"
 
     # FIXME check 这里有没有bugs
     def to_dict(self) -> Dict[str, Any]:
