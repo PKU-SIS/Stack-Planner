@@ -71,6 +71,7 @@ class CentralAgent:
         self.sub_agent_manager = SubAgentManager(self)
 
         sub_agents = get_sub_agents_by_global_type(graph_format)
+        logger.info(f"初始化中枢Agent，使用子Agent类型: {sub_agents}")
 
         # 初始化子Agent相关信息
         self.available_sub_agents = [agent["name"] for agent in sub_agents]
@@ -139,9 +140,11 @@ class CentralAgent:
             )
 
         except Exception as e:
+            import traceback
             logger.error(
                 f"决策解析失败:  (尝试 {retry_count + 1}/{max_retries}): {str(e)}"
             )
+            logger.error("详细错误信息：\n" + traceback.format_exc())
             if retry_count < max_retries - 1:
                 return self.make_decision(state, config, retry_count + 1)
             # 异常情况下返回默认决策

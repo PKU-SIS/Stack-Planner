@@ -13,15 +13,14 @@
 Analyze the current state, reflection, and summary to determine the next best action.
 Your response MUST be a valid JSON object with the following structure:
 {
-    "next_action": "reflect|summarize|think|delegate|finish",
+    "next_action": "```{{actions_list}}```",
     "action_params": {
-        "agent_type": "planner|researcher|coder|reporter|background_investigator",
+        "agent_type": "```{{agents_list}}```",
         "agent_params": {
             "title": "Task Title",
-            "description": "Task Description"
+            "description": "Task Detailed Description"
         }
     }
 }
-
-If the next action is "delegate", you MUST specify the "agent_type" parameter.
-For "researcher" or "coder" agents, you SHOULD also provide "title" and "description" in "agent_params".
+1. "next_action" is a required parameter.
+2. If the next action is "delegate", you MUST specify the "action_params" parameter.
