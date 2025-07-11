@@ -1,5 +1,8 @@
 import json
+
 HEAD_MASK = "HEAD_QUERY"
+
+
 class Node:
     def __init__(self, node_id, question, related_chunks):
         self.node_id = node_id
@@ -15,6 +18,7 @@ class Node:
 
     def set_answer(self, answer):
         self.answer = answer
+
 
 class Graph:
     def __init__(self):
@@ -50,7 +54,7 @@ class Graph:
     def __str__(self):
         sorted_nodes = self.topological_sort()
         return "\n".join(str(self.nodes[node_id]) for node_id in sorted_nodes)
-    
+
     def load_dag_from_json(self, data):
         for parent_query, child_query in data["DAG"]:
             # Extract ID and question for parent query
@@ -65,7 +69,7 @@ class Graph:
             self.add_edge(parent_id, child_id)
 
     def extract_id_and_question(self, query):
-        if isinstance(query,list):
+        if isinstance(query, list):
             query = query[0]
         parts = query.split(": ", 1)
         if len(parts) == 2:
@@ -87,6 +91,6 @@ class Graph:
                     return HEAD_MASK, query
                 else:
                     return tmp_id, query
-    
+
     def get_head(self):
         return self.nodes[HEAD_MASK]
