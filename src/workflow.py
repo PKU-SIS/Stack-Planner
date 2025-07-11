@@ -45,8 +45,9 @@ async def run_agent_workflow_async(
 
     if debug:
         enable_debug_logging()
-        
+
     from src.graph.sp_nodes import init_agents
+
     init_agents(graph_format)
 
     if graph_format == "sp":

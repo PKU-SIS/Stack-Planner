@@ -64,13 +64,13 @@ class CentralAgent:
     并最终整合结果生成完成报告
     """
 
-    def __init__(self, graph_type: str="sp"):
+    def __init__(self, graph_format: str = "sp"):
         self.memory_stack = MemoryStack()
         from src.agents.SubAgentManager import SubAgentManager
 
         self.sub_agent_manager = SubAgentManager(self)
 
-        sub_agents = get_sub_agents_by_global_type(graph_type)
+        sub_agents = get_sub_agents_by_global_type(graph_format)
 
         # 初始化子Agent相关信息
         self.available_sub_agents = [agent["name"] for agent in sub_agents]

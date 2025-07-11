@@ -26,6 +26,7 @@ from .nodes import (
 from .sp_nodes import central_agent_node
 from src.agents.sub_agent_registry import get_sub_agents_by_global_type
 
+
 def _build_base_graph():
     """Build and return the base state graph with all nodes and edges."""
     builder = StateGraph(State)

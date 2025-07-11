@@ -1,10 +1,14 @@
 from enum import Enum
+
+
 class SubAgentType(Enum):
     """子Agent类型枚举，定义可委派的专项Agent"""
 
     RESEARCHER = "researcher"  # 负责信息检索与研究
     CODER = "coder"  # 负责代码生成与执行
     REPORTER = "reporter"  # 负责结果整理与报告生成
+
+
 from src.graph.sp_nodes import (
     researcher_node,
     coder_node,
@@ -66,7 +70,3 @@ def get_sub_agents_by_global_type(graph_type: str):
         return sub_agents_sp_xxqg
     else:
         raise ValueError(f"Unknown graph type: {graph_type}")
-
-
-
-

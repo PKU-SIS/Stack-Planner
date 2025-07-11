@@ -8,8 +8,7 @@ from langgraph.types import Command
 from .types import State
 
 from src.utils.logger import logger
-from src.agents.SubAgentManager import SubAgentManager
-from src.agents.CentralAgent import CentralAgent
+
 
 # -------------------------
 # 全局实例与节点定义
@@ -17,14 +16,21 @@ from src.agents.CentralAgent import CentralAgent
 global_central_agent = None
 sub_agent_manager = None
 
+
 def init_agents(graph_format: str):
+    from src.agents.SubAgentManager import SubAgentManager
+    from src.agents.CentralAgent import CentralAgent
+
     global global_central_agent, sub_agent_manager
     global_central_agent = CentralAgent(graph_format=graph_format)
     sub_agent_manager = SubAgentManager(global_central_agent)
-    
+
+
 def _check_agents_initialized():
     if global_central_agent is None or sub_agent_manager is None:
-        raise RuntimeError("请先调用 init_agents(graph_format) 初始化 全局的agent 实例。")
+        raise RuntimeError(
+            "请先调用 init_agents(graph_format) 初始化 全局的agent 实例。"
+        )
 
 
 # 节点处理函数定义
