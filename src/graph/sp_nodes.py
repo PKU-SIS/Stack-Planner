@@ -8,6 +8,7 @@ from langgraph.types import Command
 from .types import State
 
 from src.utils.logger import logger
+from src.utils.statistics import global_statistics
 
 
 # -------------------------
@@ -76,4 +77,4 @@ async def researcher_xxqg_node(state: State, config: RunnableConfig) -> Command:
 async def sp_planner_node(state: State, config: RunnableConfig) -> Command:
     """规划Agent节点处理函数"""
     _check_agents_initialized()
-    return await sub_agent_manager.execute_sp_planner(state, config)
+    return sub_agent_manager.execute_sp_planner(state, config)

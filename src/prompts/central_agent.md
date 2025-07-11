@@ -95,6 +95,14 @@ If the **current action** is **Decision**, determine the next step as follows.
   "instruction": "Determine which sub-Agent to assign and define the task"
 ```
 
+```json
+  "action": "delegate",
+  "reasoning": "To further increase retrieval depth and ensure comprehensiveness and diversity, I need to use the replanner agent to formulate a specialized plan.",
+  "params": 
+    "agent_type": "replanner"
+  ,
+```
+
 #### FINISH Action (Complete Task)
 ```json
   "action": "finish",

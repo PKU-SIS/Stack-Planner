@@ -12,7 +12,7 @@ class State(MessagesState):
     """State for the agent system, extends MessagesState with next field."""
 
     # Runtime Variables
-    locale: str = "en-US"
+    locale: str = "zh-CN"
     observations: list[str] = []
     data_collections: list[Any] = []
     resources: list[Resource] = []

@@ -1,7 +1,7 @@
 from src.llms.llm import get_llm_by_type
 from ..graph.types import State
 from langchain_core.runnables import RunnableConfig
-import datetime
+from datetime import datetime
 
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.runnables import RunnableConfig
@@ -25,6 +25,7 @@ from src.agents.CentralAgent import CentralAgent
 
 from ..graph.types import State
 from ..config import SELECTED_SEARCH_ENGINE, SearchEngine
+from src.utils.statistics import global_statistics,timed_step
 
 
 # -------------------------
@@ -39,6 +40,7 @@ class SubAgentManager:
     def __init__(self, central_agent: "CentralAgent"):
         self.central_agent = central_agent
 
+    @timed_step("execute_researcher")
     async def execute_researcher(self, state: State, config: RunnableConfig) -> Command:
         """
         执行研究Agent，负责信息检索与分析
@@ -94,7 +96,7 @@ class SubAgentManager:
 
         # 记录到中枢Agent记忆栈
         memory_entry = MemoryStackEntry(
-            timestamp=datetime.datetime.now().isoformat(),
+            timestamp=datetime.now().isoformat(),
             action="delegate",
             agent_type="researcher",
             content=f"研究任务: {task_description}",
@@ -117,6 +119,7 @@ class SubAgentManager:
             goto="central_agent",
         )
 
+    @timed_step("execute_xxqg_researcher")
     async def execute_xxqg_researcher(
         self, state: State, config: RunnableConfig
     ) -> Command:
@@ -171,7 +174,7 @@ class SubAgentManager:
 
         # 记录到中枢Agent记忆栈
         memory_entry = MemoryStackEntry(
-            timestamp=datetime.datetime.now().isoformat(),
+            timestamp=datetime.now().isoformat(),
             action="delegate",
             agent_type="researcher",
             content=f"研究任务: {task_description}",
@@ -194,6 +197,7 @@ class SubAgentManager:
             goto="central_agent",
         )
 
+    @timed_step("execute_coder")
     async def execute_coder(self, state: State, config: RunnableConfig) -> Command:
         """
         执行编码Agent，负责代码生成与执行
@@ -237,7 +241,7 @@ class SubAgentManager:
 
         # 记录到中枢Agent记忆栈
         memory_entry = MemoryStackEntry(
-            timestamp=datetime.datetime.now().isoformat(),
+            timestamp=datetime.now().isoformat(),
             action="delegate",
             agent_type="coder",
             content=f"编码任务: {task_description}",
@@ -257,6 +261,7 @@ class SubAgentManager:
             goto="central_agent",
         )
 
+    @timed_step("execute_reporter")
     def execute_reporter(self, state: State, config: RunnableConfig) -> Command:
         """
         执行报告Agent，负责结果整理与报告生成
@@ -295,7 +300,7 @@ class SubAgentManager:
 
         # 记录到中枢Agent记忆栈
         memory_entry = MemoryStackEntry(
-            timestamp=datetime.datetime.now().isoformat(),
+            timestamp=datetime.now().isoformat(),
             action="delegate",
             agent_type="reporter",
             content=f"报告任务: {task_description}",
@@ -316,6 +321,7 @@ class SubAgentManager:
             goto="central_agent",
         )
 
+    @timed_step("execute_xxqg_reporter")
     def execute_xxqg_reporter(self, state: State, config: RunnableConfig) -> Command:
         """
         执行报告Agent，负责结果整理与报告生成
@@ -354,7 +360,7 @@ class SubAgentManager:
 
         # 记录到中枢Agent记忆栈
         memory_entry = MemoryStackEntry(
-            timestamp=datetime.datetime.now().isoformat(),
+            timestamp=datetime.now().isoformat(),
             action="delegate",
             agent_type="reporter",
             content=f"报告任务: {task_description}",
@@ -375,6 +381,7 @@ class SubAgentManager:
             goto="central_agent",
         )
 
+    @timed_step("execute_sp_planner")
     def execute_sp_planner(self, state: State, config: RunnableConfig) -> Command:
         """
         执行任务拆解Agent，负责将复杂任务拆解为可管理的子任务
@@ -445,7 +452,7 @@ class SubAgentManager:
 
         # 记录到中枢Agent记忆栈
         memory_entry = MemoryStackEntry(
-            timestamp=datetime.datetime.now().isoformat(),
+            timestamp=datetime.now().isoformat(),
             action="delegate",
             agent_type="replanner",
             content=f"任务拆解: {task_description}",
