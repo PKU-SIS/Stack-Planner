@@ -133,7 +133,7 @@ class CentralAgent:
             reasoning = decision_data.get("reasoning", "")
             params = decision_data.get("params", {})
             instruction = self.action_instructions.get(action, "")
-            
+
             end_time = datetime.now()
             time_entry = {
                 "step_name":"central decision"+start_time.isoformat(),
@@ -142,6 +142,10 @@ class CentralAgent:
                 "duration": (end_time - start_time).total_seconds(),
             }
             global_statistics.add_time_entry(time_entry)
+            locale = decision_data.get("locale", "en")  # 默认语言为 "en"
+
+            # 将 locale 添加到 state
+            state["locale"] = locale
 
             return CentralDecision(
                 action=action,
@@ -152,6 +156,7 @@ class CentralAgent:
 
         except Exception as e:
             import traceback
+
             logger.error(
                 f"决策解析失败:  (尝试 {retry_count + 1}/{max_retries}): {str(e)}"
             )
@@ -343,6 +348,7 @@ class CentralAgent:
             pop_count = 0
             reasoning = "JSON解析失败，保持现有记忆栈"
 
+        logger.debug(f"reflect决定清理{pop_count}条消息")
         # 执行记忆栈清理
         removed_items = []
         if pop_count > 0:

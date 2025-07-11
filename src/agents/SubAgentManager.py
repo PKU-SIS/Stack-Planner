@@ -396,7 +396,9 @@ class SubAgentManager:
         logger.info("任务拆解Agent开始执行...")
 
         delegation_context = state.get("delegation_context", {})
-        task_description = delegation_context.get("task_description", "将用户的任务拆解成2-5个子任务")
+        task_description = delegation_context.get(
+            "task_description", "将用户的任务拆解成2-5个子任务"
+        )
 
         # 收集任务拆解所需上下文
         context = {
@@ -417,38 +419,47 @@ class SubAgentManager:
 
             # 解析LLM返回的任务拆解结果
             import json
+
             try:
                 response_json = json.loads(replan_result)
                 if isinstance(response_json, list):
                     response_json = {"DAG": response_json}
             except json.JSONDecodeError as e:
                 logger.error(f"JSON decode error: {e}")
-                response_json ={"DAG": [(input, input)]}
+                response_json = {"DAG": [(input, input)]}
             if isinstance(response_json["DAG"], list):
                 new_dag = []
                 for item in response_json["DAG"]:
                     if isinstance(item, dict):
                         pairs = list(item.items())
-                        new_dag.append((pairs[0][1], pairs[1][1]) if len(pairs) > 1 else (pairs[0][1], pairs[0][1]))
+                        new_dag.append(
+                            (pairs[0][1], pairs[1][1])
+                            if len(pairs) > 1
+                            else (pairs[0][1], pairs[0][1])
+                        )
                     elif isinstance(item, list) and len(item) > 1:
                         new_dag.append((item[0], item[1]))
                     else:
                         new_dag.append((item, item))
                 response_json["DAG"] = new_dag
-            
+
             from src.utils.graph_utils import Graph
+
             graph = Graph()
             graph.load_dag_from_json(response_json)
             sorted_nodes = graph.topological_sort()
             # Generate a unique ID for each input using a hash
             input_id = hash(input)
             # replan_result = {"id":input_id,"plans":[{node_id: graph.nodes[node_id].question} for node_id in sorted_nodes],"status":["uncomplete" for node_id in sorted_nodes]}
-            replan_result = {"id":input_id,"plans":[{node_id: graph.nodes[node_id].question} for node_id in sorted_nodes]}
+            replan_result = {
+                "id": input_id,
+                "plans": [
+                    {node_id: graph.nodes[node_id].question} for node_id in sorted_nodes
+                ],
+            }
         except Exception as e:
             logger.error(f"任务拆解Agent执行失败: {str(e)}")
             replan_result = f"任务拆解失败: {str(e)}"
-
-        
 
         # 记录到中枢Agent记忆栈
         memory_entry = MemoryStackEntry(

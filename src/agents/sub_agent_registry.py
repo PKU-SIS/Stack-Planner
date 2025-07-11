@@ -7,7 +7,7 @@ class SubAgentType(Enum):
     RESEARCHER = "researcher"  # 负责信息检索与研究
     CODER = "coder"  # 负责代码生成与执行
     REPORTER = "reporter"  # 负责结果整理与报告生成
-    PLANNER = "replanner" #负责复杂任务分解和规划
+    PLANNER = "replanner"  # 负责复杂任务分解和规划
 
 
 from src.graph.sp_nodes import (
