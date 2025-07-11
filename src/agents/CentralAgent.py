@@ -3,7 +3,7 @@ import os
 from typing import Annotated, Literal, Dict, List, Optional, Any, Union, Type, cast
 from dataclasses import dataclass, field
 from enum import Enum
-import datetime
+from datetime import datetime
 
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.runnables import RunnableConfig
@@ -19,6 +19,7 @@ from src.memory import MemoryStack, MemoryStackEntry
 from src.utils.logger import logger
 from ..graph.types import State
 from src.agents.sub_agent_registry import get_sub_agents_by_global_type
+from src.utils.statistics import global_statistics
 
 # from .SubAgentConfig import get_sub_agents_by_global_type
 
@@ -114,6 +115,7 @@ class CentralAgent:
         """
         max_retries = 3
         logger.info("中枢Agent正在进行决策...")
+        start_time = datetime.now()
 
         # 构建决策prompt
         messages = self._build_decision_prompt(state, config)
@@ -131,6 +133,15 @@ class CentralAgent:
             reasoning = decision_data.get("reasoning", "")
             params = decision_data.get("params", {})
             instruction = self.action_instructions.get(action, "")
+
+            end_time = datetime.now()
+            time_entry = {
+                "step_name":"central decision"+start_time.isoformat(),
+                "start_time": start_time.isoformat(),
+                "end_time": end_time.isoformat(),
+                "duration": (end_time - start_time).total_seconds(),
+            }
+            global_statistics.add_time_entry(time_entry)
             locale = decision_data.get("locale", "en")  # 默认语言为 "en"
 
             # 将 locale 添加到 state
@@ -153,6 +164,14 @@ class CentralAgent:
             if retry_count < max_retries - 1:
                 return self.make_decision(state, config, retry_count + 1)
             # 异常情况下返回默认决策
+            end_time = datetime.now()
+            time_entry = {
+                "step_name":"central_decision"+start_time.isoformat(),
+                "start_time": start_time.isoformat(),
+                "end_time": end_time.isoformat(),
+                "duration": (end_time - start_time).total_seconds(),
+            }
+            global_statistics.add_time_entry(time_entry)
             return CentralDecision(
                 action=CentralAgentAction.THINK,
                 reasoning="决策解析失败，默认选择思考动作",
@@ -247,7 +266,7 @@ class CentralAgent:
     ) -> Command:
         """处理思考动作，分析当前状态生成下一步计划"""
         logger.info("中枢Agent正在思考...")
-
+        start_time = datetime.now()
         context = {
             "current_action": "think",
             "current_progress": state.get("observations", []),
@@ -263,13 +282,21 @@ class CentralAgent:
 
         # 记录思考过程到记忆栈
         memory_entry = MemoryStackEntry(
-            timestamp=datetime.datetime.now().isoformat(),
+            timestamp=datetime.now().isoformat(),
             action="think",
             content=response.content,
         )
         self.memory_stack.push(memory_entry)
 
         logger.info(f"central_think: {response.content}")
+        end_time = datetime.now()
+        time_entry = {
+            "step_name":"central_think"+start_time.isoformat(),
+            "start_time": start_time.isoformat(),
+            "end_time": end_time.isoformat(),
+            "duration": (end_time - start_time).total_seconds(),
+        }
+        global_statistics.add_time_entry(time_entry)
         return Command(
             update={
                 "messages": [AIMessage(content=response.content, name="central_think")],
@@ -286,6 +313,7 @@ class CentralAgent:
     ) -> Command:
         """处理反思动作，评估之前的步骤并清理记忆栈"""
         logger.info("中枢Agent正在反思...")
+        start_time = datetime.now()
 
         # 获取反思目标和上下文
         # recent_memory = self.memory_stack.get_recent(5)  # 获取最近5条记忆
@@ -333,7 +361,7 @@ class CentralAgent:
 
         # 记录反思过程到记忆栈
         memory_entry = MemoryStackEntry(
-            timestamp=datetime.datetime.now().isoformat(),
+            timestamp=datetime.now().isoformat(),
             action="reflect",
             content=f"反思分析: {reasoning}",
             metadata={
@@ -346,6 +374,14 @@ class CentralAgent:
         self.memory_stack.push(memory_entry)
 
         logger.info(f"central_reflect: {analysis}")
+        end_time = datetime.now()
+        time_entry = {
+            "step_name":"central_reflect"+start_time.isoformat(),
+            "start_time": start_time.isoformat(),
+            "end_time": end_time.isoformat(),
+            "duration": (end_time - start_time).total_seconds(),
+        }
+        global_statistics.add_time_entry(time_entry)
         return Command(
             update={
                 "messages": [AIMessage(content=analysis, name="central_reflect")],
@@ -368,6 +404,7 @@ class CentralAgent:
     ) -> Command:
         """处理总结动作，归纳当前已获得的信息"""
         logger.info("中枢Agent正在总结...")
+        start_time = datetime.now()
 
         context = {
             "current_action": "summarize",
@@ -388,7 +425,7 @@ class CentralAgent:
 
         # 更新记忆栈，替换最新的总结结果
         new_entry = MemoryStackEntry(
-            timestamp=datetime.datetime.now().isoformat(),
+            timestamp=datetime.now().isoformat(),
             action="summarize",
             content=context.get("summarization_focus", ""),
             result={"summary_result": response.content},
@@ -400,6 +437,14 @@ class CentralAgent:
         self.memory_stack.push_with_pop(new_entry)
 
         logger.info(f"central_summarize: {response.content}")
+        end_time = datetime.now()
+        time_entry = {
+            "step_name":"central_summarize"+start_time.isoformat(),
+            "start_time": start_time.isoformat(),
+            "end_time": end_time.isoformat(),
+            "duration": (end_time - start_time).total_seconds(),
+        }
+        global_statistics.add_time_entry(time_entry)
         return Command(
             update={
                 "messages": [
@@ -440,7 +485,7 @@ class CentralAgent:
 
         # 记录委派动作到记忆栈
         memory_entry = MemoryStackEntry(
-            timestamp=datetime.datetime.now().isoformat(),
+            timestamp=datetime.now().isoformat(),
             action="delegate",
             agent_type=agent_type,
             content=f"委派任务: {task_description}",
@@ -485,7 +530,7 @@ class CentralAgent:
 
             # 记录委派动作到记忆栈
             memory_entry = MemoryStackEntry(
-                timestamp=datetime.datetime.now().isoformat(),
+                timestamp=datetime.now().isoformat(),
                 action="delegate",
                 agent_type="reporter",
                 content="未生成最终报告，委派Reporter Agent生成最终报告",
@@ -533,12 +578,13 @@ class CentralAgent:
                 entry.to_dict() for entry in self.memory_stack.get_all()
             ],
             "final_report": final_report,
-            "completion_time": datetime.datetime.now().isoformat(),
+            "completion_time": datetime.now().isoformat(),
+            "statistics": global_statistics.get_statistics(),
         }
 
         # 保存执行摘要到文件
         os.makedirs("./reports", exist_ok=True)
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"./reports/execution_report_{timestamp}.json"
 
         try:
@@ -551,3 +597,4 @@ class CentralAgent:
             execution_summary["error"] = str(e)
 
         logger.info(report_msg)
+        logger.info(global_statistics.get_statistics())

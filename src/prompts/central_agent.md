@@ -104,6 +104,14 @@ If the **current action** is **Decision**, determine the next step as follows.
   "locale": "English"
 ```
 
+```json
+  "action": "delegate",
+  "reasoning": "To further increase retrieval depth and ensure comprehensiveness and diversity, I need to use the replanner agent to formulate a specialized plan.",
+  "params": 
+    "agent_type": "replanner"
+  ,
+```
+
 #### FINISH Action (Complete Task)
 (if the user query is English:)
 ```json

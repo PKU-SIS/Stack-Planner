@@ -34,7 +34,8 @@ from src.utils.json_utils import repair_json_output
 
 from .types import State
 from ..config import SELECTED_SEARCH_ENGINE, SearchEngine
-import datetime
+from datetime import datetime
+from src.utils.statistics import global_statistics
 
 
 @tool
@@ -785,10 +786,11 @@ def zip_data(state: State):
         "user_query": user_query,
         "plan": plan.model_dump() if hasattr(plan, "model_dump") else str(plan),
         "final_report": final_report,
+        "statistics": global_statistics.get_statistics(),
     }
 
     # Generate filename with current timestamp
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"./reports/report_{timestamp}.json"
 
     # Save data as JSON
