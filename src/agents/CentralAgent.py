@@ -573,6 +573,7 @@ class CentralAgent:
             ],
             "final_report": final_report,
             "completion_time": datetime.now().isoformat(),
+            "statistics": global_statistics.get_statistics(),
         }
 
         # 保存执行摘要到文件
