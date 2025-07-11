@@ -14,13 +14,23 @@ from src.agents.CentralAgent import CentralAgent
 # -------------------------
 # 全局实例与节点定义
 # -------------------------
-global_central_agent = CentralAgent()
-sub_agent_manager = SubAgentManager(global_central_agent)
+global_central_agent = None
+sub_agent_manager = None
+
+def init_agents(graph_format: str):
+    global global_central_agent, sub_agent_manager
+    global_central_agent = CentralAgent(graph_format=graph_format)
+    sub_agent_manager = SubAgentManager(global_central_agent)
+    
+def _check_agents_initialized():
+    if global_central_agent is None or sub_agent_manager is None:
+        raise RuntimeError("请先调用 init_agents(graph_format) 初始化 全局的agent 实例。")
 
 
 # 节点处理函数定义
 async def central_agent_node(state: State, config: RunnableConfig) -> Command:
     """中枢Agent节点处理函数，触发决策流程"""
+    _check_agents_initialized()
     logger.info("中枢Agent节点激活")
 
     # 执行决策流程
@@ -30,24 +40,29 @@ async def central_agent_node(state: State, config: RunnableConfig) -> Command:
 
 async def researcher_node(state: State, config: RunnableConfig) -> Command:
     """研究Agent节点处理函数"""
+    _check_agents_initialized()
     return await sub_agent_manager.execute_researcher(state, config)
 
 
 async def coder_node(state: State, config: RunnableConfig) -> Command:
     """编码Agent节点处理函数"""
+    _check_agents_initialized()
     return await sub_agent_manager.execute_coder(state, config)
 
 
 def reporter_node(state: State, config: RunnableConfig) -> Command:
     """报告Agent节点处理函数"""
+    _check_agents_initialized()
     return sub_agent_manager.execute_reporter(state, config)
 
 
 def reporter_xxqg_node(state: State, config: RunnableConfig) -> Command:
     """报告Agent节点处理函数"""
+    _check_agents_initialized()
     return sub_agent_manager.execute_xxqg_reporter(state, config)
 
 
 async def researcher_xxqg_node(state: State, config: RunnableConfig) -> Command:
     """研究Agent节点处理函数"""
+    _check_agents_initialized()
     return await sub_agent_manager.execute_xxqg_researcher(state, config)

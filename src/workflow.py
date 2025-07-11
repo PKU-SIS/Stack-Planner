@@ -17,7 +17,6 @@ def enable_debug_logging():
 
 
 # NOTE JXK main code直接进入到这里
-CURRENT_GRAPH_TYPE = "sp"  # 默认图类型，可设置为 "xxqg" 或其他类型
 
 
 async def run_agent_workflow_async(
@@ -40,14 +39,15 @@ async def run_agent_workflow_async(
     Returns:
         The final state after the workflow completes
     """
-    global CURRENT_GRAPH_TYPE
-    CURRENT_GRAPH_TYPE = graph_format  # 更新全局变量为当前图类型
 
     if not user_input:
         raise ValueError("Input could not be empty")
 
     if debug:
         enable_debug_logging()
+        
+    from src.graph.sp_nodes import init_agents
+    init_agents(graph_format)
 
     if graph_format == "sp":
         from src.graph.builder import sp_graph as graph

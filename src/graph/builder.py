@@ -23,13 +23,8 @@ from .nodes import (
     researcher_xxqg_node,
 )
 
-from .sp_nodes import reporter_node as sp_reporter_node
-from .sp_nodes import researcher_node as sp_researcher_node
-from .sp_nodes import coder_node as sp_coder_node
 from .sp_nodes import central_agent_node
-from .sp_nodes import reporter_xxqg_node as sp_xxqg_reporter_node
-from .sp_nodes import researcher_xxqg_node as sp_xxqg_researcher_node
-
+from src.agents.sub_agent_registry import get_sub_agents_by_global_type
 
 def _build_base_graph():
     """Build and return the base state graph with all nodes and edges."""
@@ -141,10 +136,10 @@ def build_multi_agent_graph():
     builder.add_node("central_agent", central_agent_node)
 
     # 添加sub agent
-    from src.graph.sub_agent_registry import sub_agents_nodes_sp
+    sub_agents = get_sub_agents_by_global_type("sp")
 
-    for agent_type, node in sub_agents_nodes_sp.items():
-        builder.add_node(agent_type.value, node)
+    for sub_agent in sub_agents:
+        builder.add_node(sub_agent["name"], sub_agent["node"])
     # builder.add_node("researcher", sp_researcher_node)
     # builder.add_node("coder", sp_coder_node)
     # builder.add_node("reporter", sp_reporter_node)
@@ -172,10 +167,10 @@ def build_graph_sp_xxqg():
     builder.add_node("central_agent", central_agent_node)
 
     # 添加sub agent
-    from src.graph.sub_agent_registry import sub_agents_nodes_xxqg
+    sub_agents = get_sub_agents_by_global_type("sp_xxqg")
 
-    for agent_type, node in sub_agents_nodes_xxqg.items():
-        builder.add_node(agent_type.value, node)
+    for sub_agent in sub_agents:
+        builder.add_node(sub_agent["name"], sub_agent["node"])
     # builder.add_node("researcher", sp_xxqg_researcher_node)
     # builder.add_node("coder", sp_coder_node)
     # builder.add_node("reporter", sp_xxqg_reporter_node)

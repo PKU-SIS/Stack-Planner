@@ -18,7 +18,7 @@ from src.utils.json_utils import repair_json_output
 from src.memory import MemoryStack, MemoryStackEntry
 from src.utils.logger import logger
 from ..graph.types import State
-from src.workflow import CURRENT_GRAPH_TYPE
+from src.agents.sub_agent_registry import get_sub_agents_by_global_type
 
 # from .SubAgentConfig import get_sub_agents_by_global_type
 
@@ -64,16 +64,13 @@ class CentralAgent:
     并最终整合结果生成完成报告
     """
 
-    def __init__(self):
+    def __init__(self, graph_type: str="sp"):
         self.memory_stack = MemoryStack()
         from src.agents.SubAgentManager import SubAgentManager
 
         self.sub_agent_manager = SubAgentManager(self)
 
-        # 延迟导入 get_sub_agents_by_global_type
-        from .SubAgentConfig import get_sub_agents_by_global_type
-
-        sub_agents = get_sub_agents_by_global_type(CURRENT_GRAPH_TYPE)
+        sub_agents = get_sub_agents_by_global_type(graph_type)
 
         # 初始化子Agent相关信息
         self.available_sub_agents = [agent["name"] for agent in sub_agents]
