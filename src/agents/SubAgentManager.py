@@ -25,7 +25,7 @@ from src.agents.CentralAgent import CentralAgent
 
 from ..graph.types import State
 from ..config import SELECTED_SEARCH_ENGINE, SearchEngine
-from src.utils.statistics import global_statistics,timed_step
+from src.utils.statistics import global_statistics, timed_step
 
 
 # -------------------------

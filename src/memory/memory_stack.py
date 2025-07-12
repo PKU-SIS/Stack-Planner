@@ -101,7 +101,7 @@ class MemoryStack:
         if count <= 0:
             return removed_items
         for _ in range(min(count, len(self.stack))):
-            removed_items.append(self.stack.pop())
-            # logger.info(f"Popping entry: {self.stack[-1]}")
+            top_element = self.peek()
+            removed_items.append(top_element)
             self.stack.pop()
         return removed_items
