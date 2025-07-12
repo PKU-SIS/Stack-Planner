@@ -136,7 +136,7 @@ class CentralAgent:
 
             end_time = datetime.now()
             time_entry = {
-                "step_name":"central decision"+start_time.isoformat(),
+                "step_name": "central decision" + start_time.isoformat(),
                 "start_time": start_time.isoformat(),
                 "end_time": end_time.isoformat(),
                 "duration": (end_time - start_time).total_seconds(),
@@ -166,7 +166,7 @@ class CentralAgent:
             # 异常情况下返回默认决策
             end_time = datetime.now()
             time_entry = {
-                "step_name":"central_decision"+start_time.isoformat(),
+                "step_name": "central_decision" + start_time.isoformat(),
                 "start_time": start_time.isoformat(),
                 "end_time": end_time.isoformat(),
                 "duration": (end_time - start_time).total_seconds(),
@@ -291,7 +291,7 @@ class CentralAgent:
         logger.info(f"central_think: {response.content}")
         end_time = datetime.now()
         time_entry = {
-            "step_name":"central_think"+start_time.isoformat(),
+            "step_name": "central_think" + start_time.isoformat(),
             "start_time": start_time.isoformat(),
             "end_time": end_time.isoformat(),
             "duration": (end_time - start_time).total_seconds(),
@@ -376,7 +376,7 @@ class CentralAgent:
         logger.info(f"central_reflect: {analysis}")
         end_time = datetime.now()
         time_entry = {
-            "step_name":"central_reflect"+start_time.isoformat(),
+            "step_name": "central_reflect" + start_time.isoformat(),
             "start_time": start_time.isoformat(),
             "end_time": end_time.isoformat(),
             "duration": (end_time - start_time).total_seconds(),
@@ -439,7 +439,7 @@ class CentralAgent:
         logger.info(f"central_summarize: {response.content}")
         end_time = datetime.now()
         time_entry = {
-            "step_name":"central_summarize"+start_time.isoformat(),
+            "step_name": "central_summarize" + start_time.isoformat(),
             "start_time": start_time.isoformat(),
             "end_time": end_time.isoformat(),
             "duration": (end_time - start_time).total_seconds(),
