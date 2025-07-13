@@ -129,6 +129,8 @@ class CentralAgent:
             # 解析决策结果
             decision_data = json.loads(repair_json_output(response.content))
             logger.info(f"决策结果: {decision_data}")
+            if isinstance(decision_data, list):
+                decision_data = decision_data[-1]  # 处理列表情况
             action = CentralAgentAction(decision_data["action"])
             reasoning = decision_data.get("reasoning", "")
             params = decision_data.get("params", {})
