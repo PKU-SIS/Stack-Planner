@@ -119,7 +119,7 @@ class CentralAgent:
 
         # 构建决策prompt
         messages = self._build_decision_prompt(state, config)
-        logger.debug(f"决策prompt: {messages}")
+        # logger.debug(f"决策prompt: {messages}")
 
         # 获取LLM决策并处理异常
         try:
@@ -436,7 +436,7 @@ class CentralAgent:
 
         self.memory_stack.push_with_pop(new_entry)
 
-        logger.info(f"central_summarize: {response.content}")
+        # logger.info(f"central_summarize: {response.content}")
         end_time = datetime.now()
         time_entry = {
             "step_name": "central_summarize" + start_time.isoformat(),
