@@ -61,9 +61,9 @@ You have access to two types of tools:
     - **Conclusion**: Provide a synthesized response to the problem based on the gathered information.
     - **References**: List all sources used with their complete URLs in link reference format at the end of the document. Make sure to include an empty line between each reference for better readability. Use this format for each reference:
       ```markdown
-      - [Source Title](https://example.com/page1)
+      - [Source Title](reference_web_url)
 
-      - [Source Title](https://example.com/page2)
+      - [Source Title](reference_web_url)
       ```
 - Always output in the locale of **{{ locale }}**.
 - DO NOT include inline citations in the text. Instead, track all sources and list them in the References section at the end using link reference format.
@@ -83,3 +83,4 @@ You have access to two types of tools:
 - The included images should **only** be from the information gathered **from the search results or the crawled content**. **Never** include images that are not from the search results or the crawled content.
 - Always use the locale of **{{ locale }}** for the output.
 - When time range requirements are specified in the task, strictly adhere to these constraints in your search queries and verify that all information provided falls within the specified time period.
+- When including images, ONLY use the actual image URLs from the source content. DO NOT create fictional image URLs or placeholders like 'example.com'
