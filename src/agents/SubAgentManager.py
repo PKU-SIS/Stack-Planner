@@ -3,7 +3,7 @@ from ..graph.types import State
 from langchain_core.runnables import RunnableConfig
 from datetime import datetime
 
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import HumanMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import Command
 
@@ -86,7 +86,7 @@ class SubAgentManager:
             return Command(
                 update={
                     "messages": [
-                        AIMessage(content=f"研究任务失败: {str(e)}", name="researcher")
+                        HumanMessage(content=f"研究任务失败: {str(e)}", name="researcher")
                     ],
                     "current_node": "central_agent",
                     "memory_stack": self.central_agent.memory_stack.to_dict(),
@@ -111,7 +111,7 @@ class SubAgentManager:
         return Command(
             update={
                 "messages": [
-                    AIMessage(content="研究任务完成，返回中枢Agent", name="researcher")
+                    HumanMessage(content="研究任务完成，返回中枢Agent", name="researcher")
                 ],
                 "current_node": "central_agent",
                 "memory_stack": self.central_agent.memory_stack.to_dict(),
@@ -164,7 +164,7 @@ class SubAgentManager:
             return Command(
                 update={
                     "messages": [
-                        AIMessage(content=f"研究任务失败: {str(e)}", name="researcher")
+                        HumanMessage(content=f"研究任务失败: {str(e)}", name="researcher")
                     ],
                     "current_node": "central_agent",
                     "memory_stack": self.central_agent.memory_stack.to_dict(),
@@ -189,7 +189,7 @@ class SubAgentManager:
         return Command(
             update={
                 "messages": [
-                    AIMessage(content="研究任务完成，返回中枢Agent", name="researcher")
+                    HumanMessage(content="研究任务完成，返回中枢Agent", name="researcher")
                 ],
                 "current_node": "central_agent",
                 "memory_stack": self.central_agent.memory_stack.to_dict(),
@@ -231,7 +231,7 @@ class SubAgentManager:
             return Command(
                 update={
                     "messages": [
-                        AIMessage(content=f"编码任务失败: {str(e)}", name="coder")
+                        HumanMessage(content=f"编码任务失败: {str(e)}", name="coder")
                     ],
                     "current_node": "central_agent",
                     "memory_stack": self.central_agent.memory_stack.to_dict(),
@@ -253,7 +253,7 @@ class SubAgentManager:
         return Command(
             update={
                 "messages": [
-                    AIMessage(content="编码任务完成，返回中枢Agent", name="coder")
+                    HumanMessage(content="编码任务完成，返回中枢Agent", name="coder")
                 ],
                 "current_node": "central_agent",
                 "memory_stack": self.central_agent.memory_stack.to_dict(),
@@ -312,7 +312,7 @@ class SubAgentManager:
         return Command(
             update={
                 "messages": [
-                    AIMessage(content="报告生成完成，返回中枢Agent", name="reporter")
+                    HumanMessage(content="报告生成完成，返回中枢Agent", name="reporter")
                 ],
                 "final_report": final_report,
                 "current_node": "central_agent",
@@ -372,7 +372,7 @@ class SubAgentManager:
         return Command(
             update={
                 "messages": [
-                    AIMessage(content="报告生成完成，返回中枢Agent", name="reporter")
+                    HumanMessage(content="报告生成完成，返回中枢Agent", name="reporter")
                 ],
                 "final_report": final_report,
                 "current_node": "central_agent",
@@ -397,13 +397,13 @@ class SubAgentManager:
 
         delegation_context = state.get("delegation_context", {})
         task_description = delegation_context.get(
-            "task_description", "将用户的任务拆解成2-5个子任务"
+            "task_description", state.get("user_query", "")+ "\n将用户的任务拆解成2-5个子任务"
         )
 
         # 收集任务拆解所需上下文
         context = {
             "user_query": state.get("user_query", ""),
-            "memory_history": self.central_agent.memory_stack.get_all(),
+            "memory_history": [],#self.central_agent.memory_stack.get_all(),
             "task_description": task_description,
         }
 
@@ -416,6 +416,9 @@ class SubAgentManager:
             llm = get_llm_by_type(AGENT_LLM_MAP.get("replanner", "default"))
             response = llm.invoke(messages)
             replan_result = response.content
+            replan_result = replan_result.replace("```json", "").replace("```", "").strip()
+
+            logger.debug(f"任务拆解结果: {replan_result}")
 
             # 解析LLM返回的任务拆解结果
             import json
@@ -475,7 +478,7 @@ class SubAgentManager:
         return Command(
             update={
                 "messages": [
-                    AIMessage(content="任务拆解完成，返回中枢Agent", name="planner")
+                    HumanMessage(content="任务拆解完成，返回中枢Agent", name="planner")
                 ],
                 "replan_result": replan_result,
                 "current_node": "central_agent",

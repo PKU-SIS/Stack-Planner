@@ -58,6 +58,9 @@ class ChatRequest(BaseModel):
     enable_background_investigation: Optional[bool] = Field(
         True, description="Whether to get background investigation before plan"
     )
+    graph_format: Optional[str] = Field(
+        "sp", description="The format of the graph to be used in the chat"
+    )   
 
 
 class TTSRequest(BaseModel):
