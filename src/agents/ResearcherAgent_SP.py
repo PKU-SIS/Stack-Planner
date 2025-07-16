@@ -109,7 +109,8 @@ class ResearcherAgentSP(CommonReactAgent):
 
         agent_input["messages"].append(
             HumanMessage(
-                content="IMPORTANT: DO NOT include inline citations in the text. Instead, track all sources and include a References section at the end using link reference format. Include an empty line between each citation for better readability. Use this format for each reference:\n- [Source Title](URL)\n\n- [Another Source](URL)",
+                content="IMPORTANT: DO NOT include inline citations in the text. Instead, track all sources and include a References section at the end using link reference format. Include an empty line between each citation for better readability. Use this format for each reference:\n- [Source Title](URL)\n\n- [Another Source](URL)"
+                "When including images, ONLY use the actual image URLs from the source content. DO NOT create fictional image URLs or placeholders like 'example.com'.",
                 name="system",
             )
         )
