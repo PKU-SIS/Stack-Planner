@@ -63,7 +63,7 @@ payload = {
     "interrupt_feedback": "",
     "mcp_settings": {},
     "enable_background_investigation": False,
-    "graph_format": "sp_xxqg"
+    "graph_format": "sp_xxqg",
 }
 
 response = requests.post(url, json=payload, stream=True)
@@ -88,7 +88,7 @@ for line in response.iter_lines():
                     # 更新当前节点状态
                     current_agent = data.get("current_node", None)
                     if current_agent:
-                        current_agent_str = current_agent[0].split(':')[0]
+                        current_agent_str = current_agent[0].split(":")[0]
                         print(f"\nLoading... {current_agent_str} agent 正在执行任务")
                     else:
                         print("\n有agent信息，但当前未识别到agent")

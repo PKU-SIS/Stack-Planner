@@ -353,7 +353,6 @@ async def _astream_workflow_generator_sp(
 
     init_agents(graph_format)
 
-
     if graph_format == "sp":
         from src.graph.builder import sp_graph as graph
     elif graph_format == "xxqg":

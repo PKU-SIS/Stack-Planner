@@ -60,7 +60,7 @@ class ChatRequest(BaseModel):
     )
     graph_format: Optional[str] = Field(
         "sp", description="The format of the graph to be used in the chat"
-    )   
+    )
 
 
 class TTSRequest(BaseModel):

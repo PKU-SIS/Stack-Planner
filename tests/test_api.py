@@ -58,7 +58,7 @@ data = {
     "interrupt_feedback": "string",
     "mcp_settings": {},
     "enable_background_investigation": True,
-    "graph_format": "sp_xxqg"
+    "graph_format": "sp_xxqg",
 }
 
 
