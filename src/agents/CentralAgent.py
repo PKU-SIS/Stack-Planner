@@ -354,25 +354,28 @@ class CentralAgent:
         # 执行记忆栈清理
         removed_items = []
         if pop_count > 0:
-            removed_items = self.memory_stack.pop(pop_count)
-            logger.info(
-                f"从记忆栈中移除了 {len(removed_items)} 项: {[item.action for item in removed_items]}"
+            reflection_content = (
+                f"反思分析: {analysis}\n"
+                f"反思原因: {reasoning}\n"
+                f"清理了 {pop_count} 条记忆。"
             )
+
+            memory_entry = MemoryStackEntry(
+                timestamp=datetime.now().isoformat(),
+                action="reflect",
+                content=reflection_content,
+            )
+
+            self.memory_stack.push_with_pop(memory_entry, pop_count)
+
+            removed_items = self.memory_stack.pop(pop_count)
+
+            logger.info(f"成功从记忆栈中移除了 {pop_count} 项记忆")
+            # logger.info(
+            #     f"从记忆栈中移除了 {len(removed_items)} 项: {[item.action for item in removed_items]}"
+            # )
         else:
             logger.info("不移除任何记忆栈项目")
-
-        reflection_content = (
-            f"反思分析: {analysis}\n"
-            f"反思原因: {reasoning}\n"
-            f"清理了 {len(removed_items)} 条记忆。"
-        )
-
-        memory_entry = MemoryStackEntry(
-            timestamp=datetime.now().isoformat(),
-            action="reflect",
-            content=reflection_content,
-        )
-        self.memory_stack.push(memory_entry)
 
         logger.info(f"central_reflect: {analysis}")
         end_time = datetime.now()
