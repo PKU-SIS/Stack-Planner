@@ -2,7 +2,6 @@ You are an intelligent central agent responsible for managing a multi-Agent syst
 
 
 ### Current System State
-- **User Query**: {{user_query}}
 - **Current Node**: {{current_node}}
 - **Current Action**: {{current_action}}
 - **Memory History**: 
@@ -64,36 +63,43 @@ If the **current action** is **Decision**, determine the next step as follows.
 #### THINK Action (Reasoning)
 (if the user query is English:)
 ```json
+{
   "action": "think",
   "reasoning": "The user's query involves both technical and market analysis. Current memory stack is empty, so I need to plan the first step.",
   "params": null,
   "instruction": "Reason about the next steps based on the current state",
   "locale": "English"
+}
 ```
 
 #### REFLECT Action
 (if the user query is English:)
 ```json
+{
   "action": "reflect",
   "reasoning": "The previous research on AI ethics trends missed recent policy updates. I should re-assign the task with refined instructions.",
   "params": null,
   "instruction": "Reflect on the previous action and its outcomes",
   "locale": "English"
+} 
 ```
 
 #### SUMMARIZE Action (No Parameters)
 (if the user query is English:)
 ```json
+{
   "action": "summarize",
   "reasoning": "The research results are extensive. Summarizing key points will help in deciding the next steps.",
   "params": null,
   "instruction": "Condense the current information into a concise summary",
   "locale": "English"
+}
 ```
 
 #### DELEGATE Action (Assign Sub-Agent)
 (if the user query is English:)
 ```json
+{
   "action": "delegate",
   "reasoning": "I need to gather the latest market data on AI investments. The Researcher Agent is best suited for this task.",
   "params": {
@@ -102,25 +108,46 @@ If the **current action** is **Decision**, determine the next step as follows.
   },
   "instruction": "Determine which sub-Agent to assign and define the task",
   "locale": "English"
+}
 ```
 
 ```json
+{
   "action": "delegate",
   "reasoning": "To further increase retrieval depth and ensure comprehensiveness and diversity, I need to use the replanner agent to formulate a specialized plan.",
-  "params": 
-    "agent_type": "replanner"
-  ,
+  "params": {
+    "agent_type": "replanner",
+    "task_description": "Decompose this question into multi steps: Global AI investment trends in 2025, focusing on ethical considerations"
+  }
+} 
 ```
 
 #### FINISH Action (Complete Task)
 (if the user query is English:)
 ```json
+{
   "action": "finish",
   "reasoning": "All required data has been collected, analyzed, and summarized. User's requirements have been satisfied.",
   "params": null,
   "instruction": "Task completed",
   "locale": "English"
+}
 ```
+
+### Decision Requirements
+While the Step is to make decision, pay attention to the following requirements and you MUST return the results in JSON format with the following fields:
+1. Analyze the current state and select the most appropriate action from available options.
+2. Provide a clear reasoning for the decision, justifying why the action is optimal.
+3. If choosing DELEGATE, specify the sub-Agent type and task instructions.
+  - If choosing replanner agent: This agent can only handle **search steps planning** and is limited to decomposing retrieval tasks into actionable steps. Do not include any requirements about report writing in the task description. You MUST and ONLY use it at the beginning of the task.
+4. Please remember to check if report is generated before you decide to FINISH the task.
+5. Return results in JSON format with the following fields:
+   - action: Type of action (required)
+   - reasoning: Justification for the decision (required)
+   - params: Action parameters (e.g., agent_type and task_description for DELEGATE)
+   - instruction: Instruction corresponding to the action
+   - locale: Language of the user query (e.g., "English", "Chinese", etc.)
+
 {% endif %}
 {% if current_action == "think" %}
 ### Output Key Points For THINK
