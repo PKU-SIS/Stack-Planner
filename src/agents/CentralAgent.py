@@ -1,25 +1,25 @@
 import json
 import os
-from typing import Annotated, Literal, Dict, List, Optional, Any, Union, Type, cast
 from dataclasses import dataclass, field
-from enum import Enum
 from datetime import datetime
+from enum import Enum
+from typing import Annotated, Any, Dict, List, Literal, Optional, Type, Union, cast
 
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import Command
 
-
-from src.utils.logger import logger
+from src.agents.sub_agent_registry import get_sub_agents_by_global_type
 from src.config.agents import AGENT_LLM_MAP
 from src.llms.llm import get_llm_by_type
+from src.memory import MemoryStack, MemoryStackEntry
 from src.prompts.template import apply_prompt_template, get_prompt_template
 from src.utils.json_utils import repair_json_output
-from src.memory import MemoryStack, MemoryStackEntry
 from src.utils.logger import logger
-from ..graph.types import State
-from src.agents.sub_agent_registry import get_sub_agents_by_global_type
 from src.utils.statistics import global_statistics
+from src.prompts.central_decision import Decision, DelegateParams
+
+from ..graph.types import State
 
 # from .SubAgentConfig import get_sub_agents_by_global_type
 
@@ -37,15 +37,9 @@ class CentralAgentAction(Enum):
     FINISH = "finish"  # 判断任务完成并生成最终报告
 
 
-# sub_agents = get_sub_agents_by_global_type(CURRENT_GRAPH_TYPE)
-# available_sub_agents = [agent['name'] for agent in sub_agents]
-# sub_agents_descrption = ""
-# for agent in sub_agents:
-#     sub_agents_descrption += f"- **{agent['name']}**: {agent['description']}\n"
-
-
 # -------------------------
 # 中枢Agent核心模块--中枢Agent的action
+# exp: 与prompt/central_decision.py中的Decision类不同的是，那里是字符串类型，这里是枚举类型，所以要定义两次
 # -------------------------
 @dataclass
 class CentralDecision:
@@ -53,7 +47,9 @@ class CentralDecision:
 
     action: CentralAgentAction  # 决策动作
     reasoning: str  # 决策推理过程
-    params: Dict[str, Any] = field(default_factory=dict)  # 动作参数=>delegate有参数
+    params: Dict[DelegateParams, Any] = field(
+        default_factory=dict
+    )  # 动作参数=>delegate有参数
     instruction: Optional[str] = None  # 动作对应的指令说明
 
 
@@ -119,21 +115,31 @@ class CentralAgent:
 
         # 构建决策prompt
         messages = self._build_decision_prompt(state, config)
-        logger.debug(f"决策prompt: {messages}")
+        # logger.debug(f"决策prompt: {messages}")
 
         # 获取LLM决策并处理异常
         try:
-            llm = get_llm_by_type(AGENT_LLM_MAP.get("central_agent", "default"))
+            llm = get_llm_by_type(
+                AGENT_LLM_MAP.get("central_agent", "default")
+            ).with_structured_output(
+                Decision,
+                method="json_mode",
+            )
             response = llm.invoke(messages)
 
             # 解析决策结果
-            decision_data = json.loads(repair_json_output(response.content))
-            logger.info(f"决策结果: {decision_data}")
-            action = CentralAgentAction(decision_data["action"])
-            reasoning = decision_data.get("reasoning", "")
-            params = decision_data.get("params", {})
-            instruction = self.action_instructions.get(action, "")
+            action = CentralAgentAction(response.action)
+            reasoning = response.reasoning
+            params = response.params or {}
+            instruction = response.instruction or self.action_instructions.get(
+                action, ""
+            )
+            if state.get("locale") == None:
+                locale = response.locale or "zh-CN"
+                # 将 locale 添加到 state
+                state["locale"] = locale
 
+            logger.info(f"决策结果: {response}")
             end_time = datetime.now()
             time_entry = {
                 "step_name": "central decision" + start_time.isoformat(),
@@ -142,10 +148,6 @@ class CentralAgent:
                 "duration": (end_time - start_time).total_seconds(),
             }
             global_statistics.add_time_entry(time_entry)
-            locale = decision_data.get("locale", "en")  # 默认语言为 "en"
-
-            # 将 locale 添加到 state
-            state["locale"] = locale
 
             return CentralDecision(
                 action=action,
@@ -330,7 +332,7 @@ class CentralAgent:
         llm = get_llm_by_type(AGENT_LLM_MAP.get("central_agent", "default"))
         response = llm.invoke(messages)
 
-        # 解析反思结果JSON
+        # 解析反思结果的JSON
         try:
             reflection_data = json.loads(repair_json_output(response.content))
             analysis = reflection_data.get("analysis", "反思分析")
@@ -352,26 +354,28 @@ class CentralAgent:
         # 执行记忆栈清理
         removed_items = []
         if pop_count > 0:
-            removed_items = self.memory_stack.pop(pop_count)
-            logger.info(
-                f"从记忆栈中移除了 {len(removed_items)} 项: {[item.action for item in removed_items]}"
+            reflection_content = (
+                f"反思分析: {analysis}\n"
+                f"反思原因: {reasoning}\n"
+                f"清理了 {pop_count} 条记忆。"
             )
+
+            memory_entry = MemoryStackEntry(
+                timestamp=datetime.now().isoformat(),
+                action="reflect",
+                content=reflection_content,
+            )
+
+            self.memory_stack.push_with_pop(memory_entry, pop_count)
+
+            removed_items = self.memory_stack.pop(pop_count)
+
+            logger.info(f"成功从记忆栈中移除了 {pop_count} 项记忆")
+            # logger.info(
+            #     f"从记忆栈中移除了 {len(removed_items)} 项: {[item.action for item in removed_items]}"
+            # )
         else:
             logger.info("不移除任何记忆栈项目")
-
-        # 记录反思过程到记忆栈
-        memory_entry = MemoryStackEntry(
-            timestamp=datetime.now().isoformat(),
-            action="reflect",
-            content=f"反思分析: {reasoning}",
-            result={
-                "reflection_target": decision.instruction,
-                "pop_count": len(removed_items),
-                "removed_items": [item.to_dict() for item in removed_items],
-                "analysis": analysis,
-            },
-        )
-        self.memory_stack.push(memory_entry)
 
         logger.info(f"central_reflect: {analysis}")
         end_time = datetime.now()
@@ -436,7 +440,7 @@ class CentralAgent:
 
         self.memory_stack.push_with_pop(new_entry)
 
-        logger.info(f"central_summarize: {response.content}")
+        # logger.info(f"central_summarize: {response.content}")
         end_time = datetime.now()
         time_entry = {
             "step_name": "central_summarize" + start_time.isoformat(),
@@ -463,8 +467,10 @@ class CentralAgent:
         self, decision: CentralDecision, state: State, config: RunnableConfig
     ) -> Command:
         """处理委派动作，调度子Agent执行专项任务"""
-        agent_type = decision.params.get("agent_type")
-        task_description = decision.params.get("task_description", "未指定任务")
+        agent_type = decision.params.agent_type
+        task_description = decision.params.task_description
+        # agent_type = decision.agent_type
+        # task_description = decision.task_description or "未指定任务"
 
         # 验证子Agent类型有效性
         if not agent_type or agent_type not in self.available_sub_agents:

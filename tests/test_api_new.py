@@ -1,9 +1,15 @@
-import httpx
+import requests
+import time
+import sys
 import json
 
 url = "http://localhost:8513/api/chat/sp_stream"
-
-data = {
+# 改成命令行输入
+# user_msg = input("Please input the message you want to send:")
+# if not user_msg:
+#     user_msg = "What is Transformer?"
+payload = {
+    "thread_id": "__default__",
     "messages": [
         {
             "role": "user",
@@ -46,52 +52,55 @@ data = {
 
 各地区各有关部门要在党中央集中统一领导下，把党的领导贯彻到民生工作的各领域全过程，结合实际抓好本意见贯彻落实。按照中央和地方财政事权和支出责任划分，发挥财政转移支付促进基本公共服务均等化作用。提高预算内投资支持社会事业比重。各地要强化责任落实，坚持尽力而为、量力而行，优化财政支出结构，强化基本民生财力保障，持续完善教育、卫生健康、社保、就业等重点民生领域支持政策，切实兜住兜牢民生底线。完善各级政府民生实事清单制度。加强重大民生政策跨部门统筹协调，在宏观政策取向一致性评估时注重从社会公平角度评估对社会预期的影响。科学评价民生政策实施效果，对全国层面的预期性民生指标，不搞层层分解和“一刀切”考核。
 
-请仿照以上内容的格式，写一段关于全面从严治党的《意见》，请多引用习近平总书记的讲话，请你多分几步进行搜索，请你一定要搜索，进入researcher_team""",
+请仿照以上内容的格式，写一段关于全面从严治党的《意见》，请多引用习近平总书记的讲话，请你一定进行任务分解，使用replaner""",
         }
     ],
     "resources": [],
-    "thread_id": "__default__",
-    "max_plan_iterations": 1,
-    "max_step_num": 3,
-    "max_search_results": 3,
+    "max_plan_iterations": 3,
+    "max_step_num": 5,
+    "max_search_results": 10,
     "auto_accepted_plan": True,
-    "interrupt_feedback": "string",
+    "interrupt_feedback": "",
     "mcp_settings": {},
-    "enable_background_investigation": True,
+    "enable_background_investigation": False,
     "graph_format": "sp_xxqg",
 }
 
-
-# 用于缓存 event 数据
-buffer = ""
+response = requests.post(url, json=payload, stream=True)
 
 
-def process_event(event_type, event_data):
-    """处理一个完整的 event"""
-    if event_type == "message_chunk":
-        content = event_data.get("content", "")
-        print(content, end="", flush=True)
+current_agent = None
+loading_animation = ["|", "/", "-", "\\"]
+loading_index = 0
 
-
-with httpx.Client(timeout=None) as client:
-    with client.stream("POST", url, json=data) as response:
-        if response.status_code == 200:
-            for chunk in response.iter_text():
-                buffer += chunk
-                # 按行分割
-                while "\n" in buffer:
-                    line, buffer = buffer.split("\n", 1)
-                    line = line.strip()
-                    # 解析 event 和 data
-                    if line.startswith("event:"):
-                        event_type = line.split(":", 1)[1].strip()
-                    elif line.startswith("data:"):
-                        data_str = line.split(":", 1)[1].strip()
-                        try:
-                            event_data = json.loads(data_str)
-                            process_event(event_type, event_data)
-                        except json.JSONDecodeError:
-                            pass  # 忽略无效 JSON
+for line in response.iter_lines():
+    if line:
+        decoded_line = line.decode("utf-8")
+        if decoded_line.startswith("event:"):
+            # 解析事件类型
+            event_type = decoded_line.split(":")[1].strip()
+        elif decoded_line.startswith("data:"):
+            # 解析事件数据
+            event_data = decoded_line[5:].strip()
+            try:
+                data = json.loads(event_data)
+                if event_type == "node_status":
+                    # 更新当前节点状态
+                    current_agent = data.get("current_node", None)
+                    if current_agent:
+                        current_agent_str = current_agent[0].split(":")[0]
+                        print(f"\nLoading... {current_agent_str} agent 正在执行任务")
+                    else:
+                        print("\n有agent信息，但当前未识别到agent")
+                elif event_type == "message_chunk":
+                    # 实时输出内容
+                    content = data.get("content", "")
+                    for char in content:
+                        sys.stdout.write(char)
+                        sys.stdout.flush()
+                        time.sleep(0.005)  # 模拟逐字输出的效果
+            except json.JSONDecodeError:
+                print(f"\n无法解析的数据: {event_data}")
         else:
-            print(f"Error: {response.status_code}")
-            print(response.text)
+            # 处理未知行
+            print(f"\n未知行: {decoded_line}")

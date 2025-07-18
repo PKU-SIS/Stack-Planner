@@ -312,7 +312,7 @@ async def chat_stream(request: ChatRequest):
             request.interrupt_feedback,
             request.mcp_settings,
             request.enable_background_investigation,
-            # request.graph_format,
+            request.graph_format,
         ),
         media_type="text/event-stream",
     )
@@ -348,6 +348,10 @@ async def _astream_workflow_generator_sp(
         if messages:
             resume_msg += f" {messages[-1]['content']}"
         input_ = Command(resume=resume_msg)
+
+    from src.graph.sp_nodes import init_agents
+
+    init_agents(graph_format)
 
     if graph_format == "sp":
         from src.graph.builder import sp_graph as graph
