@@ -354,7 +354,7 @@ class CentralAgent:
         if pop_count > 0:
             removed_items = self.memory_stack.pop(pop_count)
             logger.info(
-                f"从记忆栈中移除了 {len(removed_items)} 项: {[item.get('action', 'unknown') for item in removed_items]}"
+                f"从记忆栈中移除了 {len(removed_items)} 项: {[item.action for item in removed_items]}"
             )
         else:
             logger.info("不移除任何记忆栈项目")
@@ -364,10 +364,10 @@ class CentralAgent:
             timestamp=datetime.now().isoformat(),
             action="reflect",
             content=f"反思分析: {reasoning}",
-            metadata={
+            result={
                 "reflection_target": decision.instruction,
                 "pop_count": len(removed_items),
-                "removed_items": removed_items,
+                "removed_items": [item.to_dict() for item in removed_items],
                 "analysis": analysis,
             },
         )
