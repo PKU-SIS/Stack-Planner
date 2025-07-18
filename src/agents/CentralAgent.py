@@ -339,7 +339,7 @@ class CentralAgent:
         removed_items = []
         if pop_count > 0:
             removed_items = self.memory_stack.pop(pop_count)
-            logger.info(f"从记忆栈中移除了 {len(removed_items)} 项: {[item.get('action', 'unknown') for item in removed_items]}")
+            logger.info(f"从记忆栈中移除了 {len(removed_items)} 项: {[item.action for item in removed_items]}")
         else:
             logger.info("不移除任何记忆栈项目")
 
