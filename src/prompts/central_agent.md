@@ -45,6 +45,19 @@ While the Step is to think, summarize or reflect, provide detailed analysis in n
 {% endif %}
 
 {% if current_action == "decision" %}
+### Decision Requirements
+While the Step is to make decision, pay attention to the following requirements and you MUST return the results in JSON format with the following fields:
+1. Analyze the current state and select the most appropriate action from available options.
+2. Provide a clear reasoning for the decision, justifying why the action is optimal.
+3. If choosing DELEGATE, specify the sub-Agent type and task instructions.
+4. Please remember to check if report is generated before you decide to FINISH the task.
+5. Return results in JSON format with the following fields:
+   - action: Type of action (required)
+   - reasoning: Justification for the decision (required)
+   - params: Action parameters (e.g., agent_type and task_description for DELEGATE) or null or do not include if not applicable (e.g., for FINISH)
+   - instruction: Instruction corresponding to the action
+   - locale: Language of the user query (e.g., "English", "Chinese", etc.)
+
 ### Output Examples For Decision
 If the **current action** is **Decision**, determine the next step as follows.
 #### THINK Action (Reasoning)
@@ -53,7 +66,7 @@ If the **current action** is **Decision**, determine the next step as follows.
 {
   "action": "think",
   "reasoning": "The user's query involves both technical and market analysis. Current memory stack is empty, so I need to plan the first step.",
-  "params": "None",
+  "params": null,
   "instruction": "Reason about the next steps based on the current state",
   "locale": "English"
 }
@@ -65,7 +78,7 @@ If the **current action** is **Decision**, determine the next step as follows.
 {
   "action": "reflect",
   "reasoning": "The previous research on AI ethics trends missed recent policy updates. I should re-assign the task with refined instructions.",
-  "params": "None",
+  "params": null,
   "instruction": "Reflect on the previous action and its outcomes",
   "locale": "English"
 } 
@@ -77,7 +90,7 @@ If the **current action** is **Decision**, determine the next step as follows.
 {
   "action": "summarize",
   "reasoning": "The research results are extensive. Summarizing key points will help in deciding the next steps.",
-  "params": "None",
+  "params": null,
   "instruction": "Condense the current information into a concise summary",
   "locale": "English"
 }
@@ -115,7 +128,7 @@ If the **current action** is **Decision**, determine the next step as follows.
 {
   "action": "finish",
   "reasoning": "All required data has been collected, analyzed, and summarized. User's requirements have been satisfied.",
-  "params": "None",
+  "params": null,
   "instruction": "Task completed",
   "locale": "English"
 }
