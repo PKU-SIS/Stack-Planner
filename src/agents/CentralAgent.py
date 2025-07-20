@@ -1,26 +1,25 @@
 import json
 import os
-from typing import Annotated, Literal, Dict, List, Optional, Any, Union, Type, cast
 from dataclasses import dataclass, field
-from enum import Enum
 from datetime import datetime
+from enum import Enum
+from typing import Annotated, Any, Dict, List, Literal, Optional, Type, Union, cast
 
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import Command
 
-
-from src.utils.logger import logger
+from src.agents.sub_agent_registry import get_sub_agents_by_global_type
 from src.config.agents import AGENT_LLM_MAP
 from src.llms.llm import get_llm_by_type
+from src.memory import MemoryStack, MemoryStackEntry
 from src.prompts.template import apply_prompt_template, get_prompt_template
 from src.utils.json_utils import repair_json_output
-from src.memory import MemoryStack, MemoryStackEntry
 from src.utils.logger import logger
-from ..graph.types import State
-from src.agents.sub_agent_registry import get_sub_agents_by_global_type
 from src.utils.statistics import global_statistics
 from src.prompts.central_decision import Decision, DelegateParams
+
+from ..graph.types import State
 
 # from .SubAgentConfig import get_sub_agents_by_global_type
 
@@ -333,7 +332,7 @@ class CentralAgent:
         llm = get_llm_by_type(AGENT_LLM_MAP.get("central_agent", "default"))
         response = llm.invoke(messages)
 
-        # 解析反思结果JSON
+        # 解析反思结果的JSON
         try:
             reflection_data = json.loads(repair_json_output(response.content))
             analysis = reflection_data.get("analysis", "反思分析")
@@ -355,26 +354,28 @@ class CentralAgent:
         # 执行记忆栈清理
         removed_items = []
         if pop_count > 0:
-            removed_items = self.memory_stack.pop(pop_count)
-            logger.info(
-                f"从记忆栈中移除了 {len(removed_items)} 项: {[item.get('action', 'unknown') for item in removed_items]}"
+            reflection_content = (
+                f"反思分析: {analysis}\n"
+                f"反思原因: {reasoning}\n"
+                f"清理了 {pop_count} 条记忆。"
             )
+
+            memory_entry = MemoryStackEntry(
+                timestamp=datetime.now().isoformat(),
+                action="reflect",
+                content=reflection_content,
+            )
+
+            self.memory_stack.push_with_pop(memory_entry, pop_count)
+
+            removed_items = self.memory_stack.pop(pop_count)
+
+            logger.info(f"成功从记忆栈中移除了 {pop_count} 项记忆")
+            # logger.info(
+            #     f"从记忆栈中移除了 {len(removed_items)} 项: {[item.action for item in removed_items]}"
+            # )
         else:
             logger.info("不移除任何记忆栈项目")
-
-        # 记录反思过程到记忆栈
-        memory_entry = MemoryStackEntry(
-            timestamp=datetime.now().isoformat(),
-            action="reflect",
-            content=f"反思分析: {reasoning}",
-            metadata={
-                "reflection_target": decision.instruction,
-                "pop_count": len(removed_items),
-                "removed_items": removed_items,
-                "analysis": analysis,
-            },
-        )
-        self.memory_stack.push(memory_entry)
 
         logger.info(f"central_reflect: {analysis}")
         end_time = datetime.now()

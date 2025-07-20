@@ -86,7 +86,9 @@ class SubAgentManager:
             return Command(
                 update={
                     "messages": [
-                        HumanMessage(content=f"研究任务失败: {str(e)}", name="researcher")
+                        HumanMessage(
+                            content=f"研究任务失败: {str(e)}", name="researcher"
+                        )
                     ],
                     "current_node": "central_agent",
                     "memory_stack": self.central_agent.memory_stack.to_dict(),
@@ -111,7 +113,9 @@ class SubAgentManager:
         return Command(
             update={
                 "messages": [
-                    HumanMessage(content="研究任务完成，返回中枢Agent", name="researcher")
+                    HumanMessage(
+                        content="研究任务完成，返回中枢Agent", name="researcher"
+                    )
                 ],
                 "current_node": "central_agent",
                 "memory_stack": self.central_agent.memory_stack.to_dict(),
@@ -164,7 +168,9 @@ class SubAgentManager:
             return Command(
                 update={
                     "messages": [
-                        HumanMessage(content=f"研究任务失败: {str(e)}", name="researcher")
+                        HumanMessage(
+                            content=f"研究任务失败: {str(e)}", name="researcher"
+                        )
                     ],
                     "current_node": "central_agent",
                     "memory_stack": self.central_agent.memory_stack.to_dict(),
@@ -189,7 +195,9 @@ class SubAgentManager:
         return Command(
             update={
                 "messages": [
-                    HumanMessage(content="研究任务完成，返回中枢Agent", name="researcher")
+                    HumanMessage(
+                        content="研究任务完成，返回中枢Agent", name="researcher"
+                    )
                 ],
                 "current_node": "central_agent",
                 "memory_stack": self.central_agent.memory_stack.to_dict(),
@@ -410,13 +418,14 @@ class SubAgentManager:
 
         delegation_context = state.get("delegation_context", {})
         task_description = delegation_context.get(
-            "task_description", state.get("user_query", "")+ "\n将用户的任务拆解成2-5个子任务"
+            "task_description",
+            state.get("user_query", "") + "\n将用户的任务拆解成2-5个子任务",
         )
 
         # 收集任务拆解所需上下文
         context = {
             "user_query": state.get("user_query", ""),
-            "memory_history": [],#self.central_agent.memory_stack.get_all(),
+            "memory_history": [],  # self.central_agent.memory_stack.get_all(),
             "task_description": task_description,
         }
 
@@ -429,7 +438,9 @@ class SubAgentManager:
             llm = get_llm_by_type(AGENT_LLM_MAP.get("replanner", "default"))
             response = llm.invoke(messages)
             replan_result = response.content
-            replan_result = replan_result.replace("```json", "").replace("```", "").strip()
+            replan_result = (
+                replan_result.replace("```json", "").replace("```", "").strip()
+            )
 
             logger.debug(f"任务拆解结果: {replan_result}")
 

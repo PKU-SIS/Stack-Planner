@@ -44,7 +44,7 @@ sub_agents_sp_xxqg = [
         "name": SubAgentType.PLANNER.value,
         # 将问题拆解成方便处理的子任务，来更好的指导任务规划
         "description": "Decompose search problems into manageable subtasks to better guide research step. Don't contain any requirements about report writing in task description, this agent can only handle **search steps planning**. You MUST and Only use it at the beginning of the task.",
-        "node": sp_planner_node,  
+        "node": sp_planner_node,
     },
     {
         "name": SubAgentType.RESEARCHER.value,
