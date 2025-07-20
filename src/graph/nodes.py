@@ -447,7 +447,32 @@ def reporter_xxqg_node(state: State):
         ],
         "locale": state.get("locale", "en-US"),
     }
-    invoke_messages = apply_prompt_template("reporter_xxqg", input_)
+
+    # 读取所有二级文体类别
+    with open("src/prompts/xxqg_rule_demo_lib.json", "r") as f:
+        rule_demo_lib = json.load(f)
+    # 通过字符串匹配的方式简单检索文体类别
+    rule, demos = None, None
+    for type1, type2_dict in rule_demo_lib.items():
+        for type2, type2_info_dict in type2_dict.items():
+            type3_dict = type2_info_dict.get("tags", {})
+            rule = type2_info_dict.get("ori_text", None)
+            for type3, type3_info_dict in type3_dict.items():
+                if type3 in user_query:
+                    demos = type3_info_dict["few_shot"]
+                    break
+            if demos:
+                break
+        if demos:
+            break
+    if rule and demos:
+        input_["rule"] = rule
+        input_["demonstrations"] = demos
+    else:
+        raise ValueError("No matching type found")
+
+    # 应用对应文体的prompt模板
+    invoke_messages = apply_prompt_template(f"reporter_xxqg_rule_demo", input_)
     observations = state.get("observations", [])
 
     # Add a reminder about the new report format, citation style, and table usage
