@@ -359,9 +359,9 @@ class SubAgentManager:
             messages = apply_prompt_template(
                 "reporter_xxqg", state, extra_context=context
             )  # 修复：参数顺序
-            messages.append(HumanMessage(
-                f"##User Query\n\n{state.get('user_query', '')}\n\n"
-            ))
+            messages.append(
+                HumanMessage(f"##User Query\n\n{state.get('user_query', '')}\n\n")
+            )
             data_collections = state.get("data_collections", [])
             for data_collection in data_collections:
                 messages.append(

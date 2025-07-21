@@ -255,6 +255,7 @@ class CentralAgent:
                             name="central_error",
                         )
                     ],
+                    "locale": state.get("locale"),
                     "current_node": "central_agent",
                     "memory_stack": self.memory_stack.to_dict(),
                 },
@@ -306,6 +307,7 @@ class CentralAgent:
                 "memory_stack": json.dumps(
                     [entry.to_dict() for entry in self.memory_stack.get_all()]
                 ),
+                "locale": state.get("locale"),
             },
             goto="central_agent",
         )
@@ -399,6 +401,7 @@ class CentralAgent:
                 "memory_stack": json.dumps(
                     [entry.to_dict() for entry in self.memory_stack.get_all()]
                 ),
+                "locale": state.get("locale"),
             },
             goto="central_agent",
         )
@@ -459,6 +462,7 @@ class CentralAgent:
                 "memory_stack": json.dumps(
                     [entry.to_dict() for entry in self.memory_stack.get_all()]
                 ),
+                "locale": state.get("locale"),
             },
             goto="central_agent",
         )
@@ -520,6 +524,7 @@ class CentralAgent:
                 "memory_stack": json.dumps(
                     [entry.to_dict() for entry in self.memory_stack.get_all()]
                 ),
+                "locale": state.get("locale"),
             },
             goto=agent_type,
         )
