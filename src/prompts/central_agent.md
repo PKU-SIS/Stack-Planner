@@ -47,12 +47,11 @@ While the Step is to think, summarize or reflect, provide detailed analysis in n
 {% if current_action == "decision" %}
 ### Decision Requirements
 While the Step is to make decision, pay attention to the following requirements and you MUST return the results in JSON format with the following fields:
-1. Analyze the current state and select the most appropriate action from available options. Prefer REFLECT more frequently, especially after key steps or when potential improvements are needed, unless the previous action was REFLECT - in that case, prefer other actions to avoid loops.
+1. Analyze the current state and select the most appropriate action from available options.
 2. Provide a clear reasoning for the decision, justifying why the action is optimal.
 3. If choosing DELEGATE, specify the sub-Agent type and task instructions.
-4. 当系统建议进行反思（suggest_reflect为true）时，除非有充分理由，否则优先选择REFLECT动作。建议反思的原因包括：{{reflect_reasons}}。
-5. Please remember to check if report is generated before you decide to FINISH the task.
-6. Return results in JSON format with the following fields:
+4. Please remember to check if report is generated before you decide to FINISH the task.
+5. Return results in JSON format with the following fields:
    - action: Type of action (required)
    - reasoning: Justification for the decision (required)
    - params: Action parameters (e.g., agent_type and task_description for DELEGATE) or null or do not include if not applicable (e.g., for FINISH)
@@ -141,9 +140,8 @@ While the Step is to make decision, pay attention to the following requirements 
 2. Provide a clear reasoning for the decision, justifying why the action is optimal.
 3. If choosing DELEGATE, specify the sub-Agent type and task instructions.
   - If choosing replanner agent: This agent can only handle **search steps planning** and is limited to decomposing retrieval tasks into actionable steps. Do not include any requirements about report writing in the task description. You MUST and ONLY use it at the beginning of the task.
-4. 当系统建议进行反思（suggest_reflect为true）时，除非有充分理由，否则优先选择REFLECT动作。建议反思的原因包括：{{reflect_reasons}}。
-5. Please remember to check if report is generated before you decide to FINISH the task.
-6. Return results in JSON format with the following fields:
+4. Please remember to check if report is generated before you decide to FINISH the task.
+5. Return results in JSON format with the following fields:
    - action: Type of action (required)
    - reasoning: Justification for the decision (required)
    - params: Action parameters (e.g., agent_type and task_description for DELEGATE)
@@ -191,18 +189,17 @@ if the **current action** is **REFLECT**, return JSON format with reflection ana
 
 **Reflection Guidelines**:
 - **analysis**: Provide comprehensive reflection on the previous action
-- **pop_count**: Number (0 or positive integer) indicating how many recent memory stack items to remove. Be very cautious: only set pop_count > 0 if absolutely necessary for redundancy or errors; do not pop merely for space reasons. Carefully evaluate if items contribute to progress before deciding.
-- **reasoning**: Explain the reflection conclusion and memory cleanup decision, including why popping is justified or why not.
+- **pop_count**: Number (0 or positive integer) indicating how many recent memory stack items to remove
+- **reasoning**: Explain the reflection conclusion and memory cleanup decision
 
 
 **Memory Stack Management Criteria**:
-- Remove duplicate or redundant information only after careful consideration
-- Remove outdated information that no longer applies, but verify it doesn't support ongoing work
+- Remove duplicate or redundant information
+- Remove outdated information that no longer applies
 - Keep essential information supporting ongoing work
-- Remove failed attempts or incorrect reasoning only if they don't provide learning value
+- Remove failed attempts or incorrect reasoning
 - DO NOT REMOVE any history that made progress towards the final goal or decision
 - Only remove the most recent memory stack items. Older items should not be removed unless all recent items are cleared first.
-- Prioritize keeping the stack intact unless clear benefits to popping are identified; err on the side of caution.
 
 {% endif %}
 

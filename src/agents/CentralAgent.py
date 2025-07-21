@@ -113,42 +113,6 @@ class CentralAgent:
         logger.info("中枢Agent正在进行决策...")
         start_time = datetime.now()
 
-        # 智能反射触发条件（满足任一即建议）
-        reflect_conditions = []
-
-        # 条件1：关键节点检查（子任务完成且结果重要）
-        if state.get("subtask_completed") and self._is_critical_result(state):
-            reflect_conditions.append("关键子任务完成需质量验证")
-
-        # 条件2：错误率阈值（最近3步错误率>25%）
-        if self._error_rate() > 0.25:
-            reflect_conditions.append(f"高错误率({self._error_rate()*100}%)需分析")
-
-        # 条件3：信息复杂度（结果长度>500字符或含复杂结构）
-        if self._is_complex_content(state.get("last_result", "")):
-            reflect_conditions.append("复杂内容需深度验证")
-
-        # 条件4：路径决策点（多分支任务）
-        if "OR" in state.get("user_query", "") or "multiple" in state.get("plan", ""):
-            reflect_conditions.append("多路径决策需优化")
-
-        # 动态决策：有条件时优先但不强制
-        if reflect_conditions:
-            logger.info(f"建议REFLECT: {', '.join(reflect_conditions)}")
-            state["suggest_reflect"] = {
-                "conditions": reflect_conditions,
-                "priority": len(reflect_conditions),  # 条件越多优先级越高
-            }
-
-        # 添加信息冗余检查 - 当记忆栈相似条目过多时
-        if self._has_redundant_entries(threshold=3):  # 新增方法
-            logger.info("检测到冗余信息，优先触发REFLECT")
-            return CentralDecision(
-                action=CentralAgentAction.REFLECT,
-                reasoning="记忆栈中存在相似条目，需要清理冗余",
-                instruction="识别并移除重复信息",
-            )
-
         # 构建决策prompt
         messages = self._build_decision_prompt(state, config)
         # logger.debug(f"决策prompt: {messages}")
@@ -247,18 +211,12 @@ class CentralAgent:
             else:
                 converted_messages.append(msg)
 
-        # Add previous action check
-        previous_action = ""
-        if self.memory_stack.peek():
-            previous_action = self.memory_stack.peek().action
-
         context = {
             "available_actions": [action.value for action in CentralAgentAction],
             "available_sub_agents": self.available_sub_agents,
             "sub_agents_description": self.sub_agents_description,
             "current_action": "decision",
             "messages_history": converted_messages,
-            "previous_action": previous_action,  # 新加一个previous_action，防止在遇到无法解决的问题时，一直重复reflect
         }
         action_options = list(CentralAgentAction)
         # 加载正确的模板名称并合并动作选项
@@ -562,16 +520,9 @@ class CentralAgent:
                 "memory_stack": json.dumps(
                     [entry.to_dict() for entry in self.memory_stack.get_all()]
                 ),
-                "subtask_completed": False,
-                "is_critical_task": "报告" in task_description,  # 动态标记关键任务
             },
             goto=agent_type,
         )
-
-    # 在子代理返回结果时标记完成
-    def handle_subagent_result(self, result):
-        self.memory_stack.push(result)
-        return {"subtask_completed": True}  # 仅设置标记，不强制Reflect
 
     def _handle_finish(
         self, decision: CentralDecision, state: State, config: RunnableConfig
@@ -653,34 +604,3 @@ class CentralAgent:
 
         logger.info(report_msg)
         logger.info(global_statistics.get_statistics())
-
-    def _has_redundant_entries(self, threshold=3) -> bool:
-        """检查最近条目是否高度相似"""
-        recent_entries = self.memory_stack.get_recent(5)
-        if len(recent_entries) < threshold:
-            return False
-
-        # 简单相似度检测（实际可替换为文本相似度算法）
-        contents = [entry.content[:50] for entry in recent_entries]
-        return len(set(contents)) < threshold
-
-    def _is_critical_result(self, state) -> bool:
-        """检查结果是否关键（需验证）"""
-        critical_keywords = ["结论", "报告", "建议", "方案", "分析"]
-        return any(kw in state.get("last_result", "") for kw in critical_keywords)
-
-    def _error_rate(self) -> float:
-        """计算最近错误率"""
-        recent = self.memory_stack.get_recent(5)
-        if not recent:
-            return 0.0
-        errors = sum(1 for e in recent if e.action == "error")
-        return errors / len(recent)
-
-    def _is_complex_content(self, content: str) -> bool:
-        """检查内容复杂度"""
-        if len(content) > 500:
-            return True
-        if "```" in content or "|" in content:  # 含代码/表格
-            return True
-        return False
