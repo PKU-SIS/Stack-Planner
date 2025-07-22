@@ -439,14 +439,6 @@ def reporter_xxqg_node(state: State):
     logger.info("Reporter write final report")
     current_plan = state.get("current_plan")
     user_query = state.get("user_query")
-    input_ = {
-        "messages": [
-            HumanMessage(
-                f"# Research Requirements\n\n##User Query\n\n{user_query}\n\n## Task\n\n{current_plan.title}\n\n## Description\n\n{current_plan.thought}"
-            )
-        ],
-        "locale": state.get("locale", "en-US"),
-    }
 
     # 读取所有二级文体类别
     with open("src/prompts/xxqg_rule_demo_lib.json", "r") as f:
@@ -465,11 +457,26 @@ def reporter_xxqg_node(state: State):
                 break
         if demos:
             break
-    if rule and demos:
-        input_["rule"] = rule
-        input_["demonstrations"] = demos
-    else:
-        raise ValueError("No matching type found")
+    # if rule and demos:
+    #     input_ = {
+    #         "messages": [
+    #             HumanMessage(
+    #                 f"# Research Requirements\n\n##Rule\n\n{rule}\n\n##Demonstrations\n\n{demos}\n\n##User Query\n\n{user_query}\n\n## Task\n\n{current_plan.title}\n\n## Description\n\n{current_plan.thought}"
+    #             )
+    #         ],
+    #         "locale": state.get("locale", "en-US"),
+    #     }
+    # else:
+    input_ = {
+        "messages": [
+            HumanMessage(
+                f"# Research Requirements\n\n## User Query\n\n{user_query}\n\n## Task\n\n{current_plan.title}\n\n## Description\n\n{current_plan.thought}"
+            )
+        ],
+        "locale": state.get("locale", "en-US"),
+    }
+    input_["demonstrations"] = demos
+    input_["rule"] = rule
 
     # 应用对应文体的prompt模板
     invoke_messages = apply_prompt_template(f"reporter_xxqg_rule_demo", input_)
