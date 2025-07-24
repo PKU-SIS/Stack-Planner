@@ -12,6 +12,7 @@ from .nodes import (
     reporter_node,
     research_team_node,
     researcher_node,
+    researcher_sp_node,
     coder_node,
     human_feedback_node,
     background_investigation_node,
@@ -71,7 +72,7 @@ def build_graph_sp():
     builder.add_node("planner", sp_planner_node)
     builder.add_node("reporter", reporter_node)
     builder.add_node("research_team", research_team_node)
-    builder.add_node("researcher", researcher_node)
+    builder.add_node("researcher", researcher_sp_node)
     builder.add_node("coder", coder_node)
     builder.add_edge("reporter", END)
     return builder.compile()
@@ -93,30 +94,6 @@ def build_graph_xxqg():
     builder.add_edge("reporter", "zip_data")
     builder.add_edge("zip_data", END)
     return builder.compile()
-
-
-# 简化的状态图构建函数
-def build_graph_central_agent():
-    """构建以中枢Agent为核心的动态编排状态图"""
-
-    builder = StateGraph(State)
-    builder.add_edge(START, "sp_center_agent")  # 起始节点指向中枢Agent
-
-    # 添加中枢Agent节点
-    builder.add_node("sp_center_agent", sp_center_agent_node)
-
-    # 中枢Agent可以跳转到所有子节点
-    for agent_name in [agent.value for agent in SubAgentType]:
-        builder.add_edge("sp_center_agent", agent_name)
-        builder.add_edge(agent_name, "sp_center_agent")  # 子节点执行后返回中枢
-
-    # 完成节点指向结束
-    builder.add_edge("sp_center_agent", END)
-
-    return builder.compile()
-
-
-# graph = build_graph_xxqg()
 
 
 # -------------------------
@@ -188,6 +165,7 @@ def build_graph_sp_xxqg():
 
 
 # 生成最终的多Agent系统图
+base_graph = build_graph()
 sp_graph = build_multi_agent_graph()
 xxqg_graph = build_graph_xxqg()
 sp_xxqg_graph = build_graph_sp_xxqg()

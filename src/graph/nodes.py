@@ -696,6 +696,26 @@ async def researcher_node(
 
     tools = [search_docs_tool]
     logger.info(f"Researcher tools: {tools}")
+    research_agent = ResearcherAgent(
+        config=config, agent_type="researcher", default_tools=tools
+    )
+    return await research_agent.execute_agent_step(state)
+
+
+async def researcher_sp_node(
+    state: State, config: RunnableConfig
+) -> Command[Literal["research_team"]]:
+    """Researcher node that do research"""
+    logger.info("Researcher node is researching.")
+
+    configurable = Configuration.from_runnable_config(config)
+    tools = [get_web_search_tool(configurable.max_search_results), crawl_tool]
+    retriever_tool = get_retriever_tool(state.get("resources", []))
+    if retriever_tool:
+        tools.insert(0, retriever_tool)
+
+    tools = [search_docs_tool]
+    logger.info(f"Researcher tools: {tools}")
     research_agent = ResearcherAgentSP(
         config=config, agent_type="researcher", default_tools=tools
     )

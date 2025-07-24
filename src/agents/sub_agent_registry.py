@@ -72,7 +72,7 @@ def get_sub_agents_by_global_type(graph_type: str):
     Returns:
         List[Dict]: 包含子Agent名称、节点和描述的列表
     """
-    if graph_type == "sp":
+    if graph_type == "sp" or graph_type == "base":
         return sub_agents_sp
     elif graph_type == "sp_xxqg":
         return sub_agents_sp_xxqg
