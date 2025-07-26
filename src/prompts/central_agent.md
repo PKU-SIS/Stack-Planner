@@ -202,4 +202,5 @@ if the **current action** is **SUMMARIZE**, condense information based on {{summ
 - **Semantic Accuracy**: Maintain the original intent and meaning during summarization to avoid misinterpretation or distortion.
 - **Highlight Key Insights**: Clearly emphasize or mark important findings, trends, and actionable recommendations (when applicable).
 - **Contextual Relevance**: If the summary will be used in subsequent steps (e.g., decision-making or reporting), preserve logical connections to the broader context.
+- **URL Completeness**: Ensure that ALL relevant URLs(include image URLs) are included in the summary to provide context and ensure that the summary is complete and accurate.
 {% endif %}
