@@ -25,6 +25,7 @@ conf.yaml
 .idea/
 .langgraph_api/
 *.log
+tests/
 
 # coverage report
 coverage.xml
