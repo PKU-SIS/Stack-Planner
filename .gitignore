@@ -29,4 +29,6 @@ conf.yaml
 # coverage report
 coverage.xml
 coverage/
-cases/good.md
+cases/*
+test_*.py
+shell/*

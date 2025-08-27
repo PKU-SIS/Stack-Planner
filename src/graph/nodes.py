@@ -457,26 +457,28 @@ def reporter_xxqg_node(state: State):
                 break
         if demos:
             break
-    # if rule and demos:
-    #     input_ = {
-    #         "messages": [
-    #             HumanMessage(
-    #                 f"# Research Requirements\n\n##Rule\n\n{rule}\n\n##Demonstrations\n\n{demos}\n\n##User Query\n\n{user_query}\n\n## Task\n\n{current_plan.title}\n\n## Description\n\n{current_plan.thought}"
-    #             )
-    #         ],
-    #         "locale": state.get("locale", "en-US"),
-    #     }
-    # else:
+    demos_str = "\n\n".join(
+        [f"### Demonstration {i+1}\n\n{d}" for i, d in enumerate(demos)]
+    )
     input_ = {
         "messages": [
             HumanMessage(
-                f"# Research Requirements\n\n## User Query\n\n{user_query}\n\n## Task\n\n{current_plan.title}\n\n## Description\n\n{current_plan.thought}"
+                f"# Research Requirements\n\n##User Query\n\n{demos_str}\n\n请严格仿照以上示例。{user_query}\n\n## Task\n\n{current_plan.title}\n\n## Description\n\n{current_plan.thought}"
             )
         ],
         "locale": state.get("locale", "en-US"),
     }
-    input_["demonstrations"] = demos
-    input_["rule"] = rule
+    # else:
+    # input_ = {
+    #     "messages": [
+    #         HumanMessage(
+    #             f"# Research Requirements\n\n## User Query\n\n{user_query}\n\n## Task\n\n{current_plan.title}\n\n## Description\n\n{current_plan.thought}"
+    #         )
+    #     ],
+    #     "locale": state.get("locale", "en-US"),
+    # }
+    # input_["demonstrations"] = demos
+    # input_["rule"] = rule
 
     # 应用对应文体的prompt模板
     invoke_messages = apply_prompt_template(f"reporter_xxqg_rule_demo", input_)

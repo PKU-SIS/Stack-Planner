@@ -42,7 +42,11 @@
             "console": "integratedTerminal",
             "justMyCode": false,
             "env": {
-                "PYTHONPATH": "${workspaceFolder}"
+                "PYTHONPATH": "${workspaceFolder}",
+                "http_proxy": "http://localhost:8888",
+                "https_proxy": "http://localhost:8888",
+                "HTTP_PROXY": "http://localhost:8888",
+                "HTTPS_PROXY": "http://localhost:8888"
             },
             "args": [
                 "--reload",
