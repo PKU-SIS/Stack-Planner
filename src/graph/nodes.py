@@ -477,8 +477,8 @@ def reporter_xxqg_node(state: State):
     #     ],
     #     "locale": state.get("locale", "en-US"),
     # }
-    # input_["demonstrations"] = demos
-    # input_["rule"] = rule
+    input_["demonstrations"] = demos
+    input_["rule"] = rule
 
     # 应用对应文体的prompt模板
     invoke_messages = apply_prompt_template(f"reporter_xxqg_rule_demo", input_)

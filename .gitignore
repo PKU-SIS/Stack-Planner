@@ -32,4 +32,4 @@ coverage.xml
 coverage/
 cases/*
 test_*.py
-shell/*
+shells/*
