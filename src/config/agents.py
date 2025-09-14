@@ -20,4 +20,5 @@ AGENT_LLM_MAP: dict[str, LLMType] = {
     "central_agent": "basic",
     "researcher_xxqg": "basic",
     "replanner": "basic",
+    "perception": "basic",
 }

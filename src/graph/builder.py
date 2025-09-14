@@ -24,7 +24,7 @@ from .nodes import (
     researcher_xxqg_node,
 )
 
-from .sp_nodes import central_agent_node
+from .sp_nodes import central_agent_node,perception_node
 from src.agents.sub_agent_registry import get_sub_agents_by_global_type
 
 
@@ -142,6 +142,7 @@ def build_graph_sp_xxqg():
     builder = StateGraph(State)
 
     # 添加center planner agent
+    builder.add_node("perception", perception_node)
     builder.add_node("central_agent", central_agent_node)
 
     # 添加sub agent
@@ -156,9 +157,14 @@ def build_graph_sp_xxqg():
     # 下面这些暂时没有算sub agent
     builder.add_node("zip_data", zip_data)
 
-    # 定义状态转移
-    builder.add_edge(START, "central_agent")
+    # 感知层，包括search before plan、human in the loop
+    builder.add_edge(START, "perception")
+
+    #核心流程
+    builder.add_edge("perception", "central_agent")
     builder.add_edge("central_agent", "zip_data")
+
+    #后处理部分
     builder.add_edge("zip_data", END)
 
     return builder.compile()

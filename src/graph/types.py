@@ -24,6 +24,7 @@ class State(MessagesState):
     auto_accepted_plan: bool = False
     enable_background_investigation: bool = True
     background_investigation_results: str = None
+    user_dst:str = None
 
     delegation_context: dict = None
     current_node: str = None
