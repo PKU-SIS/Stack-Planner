@@ -360,17 +360,10 @@ class SubAgentManager:
             messages = apply_prompt_template(
                 "reporter_xxqg", state, extra_context=context
             )  # 修复：参数顺序
-            messages.append(
-                HumanMessage(f"##User Query\n\n{state.get('user_query', '')}\n\n")
-            )
             data_collections = state.get("data_collections", [])
-            for data_collection in data_collections:
-                messages.append(
-                    HumanMessage(
-                        content=f"Below are data collected in previous tasks:\n\n{data_collection}",
-                        name="observation",
-                    )
-                )
+            messages.append(
+                HumanMessage(f"##User Query\n\n{state.get('user_query', '')}\n\n##用户约束\n\n{state.get("user_dst","")}\n\nBelow are data collected in previous tasks:\n\n{"\n\n".join(data_collections)}")
+            )
 
             logger.debug(f"Reporter messages: {messages}")
             llm = get_llm_by_type(AGENT_LLM_MAP.get("reporter_xxqg", "default"))
