@@ -373,7 +373,7 @@ class SubAgentManager:
                 )
 
             logger.debug(f"Reporter messages: {messages}")
-            llm = get_llm_by_type(AGENT_LLM_MAP.get("reporter", "default"))
+            llm = get_llm_by_type(AGENT_LLM_MAP.get("reporter_xxqg", "default"))
             response = llm.invoke(messages)
             final_report = response.content
         except Exception as e:

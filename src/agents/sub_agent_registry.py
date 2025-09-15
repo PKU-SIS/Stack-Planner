@@ -52,11 +52,6 @@ sub_agents_sp_xxqg = [
         "node": researcher_xxqg_node,
     },
     {
-        "name": SubAgentType.CODER.value,
-        "description": "Code generation and execution for math or code problems",
-        "node": coder_node,
-    },
-    {
         "name": SubAgentType.REPORTER.value,
         "description": "Result organization and report generation",
         "node": reporter_xxqg_node,
