@@ -529,7 +529,7 @@ class SubAgentManager:
             logger.error(f"感知层执行失败: {str(e)}")
         
 
-        feedback = interrupt("Please Fill the Question.")
+        feedback = interrupt("Please Fill the Question.[DST]"+dst_question+"[/DST]")
 
         # if the feedback is not accepted, return the planner node
         if feedback and str(feedback).upper().startswith("[FILLED_QUESTION]"):

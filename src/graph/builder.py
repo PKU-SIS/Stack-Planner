@@ -3,7 +3,7 @@
 
 from langgraph.graph import StateGraph, START, END
 from langgraph.checkpoint.memory import MemorySaver
-
+from src.utils.logger import logger
 from .types import State
 
 from .nodes import (
@@ -130,7 +130,7 @@ def build_multi_agent_graph():
     return builder.compile()
 
 
-def build_graph_sp_xxqg():
+def _build_graph_sp_xxqg():
     """
     构建多Agent系统状态图，定义系统状态转移逻辑
 
@@ -167,11 +167,62 @@ def build_graph_sp_xxqg():
     #后处理部分
     builder.add_edge("zip_data", END)
 
-    return builder.compile()
+    return builder
 
 
 # 生成最终的多Agent系统图
 base_graph = build_graph()
 sp_graph = build_multi_agent_graph()
 xxqg_graph = build_graph_xxqg()
-sp_xxqg_graph = build_graph_sp_xxqg()
+
+def build_graph_with_memory_from_builder(builder):
+    """Build and return the agent workflow graph with memory."""
+    # use persistent memory to save conversation history
+    # TODO: be compatible with SQLite / PostgreSQL
+    memory = MemorySaver()
+
+    # build state graph
+    return builder.compile(checkpointer=memory)
+
+sp_xxqg_graph_builder = _build_graph_sp_xxqg()
+
+
+_GRAPH_BUILDER_CLASS_MAP = {
+    "base": None,
+    "sp": None,
+    "xxqg": None,
+    "sp_xxqg": sp_xxqg_graph_builder,
+}
+
+_GRAPH_CLASS_MAP = {
+    "base": {"memory":None, "no_memory": base_graph},
+    "sp": {"memory":None, "no_memory": sp_graph},
+    "xxqg": {"memory":None, "no_memory": xxqg_graph},
+    "sp_xxqg": {"memory":None,"no_memory": sp_xxqg_graph_builder.compile()},
+}
+
+def get_graph_by_format(graph_format: str, with_memory: bool = False):
+    """
+    根据图格式获取状态图实例
+
+    Args:
+        graph_format (str): 图格式标识
+        with_memory (bool): 是否启用记忆功能
+
+    Returns:
+        状态图实例
+    """
+    if graph_format not in _GRAPH_BUILDER_CLASS_MAP:
+        raise ValueError(f"Unsupported graph format: {graph_format}")
+
+    graph_builder = _GRAPH_BUILDER_CLASS_MAP[graph_format]
+    if with_memory:
+        if graph_format != "sp_xxqg":
+            logger.error("Memory功能目前仅支持 sp_xxqg 图格式")
+            return _GRAPH_CLASS_MAP[graph_format]["no_memory"]
+        else:
+            if _GRAPH_CLASS_MAP[graph_format]["memory"] is None:
+                _GRAPH_CLASS_MAP[graph_format]["memory"] = build_graph_with_memory_from_builder(graph_builder)
+            return _GRAPH_CLASS_MAP[graph_format]["memory"]
+    else:
+        return _GRAPH_CLASS_MAP[graph_format]["no_memory"]

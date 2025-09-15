@@ -3,6 +3,9 @@
 
 import base64
 import json
+from math import log
+
+from sympy import im
 from src.utils.logger import logger
 import os
 from typing import Annotated, List, cast
@@ -16,7 +19,7 @@ from langgraph.types import Command
 
 from src.config.tools import SELECTED_RAG_PROVIDER
 from src.graph.builder import build_graph_with_memory
-from src.graph.builder import xxqg_graph
+from src.graph.builder import get_graph_by_format
 from src.podcast.graph.builder import build_graph as build_podcast_graph
 from src.ppt.graph.builder import build_graph as build_ppt_graph
 from src.prose.graph.builder import build_graph as build_prose_graph
@@ -54,8 +57,10 @@ app.add_middleware(
     allow_methods=["*"],  # Allows all methods
     allow_headers=["*"],  # Allows all headers
 )
-
+from langgraph.store.memory import InMemoryStore
+in_memory_store = InMemoryStore()
 graph = build_graph_with_memory()
+
 
 
 @app.post("/api/chat/stream")
@@ -227,7 +232,7 @@ async def _astream_workflow_generator_xxqg(
         if messages:
             resume_msg += f" {messages[-1]['content']}"
         input_ = Command(resume=resume_msg)
-    async for agent, _, event_data in xxqg_graph.astream(
+    async for agent, _, event_data in get_graph_by_format("xxqg").astream(
         input_,
         config={
             "thread_id": thread_id,
@@ -300,6 +305,7 @@ async def chat_stream(request: ChatRequest):
     thread_id = request.thread_id
     if thread_id == "__default__":
         thread_id = str(uuid4())
+    logger.info(f"request param details: {request}")
     return StreamingResponse(
         _astream_workflow_generator_sp(
             request.model_dump()["messages"],
@@ -343,7 +349,10 @@ async def _astream_workflow_generator_sp(
         "data_collections": [],
     }
     if not auto_accepted_plan and interrupt_feedback:
-        resume_msg = f"[{interrupt_feedback}]"
+        if "FILLED_QUESTION" in interrupt_feedback:
+            resume_msg = interrupt_feedback
+        else:
+            resume_msg = f"[{interrupt_feedback}]"
         # add the last message to the resume message
         if messages:
             resume_msg += f" {messages[-1]['content']}"
@@ -352,13 +361,11 @@ async def _astream_workflow_generator_sp(
     from src.graph.sp_nodes import init_agents
 
     init_agents(graph_format)
+    if graph_format == "sp_xxqg":
+        graph = get_graph_by_format(graph_format, with_memory=True)
+    else:
+        graph = get_graph_by_format(graph_format, with_memory=False)
 
-    if graph_format == "sp":
-        from src.graph.builder import sp_graph as graph
-    elif graph_format == "xxqg":
-        from src.graph.builder import xxqg_graph as graph
-    elif graph_format == "sp_xxqg":
-        from src.graph.builder import sp_xxqg_graph as graph
     last_known_agent = None
     async for agent, _, event_data in graph.astream(
         input_,
@@ -385,18 +392,16 @@ async def _astream_workflow_generator_sp(
 
         if isinstance(event_data, dict):
             if "__interrupt__" in event_data:
+                dst_question = event_data["__interrupt__"][0].value.split("[DST]")[-1].split("[/DST]")[0] if "[DST]" in event_data["__interrupt__"][0].value else ""
                 yield _make_event(
                     "interrupt",
                     {
                         "thread_id": thread_id,
                         "id": event_data["__interrupt__"][0].ns[0],
                         "role": "assistant",
-                        "content": event_data["__interrupt__"][0].value,
+                        "content": "Please Fill the Question",
                         "finish_reason": "interrupt",
-                        "options": [
-                            {"text": "Edit plan", "value": "edit_plan"},
-                            {"text": "Start research", "value": "accepted"},
-                        ],
+                        "question": dst_question
                     },
                 )
             continue
