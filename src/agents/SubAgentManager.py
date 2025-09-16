@@ -178,7 +178,6 @@ class SubAgentManager:
                     ],
                     "current_node": "central_agent",
                     "memory_stack": self.central_agent.memory_stack.to_dict(),
-                    "data_collections": result_data_collections,
                 },
                 goto="central_agent",
             )
@@ -206,6 +205,7 @@ class SubAgentManager:
                 ],
                 "current_node": "central_agent",
                 "memory_stack": self.central_agent.memory_stack.to_dict(),
+                "data_collections": result_data_collections,
             },
             goto="central_agent",
         )
