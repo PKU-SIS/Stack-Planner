@@ -82,6 +82,8 @@ class SubAgentManager:
                     "data_collections", []
                 )
 
+            logger.info(f"data_collections_in subagent:{result_data_collections}")
+
         except Exception as e:
             logger.error(f"Researcher Agent执行失败: {str(e)}")
             return Command(
@@ -120,6 +122,7 @@ class SubAgentManager:
                 ],
                 "current_node": "central_agent",
                 "memory_stack": self.central_agent.memory_stack.to_dict(),
+                "data_collections": result_data_collections,
             },
             goto="central_agent",
         )
@@ -175,6 +178,7 @@ class SubAgentManager:
                     ],
                     "current_node": "central_agent",
                     "memory_stack": self.central_agent.memory_stack.to_dict(),
+                    "data_collections": result_data_collections,
                 },
                 goto="central_agent",
             )
@@ -316,6 +320,9 @@ class SubAgentManager:
             result={"final_report": final_report},
         )
         self.central_agent.memory_stack.push(memory_entry)
+
+        data_collections = state.get("data_collections", [])
+        logger.info(f"report agent: data_collections:{data_collections}")     # NOTE: data_collections可以在这里取
 
         logger.info("报告生成完成，返回中枢Agent")
         return Command(
