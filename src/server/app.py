@@ -390,6 +390,7 @@ async def _astream_workflow_generator_sp(
             }
             yield _make_event("node_status", current_node_state)
 
+        # logger.debug(f"Event data: {event_data}")
         if isinstance(event_data, dict):
             if "__interrupt__" in event_data:
                 dst_question = event_data["__interrupt__"][0].value.split("[DST]")[-1].split("[/DST]")[0] if "[DST]" in event_data["__interrupt__"][0].value else ""
@@ -404,6 +405,17 @@ async def _astream_workflow_generator_sp(
                         "question": dst_question
                     },
                 )
+            elif "tools" in event_data:
+                toolMessage = event_data["tools"]["messages"][0]
+                yield _make_event("tool_call_result", {
+                    "thread_id": thread_id,
+                    "role": "assistant",
+                    "agent": agent[0].split(":")[0],
+                    "content": toolMessage.content,
+                    "id": toolMessage.id,
+                    "tool_name": toolMessage.name,
+                    "tool_call_id": toolMessage.tool_call_id,
+                })
             continue
         message_chunk, message_metadata = cast(
             tuple[BaseMessage, dict[str, any]], event_data

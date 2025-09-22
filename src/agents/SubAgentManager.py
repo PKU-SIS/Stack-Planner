@@ -377,6 +377,8 @@ class SubAgentManager:
             response = llm.invoke(messages)
             final_report = response.content
         except Exception as e:
+            import traceback
+            logger.error(traceback.format_exc())
             logger.error(f"报告Agent执行失败: {str(e)}")
             final_report = f"报告生成失败: {str(e)}"
 
@@ -517,57 +519,62 @@ class SubAgentManager:
         user_query = state.get("user_query", "")
         # check if the plan is auto accepted
         perception_llm = get_llm_by_type(AGENT_LLM_MAP.get("perception", "default"))
-        try:
-            messages = apply_prompt_template(
-                "perception", state
-            ) + [HumanMessage(f"##User Query\n\n{user_query}\n\n")]
-            response = perception_llm.invoke(messages)
-            dst_question = response.content
-            dst_question = repair_json_output(dst_question)
-            logger.info(f"感知层完成，生成DST问题: {dst_question}")
-        except Exception as e:
-            logger.error(f"感知层执行失败: {str(e)}")
+        auto_accepted_plan = state.get("auto_accepted_plan", False)
+        if auto_accepted_plan:
+            try:
+                messages = apply_prompt_template(
+                    "perception", state
+                ) + [HumanMessage(f"##User Query\n\n{user_query}\n\n")]
+                response = perception_llm.invoke(messages)
+                dst_question = response.content
+                dst_question = repair_json_output(dst_question)
+                logger.info(f"感知层完成，生成DST问题: {dst_question}")
+            except Exception as e:
+                logger.error(f"感知层执行失败: {str(e)}")
+            
         
+            feedback = interrupt("Please Fill the Question.[DST]"+dst_question+"[/DST]")
 
-        feedback = interrupt("Please Fill the Question.[DST]"+dst_question+"[/DST]")
+            # if the feedback is not accepted, return the planner node
+            if feedback and str(feedback).upper().startswith("[FILLED_QUESTION]"):
+                messages = apply_prompt_template(
+                    "perception", state
+                ) + [HumanMessage(f"##User Query\n\n{user_query}\n\n")]
+                messages.append(AIMessage(content=f"##LLM DST Question\n\n{dst_question}\n\n"))
+                messages.append(HumanMessage(content=f"##User Feedback\n\n{feedback}\n\n"))
+                response = perception_llm.invoke(messages)
+                summary = response.content
+                logger.info(f"感知层完成，收集用户反馈: {summary}")
 
-        # if the feedback is not accepted, return the planner node
-        if feedback and str(feedback).upper().startswith("[FILLED_QUESTION]"):
-            messages.append(AIMessage(content=f"##LLM DST Question\n\n{dst_question}\n\n"))
-            messages.append(HumanMessage(content=f"##User Feedback\n\n{feedback}\n\n"))
-            response = perception_llm.invoke(messages)
-            summary = response.content
-            logger.info(f"感知层完成，收集用户反馈: {summary}")
-
-            return Command(
-            update={
-                "messages": [
-                    HumanMessage(content=f"感知层完成，收集用户反馈: {summary}", name="perception")
-                ],
-                "user_dst": summary,
-                "current_node": "central_agent",
-            },
-            goto="central_agent",
-        )
-        elif feedback and str(feedback).upper().startswith("[SKIP]"):
-            logger.info("DST question is skipped by user.")
-            messages.append(AIMessage(content=f"##LLM DST Question\n\n{dst_question}\n\n"))
-            messages.append(HumanMessage(content=f"用户跳过了回答，你可以根据自己的理解进行总结\n\n"))
-            response = perception_llm.invoke(messages)
-            summary = response.content
-            return Command(
+                return Command(
                 update={
                     "messages": [
-                        HumanMessage(
-                            content="DST question is skipped by user.", name="perception"
-                        )
+                        HumanMessage(content=f"感知层完成，收集用户反馈: {summary}", name="perception")
                     ],
                     "user_dst": summary,
                     "current_node": "central_agent",
                 },
                 goto="central_agent",
             )
-        else:
-            raise TypeError(f"Interrupt value of {feedback} is not supported.")
+            elif feedback and str(feedback).upper().startswith("[SKIP]"):
+                logger.info("DST question is skipped by user.")
+                messages.append(AIMessage(content=f"##LLM DST Question\n\n{dst_question}\n\n"))
+                messages.append(HumanMessage(content=f"用户跳过了回答，你可以根据自己的理解进行总结\n\n"))
+                response = perception_llm.invoke(messages)
+                summary = response.content
+                return Command(
+                    update={
+                        "messages": [
+                            HumanMessage(
+                                content="DST question is skipped by user.", name="perception"
+                            )
+                        ],
+                        "user_dst": summary,
+                        "current_node": "central_agent",
+                    },
+                    goto="central_agent",
+                )
+            else:
+                raise TypeError(f"Interrupt value of {feedback} is not supported.")
 
     
