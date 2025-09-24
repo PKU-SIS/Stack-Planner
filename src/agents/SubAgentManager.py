@@ -23,6 +23,7 @@ from src.llms.llm import get_llm_by_type
 from src.prompts.template import apply_prompt_template
 from src.memory import MemoryStack, MemoryStackEntry
 from src.agents.CentralAgent import CentralAgent
+from src.tools.get_docs_info import search_docs
 
 from ..graph.types import State
 from ..config import SELECTED_SEARCH_ENGINE, SearchEngine
@@ -369,11 +370,10 @@ class SubAgentManager:
             )  # 修复：参数顺序
             data_collections = state.get("data_collections", [])
             messages.append(
-                HumanMessage(f"##User Query\n\n{state.get('user_query', '')}\n\n##用户约束\n\n{state.get("user_dst","")}\n\nBelow are data collected in previous tasks:\n\n{"\n\n".join(data_collections)}")
-            )
+                HumanMessage(f"##User Query\n\n{state.get('user_query', '')}\n\n##用户约束\n\n{state.get("user_dst","")}\n\n##报告大纲{state.get('report_outline','用户未提供大纲')}\n\nBelow are data collected in previous tasks:\n\n{"\n\n".join(data_collections)}"))
 
             logger.debug(f"Reporter messages: {messages}")
-            llm = get_llm_by_type(AGENT_LLM_MAP.get("reporter_xxqg", "default"))
+            llm = get_llm_by_type(AGENT_LLM_MAP.get("reporter", "default"))
             response = llm.invoke(messages)
             final_report = response.content
         except Exception as e:
@@ -529,6 +529,7 @@ class SubAgentManager:
                 dst_question = response.content
                 dst_question = repair_json_output(dst_question)
                 logger.info(f"感知层完成，生成DST问题: {dst_question}")
+                state["wait_for_user"] = True
             except Exception as e:
                 logger.error(f"感知层执行失败: {str(e)}")
             
@@ -539,9 +540,7 @@ class SubAgentManager:
             if feedback and str(feedback).upper().startswith("[FILLED_QUESTION]"):
                 messages = apply_prompt_template(
                     "perception", state
-                ) + [HumanMessage(f"##User Query\n\n{user_query}\n\n")]
-                messages.append(AIMessage(content=f"##LLM DST Question\n\n{dst_question}\n\n"))
-                messages.append(HumanMessage(content=f"##User Feedback\n\n{feedback}\n\n"))
+                ) + [HumanMessage(f"##User Query\n\n{user_query}\n\n##希望用户回答的问题\n\n{dst_question}\n\n##用户回答的结果\n\n{feedback}\n\n")]
                 response = perception_llm.invoke(messages)
                 summary = response.content
                 logger.info(f"感知层完成，收集用户反馈: {summary}")
@@ -552,9 +551,10 @@ class SubAgentManager:
                         HumanMessage(content=f"感知层完成，收集用户反馈: {summary}", name="perception")
                     ],
                     "user_dst": summary,
-                    "current_node": "central_agent",
+                    "current_node": "perception",
+                    "wait_for_user": False,
                 },
-                goto="central_agent",
+                goto="outline",
             )
             elif feedback and str(feedback).upper().startswith("[SKIP]"):
                 logger.info("DST question is skipped by user.")
@@ -570,11 +570,66 @@ class SubAgentManager:
                             )
                         ],
                         "user_dst": summary,
-                        "current_node": "central_agent",
+                        "current_node": "perception",
+                        "wait_for_user": False,
                     },
-                    goto="central_agent",
+                    goto="outline",
                 )
             else:
                 raise TypeError(f"Interrupt value of {feedback} is not supported.")
 
+    @timed_step("execute_outline")
+    async def execute_outline(self, state: State, config: RunnableConfig) -> Command:
+        user_query = state.get("user_query", "")
+        # check if the plan is auto accepted
+        outline_llm = get_llm_by_type(AGENT_LLM_MAP.get("outline", "default"))
+        auto_accepted_plan = state.get("auto_accepted_plan", False)
+        if auto_accepted_plan:
+            bg_investigation = search_docs(user_query, top_k=5)
+            user_dst = state.get("user_dst", "") 
+            try:
+                messages = apply_prompt_template(
+                    "outline", state
+                ) + [HumanMessage(f"##用户原始问题\n\n{user_query}\n\n##用户补充需求\n\n{user_dst}\n\n##可能用到的相关数据\n\n{bg_investigation}\n\n")]
+                response = outline_llm.invoke(messages)
+                outline_response = response.content
+                outline_response = repair_json_output(outline_response)
+                logger.info(f"大纲生成完成: {outline_response}")
+            except Exception as e:
+                logger.error(f"大纲生成执行失败: {str(e)}")
+            
+        
+            feedback = interrupt("Please Confirm or Edit the Outline.[OUTLINE]"+outline_response+"[/OUTLINE]")
+
+            # if the feedback is not accepted, return the planner node
+            if feedback and str(feedback).upper().startswith("[CONFIRMED_OUTLINE]"):
+                outline_confirmed = feedback[len("[CONFIRMED_OUTLINE]"):].strip()
+                logger.info(f"大纲确认: {outline_confirmed}")
+
+                return Command(
+                update={
+                    "messages": [
+                        HumanMessage(content=f"大纲确认: {outline_confirmed}", name="outline")
+                    ],
+                    "report_outline": outline_confirmed,
+                    "current_node": "outline",
+                },
+                goto="central_agent",
+            )
+            elif feedback and str(feedback).upper().startswith("[SKIP]"):
+                outline_confirmed = feedback[len("[SKIP]"):].strip()
+                logger.info(f"大纲确认: {outline_confirmed}")
+
+                return Command(
+                update={
+                    "messages": [
+                        HumanMessage(content=f"大纲确认: {outline_confirmed}", name="outline")
+                    ],
+                    "report_outline": outline_confirmed,
+                    "current_node": "outline",
+                },
+                goto="central_agent",
+            )
+            else:
+                raise TypeError(f"Interrupt value of {feedback} is not supported.")
     

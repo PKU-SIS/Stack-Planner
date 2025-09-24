@@ -349,7 +349,7 @@ async def _astream_workflow_generator_sp(
         "data_collections": [],
     }
     if not auto_accepted_plan and interrupt_feedback:
-        if "FILLED_QUESTION" in interrupt_feedback:
+        if interrupt_feedback.startswith("["):
             resume_msg = interrupt_feedback
         else:
             resume_msg = f"[{interrupt_feedback}]"
@@ -390,21 +390,36 @@ async def _astream_workflow_generator_sp(
             }
             yield _make_event("node_status", current_node_state)
 
-        # logger.debug(f"Event data: {event_data}")
+        logger.debug(f"Event data: {event_data}")
         if isinstance(event_data, dict):
             if "__interrupt__" in event_data:
-                dst_question = event_data["__interrupt__"][0].value.split("[DST]")[-1].split("[/DST]")[0] if "[DST]" in event_data["__interrupt__"][0].value else ""
-                yield _make_event(
-                    "interrupt",
-                    {
-                        "thread_id": thread_id,
-                        "id": event_data["__interrupt__"][0].ns[0],
-                        "role": "assistant",
-                        "content": "Please Fill the Question",
-                        "finish_reason": "interrupt",
-                        "question": dst_question
-                    },
-                )
+                data_value = event_data["__interrupt__"][0].value
+                if "[DST]" in data_value:
+                    dst_question = data_value.split("[DST]")[-1].split("[/DST]")[0]
+                    yield _make_event(
+                        "interrupt",
+                        {
+                            "thread_id": thread_id,
+                            "id": event_data["__interrupt__"][0].ns[0],
+                            "role": "assistant",
+                            "content": "Please Fill the Question",
+                            "finish_reason": "interrupt",
+                            "question": dst_question
+                        },
+                    )
+                elif "[OUTLINE]" in data_value:
+                    outline = data_value.split("[OUTLINE]")[-1].split("[/OUTLINE]")[0]
+                    yield _make_event(
+                        "interrupt",
+                        {
+                            "thread_id": thread_id,
+                            "id": event_data["__interrupt__"][0].ns[0],
+                            "role": "assistant",
+                            "content": "Please Confirm or Edit the Outline",
+                            "finish_reason": "interrupt",
+                            "outline": outline
+                        },
+                    )
             elif "tools" in event_data:
                 toolMessage = event_data["tools"]["messages"][0]
                 yield _make_event("tool_call_result", {
@@ -453,6 +468,8 @@ async def _astream_workflow_generator_sp(
             else:
                 # AI Message - Raw message tokens
                 yield _make_event("message_chunk", event_stream_message)
+        else:
+            yield _make_event("agent_action", event_stream_message)
 
 
 def _make_event(event_type: str, data: dict[str, any]):
