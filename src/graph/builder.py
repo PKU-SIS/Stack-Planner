@@ -24,7 +24,7 @@ from .nodes import (
     researcher_xxqg_node,
 )
 
-from .sp_nodes import central_agent_node,perception_node
+from .sp_nodes import central_agent_node, perception_node
 from src.agents.sub_agent_registry import get_sub_agents_by_global_type
 
 
@@ -160,11 +160,11 @@ def _build_graph_sp_xxqg():
     # 感知层，包括search before plan、human in the loop
     builder.add_edge(START, "perception")
 
-    #核心流程
+    # 核心流程
     builder.add_edge("perception", "central_agent")
     builder.add_edge("central_agent", "zip_data")
 
-    #后处理部分
+    # 后处理部分
     builder.add_edge("zip_data", END)
 
     return builder
@@ -175,6 +175,7 @@ base_graph = build_graph()
 sp_graph = build_multi_agent_graph()
 xxqg_graph = build_graph_xxqg()
 
+
 def build_graph_with_memory_from_builder(builder):
     """Build and return the agent workflow graph with memory."""
     # use persistent memory to save conversation history
@@ -183,6 +184,7 @@ def build_graph_with_memory_from_builder(builder):
 
     # build state graph
     return builder.compile(checkpointer=memory)
+
 
 sp_xxqg_graph_builder = _build_graph_sp_xxqg()
 
@@ -195,11 +197,12 @@ _GRAPH_BUILDER_CLASS_MAP = {
 }
 
 _GRAPH_CLASS_MAP = {
-    "base": {"memory":None, "no_memory": base_graph},
-    "sp": {"memory":None, "no_memory": sp_graph},
-    "xxqg": {"memory":None, "no_memory": xxqg_graph},
-    "sp_xxqg": {"memory":None,"no_memory": sp_xxqg_graph_builder.compile()},
+    "base": {"memory": None, "no_memory": base_graph},
+    "sp": {"memory": None, "no_memory": sp_graph},
+    "xxqg": {"memory": None, "no_memory": xxqg_graph},
+    "sp_xxqg": {"memory": None, "no_memory": sp_xxqg_graph_builder.compile()},
 }
+
 
 def get_graph_by_format(graph_format: str, with_memory: bool = False):
     """
@@ -222,7 +225,9 @@ def get_graph_by_format(graph_format: str, with_memory: bool = False):
             return _GRAPH_CLASS_MAP[graph_format]["no_memory"]
         else:
             if _GRAPH_CLASS_MAP[graph_format]["memory"] is None:
-                _GRAPH_CLASS_MAP[graph_format]["memory"] = build_graph_with_memory_from_builder(graph_builder)
+                _GRAPH_CLASS_MAP[graph_format]["memory"] = (
+                    build_graph_with_memory_from_builder(graph_builder)
+                )
             return _GRAPH_CLASS_MAP[graph_format]["memory"]
     else:
         return _GRAPH_CLASS_MAP[graph_format]["no_memory"]

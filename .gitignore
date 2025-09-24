@@ -33,3 +33,4 @@ coverage/
 cases/*
 test_*.py
 shells/*
+.cursor/

@@ -561,7 +561,7 @@ class CentralAgent:
                     entry.to_dict() for entry in self.memory_stack.get_all()
                 ],
             }
-            
+
             logger.info("central_delegate_reporter: 委派Reporter Agent生成最终报告")
             return Command(
                 update={
