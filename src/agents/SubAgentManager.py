@@ -607,11 +607,11 @@ class SubAgentManager:
             bg_investigation = search_docs(user_query, top_k=5)
             user_dst = state.get("user_dst", "")
             try:
-                messages = apply_prompt_template("outline", state) + [
+                messages = [
                     HumanMessage(
                         f"##用户原始问题\n\n{user_query}\n\n##用户补充需求\n\n{user_dst}\n\n##可能用到的相关数据\n\n{bg_investigation}\n\n"
                     )
-                ]
+                ] + apply_prompt_template("outline", state)
                 response = outline_llm.invoke(messages)
                 outline_response = response.content
                 outline_response = repair_json_output(outline_response)
