@@ -175,5 +175,9 @@ class ReferenceMap:
         session_map = self.get_session_map(session_id)
         session_map.save(file_path)
 
+    def get_session_ref_map(self,session_id):
+        session_map = self.get_session_map(session_id)
+        return session_map.reference_map
+
 
 global_reference_map = ReferenceMap()

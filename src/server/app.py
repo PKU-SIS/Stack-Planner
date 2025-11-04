@@ -392,6 +392,15 @@ async def _astream_workflow_generator_sp(
 
         logger.debug(f"Event data: {event_data}")
         if isinstance(event_data, dict):
+            if "__ref_map__" in event_data:
+                ref_map = event_data["__ref_map__"][0].value
+                yield _make_event(
+                    "ref_map",
+                    {
+                        "thread_id": thread_id,
+                        "ref_map": ref_map,
+                    },
+                )
             if "__interrupt__" in event_data:
                 data_value = event_data["__interrupt__"][0].value
                 if "[DST]" in data_value:
