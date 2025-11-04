@@ -60,7 +60,9 @@ def search_docs_tool(
         logger.error("session_id is None in config")
         return {"query": question, "docs": docs}
     ids = global_reference_map.add_references(session_id, docs)
+    # 先把docs按ids升序排序
     # ["【文档x】name\ncontent\n",...]
+    ids , docs = zip(*sorted(zip(ids, docs)))
     rename_docs = ["【文档" + str(doc_id) + "】" + doc.get("source", "") + "\n" + doc.get("content", "") for doc_id, doc in zip(ids, docs)]
     return {"query": question, "docs": rename_docs}
 
