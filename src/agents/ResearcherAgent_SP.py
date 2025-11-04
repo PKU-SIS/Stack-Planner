@@ -158,7 +158,8 @@ class ResearcherAgentSP(CommonReactAgent):
         )
 
         logger.info(f"Task execution completed by {self.agent_name}")
-
+        #todo
+        # response_content = modify_reference_mark(response_content)
         # 后续goto操作在subagentmanager处理
         return Command(
             update={
