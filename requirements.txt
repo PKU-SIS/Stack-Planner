@@ -62,3 +62,6 @@ langchain_experimental
 json_repair
 loguru
 fastapi
+sentence-transformers
+faiss-cpu
+scikit-learn

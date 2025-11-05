@@ -1,6 +1,3 @@
-# Copyright (c) 2025 Bytedance Ltd. and/or its affiliates
-# SPDX-License-Identifier: MIT
-
 from langgraph.graph import MessagesState
 
 from src.prompts.planner_model import Plan
@@ -31,3 +28,7 @@ class State(MessagesState):
     delegation_context: dict = None
     current_node: str = None
     memory_stack: str = None
+
+    # FactStruct Stage 1 相关字段
+    factstruct_outline: Any = None  # OutlineNode 根节点
+    factstruct_memory: Any = None  # Memory 实例（需要序列化时转换为 dict）

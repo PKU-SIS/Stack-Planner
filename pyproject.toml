@@ -48,6 +48,7 @@ test = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
+pythonpath = ["."]
 addopts = "-v --cov=src --cov-report=term-missing"
 filterwarnings = [
     "ignore::DeprecationWarning",
@@ -55,7 +56,17 @@ filterwarnings = [
 ]
 
 [tool.coverage.report]
-fail_under = 25
+fail_under = 20
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src"]

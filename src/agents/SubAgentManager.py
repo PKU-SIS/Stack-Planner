@@ -24,6 +24,11 @@ from src.prompts.template import apply_prompt_template
 from src.memory import MemoryStack, MemoryStackEntry
 from src.agents.CentralAgent import CentralAgent
 from src.tools.get_docs_info import search_docs
+from src.factstruct import (
+    run_factstruct_stage1,
+    outline_node_to_markdown,
+    memory_to_dict,
+)
 
 from ..graph.types import State
 from ..config import SELECTED_SEARCH_ENGINE, SearchEngine
@@ -599,25 +604,78 @@ class SubAgentManager:
 
     @timed_step("execute_outline")
     async def execute_outline(self, state: State, config: RunnableConfig) -> Command:
+        """
+        执行大纲生成（使用 FactStruct Stage 1 Batch-MAB 算法）
+
+        使用批量-信息觅食多臂老虎机算法动态生成和优化大纲结构。
+        """
         user_query = state.get("user_query", "")
-        # check if the plan is auto accepted
-        outline_llm = get_llm_by_type(AGENT_LLM_MAP.get("outline", "default"))
+        user_dst = state.get("user_dst", "")
         auto_accepted_plan = state.get("auto_accepted_plan", False)
+
         if auto_accepted_plan:
-            bg_investigation = search_docs(user_query, top_k=5)
-            user_dst = state.get("user_dst", "")
+            # 使用 FactStruct Stage 1 生成大纲
             try:
-                messages = [
-                    HumanMessage(
-                        f"##用户原始问题\n\n{user_query}\n\n##用户补充需求\n\n{user_dst}\n\n##可能用到的相关数据\n\n{bg_investigation}\n\n"
-                    )
-                ] + apply_prompt_template("outline", state)
-                response = outline_llm.invoke(messages)
-                outline_response = response.content
-                outline_response = repair_json_output(outline_response)
-                logger.info(f"大纲生成完成: {outline_response}")
+                logger.info("开始使用 FactStruct Stage 1 生成大纲...")
+
+                # 构建完整查询（包含用户补充需求）
+                full_query = user_query
+                if user_dst:
+                    full_query = f"{user_query}\n\n用户补充需求：{user_dst}"
+
+                # 运行 Batch-MAB 算法
+                # 注意：这里使用较小的迭代次数和批量大小以加快响应速度
+                # 生产环境可以根据需要调整这些参数
+                outline_root, memory = run_factstruct_stage1(
+                    query=full_query,
+                    max_iterations=state.get(
+                        "factstruct_max_iterations", 20
+                    ),  # 默认 10 次迭代
+                    batch_size=state.get("factstruct_batch_size", 5),  # 默认批量大小 3
+                )
+
+                # 转换为 Markdown 格式（完整大纲，不限制深度）
+                outline_response = outline_node_to_markdown(
+                    outline_root, max_depth=None, include_root=True
+                )
+
+                # 保存到 state（可选，供后续 Stage 使用）
+                # 注意：OutlineNode 和 Memory 对象无法直接序列化到 State
+                # 如果需要保存，可以使用 memory_to_dict 转换
+                logger.info(
+                    f"FactStruct Stage 1 大纲生成完成: "
+                    f"{len(outline_root.get_all_nodes())} 个节点, "
+                    f"{len(memory.documents)} 个文档"
+                )
+
             except Exception as e:
-                logger.error(f"大纲生成执行失败: {str(e)}")
+                import traceback
+
+                logger.error(f"FactStruct Stage 1 执行失败: {str(e)}")
+                logger.error(f"详细错误:\n{traceback.format_exc()}")
+
+                # Fallback: 使用传统方法生成大纲
+                logger.warning("回退到传统大纲生成方法...")
+                outline_llm = get_llm_by_type(AGENT_LLM_MAP.get("outline", "default"))
+                bg_investigation = search_docs(user_query, top_k=5)
+                try:
+                    messages = [
+                        HumanMessage(
+                            f"##用户原始问题\n\n{user_query}\n\n##用户补充需求\n\n{user_dst}\n\n##可能用到的相关数据\n\n{bg_investigation}\n\n"
+                        )
+                    ] + apply_prompt_template("outline", state)
+                    response = outline_llm.invoke(messages)
+                    outline_response = response.content
+                    outline_response = repair_json_output(outline_response)
+                    logger.info(f"传统方法大纲生成完成: {outline_response}")
+                except Exception as fallback_error:
+                    logger.error(f"传统方法也失败: {str(fallback_error)}")
+                    # 返回最简单的默认大纲
+                    import json
+
+                    outline_response = json.dumps(
+                        {"title": user_query, "children": []}, ensure_ascii=False
+                    )
 
             feedback = interrupt(
                 "Please Confirm or Edit the Outline.[OUTLINE]"
