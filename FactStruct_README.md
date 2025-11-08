@@ -3,6 +3,7 @@
 ## 🚀 快速开始
 
 基本上沿用Stack-Planner的环境配置即可，只需要多安装几个包。
+与FactStruct相关的代码主要在src/factstruct这个位置。
 
 ### 1. 安装依赖
 
