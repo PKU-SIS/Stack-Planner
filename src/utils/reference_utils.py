@@ -176,6 +176,11 @@ class ReferenceMap:
         session_map.save(file_path)
 
     def get_session_ref_map(self,session_id):
+        file_path = PROJECT_ROOT / "references_logs" / f"{session_id}_references.json"
+        if file_path.exists():
+            with open(file_path, 'r', encoding='utf-8') as f:
+                reference_map = json.load(f)
+            return reference_map
         session_map = self.get_session_map(session_id)
         return session_map.reference_map
 

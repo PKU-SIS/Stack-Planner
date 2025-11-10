@@ -41,6 +41,7 @@ from src.server.rag_request import (
     RAGResourcesResponse,
 )
 from src.tools import VolcengineTTS
+from src.utils.reference_utils import global_reference_map
 
 
 app = FastAPI(
@@ -488,6 +489,17 @@ def _make_event(event_type: str, data: dict[str, any]):
     if data.get("content") == "":
         data.pop("content")
     return f"event: {event_type}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+@app.get("/api/references/{thread_id}")
+async def get_references(thread_id: str):
+    """Get the references for a given thread ID."""
+    try:
+        references = global_reference_map.get_session_ref_map(thread_id)
+        return {"thread_id": thread_id, "references": references}
+    except Exception as e:
+        logger.exception(f"Error in get_references endpoint: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/api/tts")
