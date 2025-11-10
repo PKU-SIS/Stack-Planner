@@ -107,7 +107,7 @@ python examples/factstruct_diagnose.py
 
   
 
-**Batch-IF-MAB 如何解决这个铁三角问题？**
+**Batch-IF-MAB 如何解决这个问题？**
 
   
 
