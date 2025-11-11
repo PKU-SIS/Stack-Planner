@@ -126,6 +126,8 @@ class SessionMap:
     def save(self,file_path:str):
         """将 reference_map 保存到指定文件路径，格式为 JSON。"""
         with self._lock:
+            # 确保父目录存在
+            Path(file_path).parent.mkdir(parents=True, exist_ok=True)
             with open(file_path, 'w', encoding='utf-8') as f:
                 json.dump(self.reference_map, f, ensure_ascii=False, indent=2)
 
