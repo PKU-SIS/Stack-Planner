@@ -16,6 +16,7 @@ node_modules/
 .venv
 venv/
 logs/
+references_logs/
 reports/
 /node_modules
 
