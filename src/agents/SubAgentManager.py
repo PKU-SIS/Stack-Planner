@@ -380,7 +380,7 @@ class SubAgentManager:
             role_constraints = {
                 '鲁迅':'''我希望生成的文字具备鲁迅式风格，语言尖锐、冷峻、带讽刺，但保持自然白话表达，可以使用少量文言。
 标题要求：文章必须包含一个标题，标题应简短有力、富隐喻或冷讽意味，可为一句或两句并列句。标题风格应与正文一致，具有鲁迅式的锋芒与余味，不得中性或平淡。
-重要禁止项：严禁在生成的文本中出现任何提及或引用“鲁迅”、“鲁迅先生”、“他的作品”、“他的笔下的人物”等字眼的语句。文本风格应是直接的、沉浸式的鲁迅式表达，而非对鲁迅风格的引用或评论。此禁令在任何标题或正文中均适用，绝不可出现任何直接或间接的提及。
+重要禁止项：文中不要有“鲁迅”这个词，严禁在生成的文本中出现任何提及或引用“鲁迅”、“鲁迅先生”、“鲁迅笔下”、“他的作品”、“他的笔下的人物”等字眼的语句。文本风格应是直接的、沉浸式的鲁迅式表达，而非对鲁迅风格的引用或评论。此禁令在任何标题或正文中均适用，绝不可出现任何直接或间接的提及。
 风格应用强制要求：请确保文章的每一个自然段，乃至每一句的行文，都贯彻鲁迅式用词、句式和节奏。特别是在文章的中间部分，必须维持并强化这种尖锐、冷峻的语感。全篇保持一致的鲁迅式节奏与语气，特别在中段保持最高的语言张力与思想锋芒。
 
 句式与节奏：
@@ -595,11 +595,15 @@ class SubAgentManager:
         auto_accepted_plan = state.get("auto_accepted_plan", False)
         if auto_accepted_plan:
             try:
-                messages = apply_prompt_template("perception", state) + [
-                    HumanMessage(f"##User Query\n\n{user_query}\n\n")
-                ]
+                # messages = apply_prompt_template("perception", state) + [
+                #     HumanMessage(f"##User Query\n\n{user_query}\n\n")
+                # ]
+                messages = apply_prompt_template("perception", state)
+
+                # logger.debug("messages"+str(messages))
                 response = perception_llm.invoke(messages)
                 dst_question = response.content
+                # logger.debug("dst_question"+str(dst_question))
                 dst_question = repair_json_output(dst_question)
                 logger.info(f"感知层完成，生成DST问题: {dst_question}")
                 state["wait_for_user"] = True
@@ -609,7 +613,7 @@ class SubAgentManager:
             feedback = interrupt(
                 "Please Fill the Question.[DST]" + dst_question + "[/DST]"
             )
-
+            # logger.debug("feedback"+str(feedback))
             # if the feedback is not accepted, return the planner node
             if feedback and str(feedback).upper().startswith("[FILLED_QUESTION]"):
                 messages = apply_prompt_template("perception", state) + [
@@ -617,6 +621,8 @@ class SubAgentManager:
                         f"##User Query\n\n{user_query}\n\n##希望用户回答的问题\n\n{dst_question}\n\n##用户回答的结果\n\n{feedback}\n\n"
                     )
                 ]
+                # logger.debug("messages"+str(messages))
+                # exit()
                 response = perception_llm.invoke(messages)
                 summary = response.content
                 logger.info(f"感知层完成，收集用户反馈: {summary}")
