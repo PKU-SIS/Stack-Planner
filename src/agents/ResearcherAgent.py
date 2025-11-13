@@ -64,6 +64,8 @@ class ResearcherAgent(CommonReactAgent):
         observations = state.get("observations", [])
         data_collections = state.get("data_collections", [])
 
+        logger.store_cmd(f"EXEC {self.agent_name}")
+
         # Find the first unexecuted step
         current_step = None
         completed_steps = []
@@ -151,6 +153,8 @@ class ResearcherAgent(CommonReactAgent):
             recursion_limit = default_recursion_limit
 
         logger.info(f"Agent input: {agent_input}")
+        logger.store_cmd("INPUT")
+        logger.store_content(agent_input)
         result = await self.ainvoke(
             input=agent_input, config={"recursion_limit": recursion_limit}
         )
@@ -161,12 +165,16 @@ class ResearcherAgent(CommonReactAgent):
             f"{self.agent_name.capitalize()} full response: {response_content}"
         )
 
+        logger.store_cmd("OUTPUT")
+        logger.store_content(response_content)
+
         # Update the step with the execution result
         current_step.execution_res = response_content
         logger.info(
             f"Step '{current_step.title}' execution completed by {self.agent_name}"
         )
         logger.debug(f"Step tool results: {self.tool_results}")
+        logger.store_cmd("EXEC END")
         return Command(
             update={
                 "messages": [

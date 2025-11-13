@@ -44,11 +44,11 @@ def search_docs(question, top_k=5):
         logger.error(f"请求过程中出现异常: {e}")
         return docs
 
+
 @tool
 @log_io
 def search_docs_tool(
-    question: Annotated[str, "检索的问题，使用语义相似度匹配"],
-    config: RunnableConfig
+    question: Annotated[str, "检索的问题，使用语义相似度匹配"], config: RunnableConfig
 ) -> dict:
     """
     使用这个工具查询本地存储的领域知识库，检索方式为语义相似度匹配，返回与question相关的文档内容。
@@ -62,8 +62,16 @@ def search_docs_tool(
     ids = global_reference_map.add_references(session_id, docs)
     # 先把docs按ids升序排序
     # ["【文档x】name\ncontent\n",...]
-    ids , docs = zip(*sorted(zip(ids, docs)))
-    rename_docs = ["【文档" + str(doc_id) + "】" + doc.get("source", "") + "\n" + doc.get("content", "") for doc_id, doc in zip(ids, docs)]
+    ids, docs = zip(*sorted(zip(ids, docs)))
+    rename_docs = [
+        "【文档"
+        + str(doc_id)
+        + "】"
+        + doc.get("source", "")
+        + "\n"
+        + doc.get("content", "")
+        for doc_id, doc in zip(ids, docs)
+    ]
     return {"query": question, "docs": rename_docs}
 
 

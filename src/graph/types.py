@@ -27,6 +27,9 @@ class State(MessagesState):
     user_dst: str = None
     wait_for_user: bool = False
     report_outline: str = None
+    lmem_old: str = None
+    lmem_new: str = None
+    systeminfo: str = None
 
     delegation_context: dict = None
     current_node: str = None

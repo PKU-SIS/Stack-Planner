@@ -82,6 +82,8 @@ class CoderAgent(CommonReactAgent):
             )
 
         logger.info(f"Executing task: {task_description}, agent: {self.agent_name}")
+        logger.store_cmd(f"EXEC {self.agent_name}")
+        logger.store_content(task_description)
 
         # 准备 agent 输入，使用任务描述而不是步骤信息
         agent_input = {
@@ -118,6 +120,8 @@ class CoderAgent(CommonReactAgent):
             recursion_limit = default_recursion_limit
 
         logger.info(f"Agent input: {agent_input}")
+        logger.store_cmd("INPUT")
+        logger.store_content(agent_input)
         result = await self.ainvoke(
             input=agent_input, config={"recursion_limit": recursion_limit}
         )
@@ -129,6 +133,10 @@ class CoderAgent(CommonReactAgent):
         )
 
         logger.info(f"Task execution completed by {self.agent_name}")
+        logger.store_cmd("OUTPUT")
+        logger.store_content(response_content)
+
+        logger.store_cmd("EXEC END")
 
         return Command(
             update={

@@ -7,14 +7,17 @@ from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import Command, interrupt
 
+from src.rag import Resource
 from src.agents.CoderAgent import CoderAgent
 from src.agents.ResearcherAgent_SP import ResearcherAgentSP
+from src.agents.ExperienceAgent import ExperienceAgent
 from src.tools import (
     crawl_tool,
     get_web_search_tool,
     get_retriever_tool,
     python_repl_tool,
     search_docs_tool,
+    get_lmem_search_tool,
 )
 from src.utils.json_utils import repair_json_output
 from src.utils.logger import logger
@@ -124,7 +127,6 @@ class SubAgentManager:
                 "current_node": "central_agent",
                 "memory_stack": self.central_agent.memory_stack.to_dict(),
                 "data_collections": result_data_collections,
-                "observations": result_observations,
             },
             goto="central_agent",
         )
@@ -208,7 +210,100 @@ class SubAgentManager:
                 "current_node": "central_agent",
                 "memory_stack": self.central_agent.memory_stack.to_dict(),
                 "data_collections": result_data_collections,
+            },
+            goto="central_agent",
+        )
+
+    @timed_step("execute_experience_agent")
+    async def execute_experience_agent(
+        self, state: State, config: RunnableConfig
+    ) -> Command:
+        """
+        执行长期记忆总结Agent，负责对长期记忆进行总结与提炼
+
+        Args:
+            state: 当前系统状态
+            config: 运行配置
+
+        Returns:
+            执行结果Command对象
+        """
+        logger.info("长期记忆总结Agent开始执行...")
+
+        resources = [
+            Resource(
+                uri="rag://dataset/39ea834abf1111f0bf2ecd6543f8a381",
+                title="LTM",
+                description="长期记忆知识库",
+            )
+        ]
+        retriever_tool = get_lmem_search_tool(resources)
+
+        delegation_context = state.get("delegation_context", {})
+        task_description = delegation_context.get(
+            "task_description", "未知经验搜索任务"
+        )
+
+        # 实例化长期记忆总结Agent
+        summarizer_agent = ExperienceAgent(
+            config=config,
+            agent_type="experience_agent",
+            default_tools=[retriever_tool],
+        )
+
+        # 执行总结任务并处理异常
+        try:
+            result_observations = []
+            result_data_collections = []
+
+            result_command = await summarizer_agent.execute_agent_step(state)
+
+            if result_command and result_command.update:
+                result_observations = result_command.update.get("observations", [])
+                result_data_collections = result_command.update.get(
+                    "data_collections", []
+                )
+
+            logger.info(f"data_collections_in subagent:{result_data_collections}")
+        except Exception as e:
+            logger.error(f"长期记忆总结Agent执行失败: {str(e)}")
+            return Command(
+                update={
+                    "messages": [
+                        HumanMessage(
+                            content=f"长期记忆总结任务失败: {str(e)}",
+                            name="experience_agent",
+                        )
+                    ],
+                },
+                goto="central_agent",
+            )
+
+        # 记录到中枢Agent记忆栈
+        memory_entry = MemoryStackEntry(
+            timestamp=datetime.now().isoformat(),
+            action="delegate",
+            agent_type="experience_agent",
+            content=f"长期记忆总结任务: {task_description}",
+            result={
                 "observations": result_observations,
+                # "data_collections": result_data_collections,
+            },
+        )
+        self.central_agent.memory_stack.push(memory_entry)
+
+        logger.info("查询长期记忆任务完成，返回中枢Agent")
+        return Command(
+            update={
+                "messages": [
+                    HumanMessage(
+                        content="查询长期记忆任务完成，返回中枢Agent",
+                        name="experience_agent",
+                    )
+                ],
+                "current_node": "central_agent",
+                "memory_stack": self.central_agent.memory_stack.to_dict(),
+                "data_collections": result_data_collections,
             },
             goto="central_agent",
         )
@@ -291,6 +386,8 @@ class SubAgentManager:
         """
         logger.info("报告Agent开始执行...")
 
+        logger.store_cmd("EXEC reporter")
+
         delegation_context = state.get("delegation_context", {})
         task_description = delegation_context.get("task_description", "生成最终报告")
 
@@ -310,6 +407,12 @@ class SubAgentManager:
             llm = get_llm_by_type(AGENT_LLM_MAP.get("reporter", "default"))
             response = llm.invoke(messages)
             final_report = response.content
+
+            logger.store_cmd("INPUT")
+            logger.store_content(messages)
+            logger.store_cmd("OUTPUT")
+            logger.store_content(final_report)
+
         except Exception as e:
             logger.error(f"报告Agent执行失败: {str(e)}")
             final_report = f"报告生成失败: {str(e)}"
@@ -330,6 +433,7 @@ class SubAgentManager:
         )  # NOTE: data_collections可以在这里取
 
         logger.info("报告生成完成，返回中枢Agent")
+        logger.store_cmd("EXEC END")
         return Command(
             update={
                 "messages": [
@@ -373,15 +477,9 @@ class SubAgentManager:
                 "reporter_xxqg", state, extra_context=context
             )  # 修复：参数顺序
             data_collections = state.get("data_collections", [])
-            observations = state.get("observations", [])
-            # messages.append(
-            #     HumanMessage(
-            #         f"##User Query\n\n{state.get('user_query', '')}\n\n##用户约束\n\n{state.get("user_dst","")}\n\n##报告大纲{state.get('report_outline','用户未提供大纲')}\n\nBelow are data collected in previous tasks:\n\n{"\n\n".join(data_collections)}"
-            #     )
-            # )
             messages.append(
                 HumanMessage(
-                    f"##User Query\n\n{state.get('user_query', '')}\n\n##用户约束\n\n{state.get("user_dst","")}\n\n##报告大纲{state.get('report_outline','用户未提供大纲')}\n\nBelow are information collected in previous tasks:\n\n{"\n\n".join(observations)}"
+                    f"##User Query\n\n{state.get('user_query', '')}\n\n##用户约束\n\n{state.get("user_dst","")}\n\n##报告大纲{state.get('report_outline','用户未提供大纲')}\n\nBelow are data collected in previous tasks:\n\n{"\n\n".join(data_collections)}"
                 )
             )
 
