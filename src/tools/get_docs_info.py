@@ -71,6 +71,9 @@ def search_docs_tool(
         return {"query": question, "docs": docs}
     #logger.debug(f"检索到的文档{docs}")
     ids = global_reference_map.add_references(session_id, docs)
+    if not ids or not docs:
+        logger.warning("ids or docs is empty, returning empty result")
+        return {"query": question, "docs": []}
     # 先把docs按ids升序排序
     # ["【文档x】name\ncontent\n",...]
     ids , docs = zip(*sorted(zip(ids, docs)))
