@@ -115,6 +115,9 @@ class CentralAgent:
 
         # 构建决策prompt
         messages = self._build_decision_prompt(state, config)
+        logger.store_cmd("DECISION")
+        logger.store_cmd("INPUT")
+        logger.store_content(messages)
         # logger.debug(f"决策prompt: {messages}")
 
         # 获取LLM决策并处理异常
@@ -140,6 +143,8 @@ class CentralAgent:
                 state["locale"] = locale
 
             logger.info(f"决策结果: {response}")
+            logger.store_cmd("OUTPUT")
+            logger.store_content(response)
             end_time = datetime.now()
             time_entry = {
                 "step_name": "central decision" + start_time.isoformat(),
@@ -149,6 +154,7 @@ class CentralAgent:
             }
             global_statistics.add_time_entry(time_entry)
 
+            logger.store_cmd("DECISION END")
             return CentralDecision(
                 action=action,
                 reasoning=reasoning,
@@ -268,6 +274,7 @@ class CentralAgent:
         self, decision: CentralDecision, state: State, config: RunnableConfig
     ) -> Command:
         """处理思考动作，分析当前状态生成下一步计划"""
+        logger.store_cmd("THINK")
         logger.info("中枢Agent正在思考...")
         start_time = datetime.now()
         context = {
@@ -292,6 +299,12 @@ class CentralAgent:
         self.memory_stack.push(memory_entry)
 
         logger.info(f"central_think: {response.content}")
+
+        logger.store_cmd("INPUT")
+        logger.store_content(messages)
+        logger.store_cmd("OUTPUT")
+        logger.store_content(response.content)
+
         end_time = datetime.now()
         time_entry = {
             "step_name": "central_think" + start_time.isoformat(),
@@ -300,6 +313,8 @@ class CentralAgent:
             "duration": (end_time - start_time).total_seconds(),
         }
         global_statistics.add_time_entry(time_entry)
+
+        logger.store_cmd("THINK END")
         return Command(
             update={
                 "messages": [AIMessage(content=response.content, name="central_think")],
@@ -318,6 +333,7 @@ class CentralAgent:
         """处理反思动作，评估之前的步骤并清理记忆栈"""
         logger.info("中枢Agent正在反思...")
         start_time = datetime.now()
+        logger.store_cmd("REFLECT")
 
         # 获取反思目标和上下文
         # recent_memory = self.memory_stack.get_recent(5)  # 获取最近5条记忆
@@ -330,9 +346,14 @@ class CentralAgent:
 
         # 应用反思提示模板
         messages = apply_prompt_template("central_agent", state, extra_context=context)
+        logger.store_cmd("INPUT")
+        logger.store_content(messages)
 
         llm = get_llm_by_type(AGENT_LLM_MAP.get("central_agent", "default"))
         response = llm.invoke(messages)
+
+        logger.store_cmd("OUTPUT")
+        logger.store_content(response.content)
 
         # 解析反思结果的JSON
         try:
@@ -379,6 +400,8 @@ class CentralAgent:
         else:
             logger.info("不移除任何记忆栈项目")
 
+        logger.store_cmd("ANALYSIS")
+        logger.store_content(analysis)
         logger.info(f"central_reflect: {analysis}")
         end_time = datetime.now()
         time_entry = {
@@ -388,6 +411,7 @@ class CentralAgent:
             "duration": (end_time - start_time).total_seconds(),
         }
         global_statistics.add_time_entry(time_entry)
+        logger.store_cmd("REFLECT END")
         return Command(
             update={
                 "messages": [AIMessage(content=analysis, name="central_reflect")],
@@ -427,6 +451,10 @@ class CentralAgent:
         # 应用统一的总结提示模板
         messages = apply_prompt_template("central_agent", state, extra_context=context)
 
+        logger.store_cmd("SUMMARY")
+        logger.store_cmd(f"INPUT")
+        logger.store_content(messages)
+
         llm = get_llm_by_type(AGENT_LLM_MAP.get("central_agent", "default"))
         response = llm.invoke(messages)
 
@@ -440,6 +468,8 @@ class CentralAgent:
 
         # logger.info("NEW_ENTRY", new_entry)
         # logger.info("*"*100)
+        logger.store_cmd(f"OUTPUT")
+        logger.store_content(response.content)
 
         self.memory_stack.push_with_pop(new_entry)
 
@@ -452,12 +482,113 @@ class CentralAgent:
             "duration": (end_time - start_time).total_seconds(),
         }
         global_statistics.add_time_entry(time_entry)
+        logger.store_cmd("SUMMARY END")
         return Command(
             update={
                 "messages": [
                     AIMessage(content=response.content, name="central_summarize")
                 ],
                 "summary": response.content,
+                "current_node": "central_agent",
+                "memory_stack": json.dumps(
+                    [entry.to_dict() for entry in self.memory_stack.get_all()]
+                ),
+                "locale": state.get("locale"),
+            },
+            goto="central_agent",
+        )
+
+    def _handle_longmemory(
+        self, decision: CentralDecision, state: State, config: RunnableConfig
+    ) -> Command:
+        """处理长期记忆动作，根据短期记忆内容更新和维护长期记忆"""
+
+        logger.store_cmd("LONGMEMORY")
+
+        logger.info("中枢Agent正在更新长期记忆...")
+        start_time = datetime.now()
+
+        # 检查 `lmems` 目录下是否有 `lmem.json`，没有则创建空的，并填入模板信息
+        os.makedirs("./lmems", exist_ok=True)
+        lmem_path = "./lmems/lmem.json"
+        if not os.path.exists(lmem_path):
+            with open(lmem_path, "w", encoding="utf-8") as f:
+                f.write(
+                    '{"core_memory": "", "semantic_memory": [], "episodic_memory": []}'
+                )
+            logger.info("长期记忆不存在，创建了新的长期记忆文件: reports/lmem.json")
+
+        with open(lmem_path, "r", encoding="utf-8") as f:
+            existing_long_term_memory_json = f.read()
+
+        final_report = state.get("final_report", None)
+
+        execution_summary = {
+            "user_query": state.get("user_query", "未知查询"),
+            "execution_history": [
+                entry.to_dict() for entry in self.memory_stack.get_all()
+            ],
+            "final_report": final_report,
+            "completion_time": datetime.now().isoformat(),
+        }
+
+        context = {
+            "existing_long_term_memory_json": existing_long_term_memory_json,
+            "short_term_memory_json": json.dumps(execution_summary, ensure_ascii=False),
+        }
+
+        # 打印上下文用于调试
+        logger.debug(
+            f"long memory context: {json.dumps(context, ensure_ascii=False, indent=2)}"
+        )
+
+        # 应用统一的总结提示模板
+        messages = apply_prompt_template(
+            "long_memory_summarize", state, extra_context=context
+        )
+
+        llm = get_llm_by_type(AGENT_LLM_MAP.get("central_agent", "default"))
+
+        response = llm.invoke(messages)
+
+        logger.store_cmd(f"INPUT")
+        logger.store_content(messages)
+
+        logger.store_cmd(f"OUTPUT")
+        logger.store_content(response.content)
+
+        logger.store_cmd("LONGMEMORY END")
+
+        end_time = datetime.now()
+        time_entry = {
+            "step_name": "central_summarize" + start_time.isoformat(),
+            "start_time": start_time.isoformat(),
+            "end_time": end_time.isoformat(),
+            "duration": (end_time - start_time).total_seconds(),
+        }
+        global_statistics.add_time_entry(time_entry)
+
+        # 过滤可能的 ```json ``` 标记
+        if response.content.startswith("```json"):
+            response.content = (
+                response.content.replace("```json", "").replace("```", "").strip()
+            )
+
+        # 写入最新的 LTM
+        with open(lmem_path, "w", encoding="utf-8") as f:
+            f.write(response.content)
+        # 按日期备份 LTM
+        backup_path = f"./lmems/lmem_{logger.getcurdate()}.json"
+        with open(backup_path, "w", encoding="utf-8") as f:
+            f.write(response.content)
+        logger.info("长期记忆已更新，保存到 lmems/lmem.json")
+
+        logger.debug(state)
+
+        return Command(
+            update={
+                "messages": [AIMessage(content=response.content, name="lmem_update")],
+                "lmem_new": response.content,
                 "current_node": "central_agent",
                 "memory_stack": json.dumps(
                     [entry.to_dict() for entry in self.memory_stack.get_all()]
@@ -476,6 +607,8 @@ class CentralAgent:
         # agent_type = decision.agent_type
         # task_description = decision.task_description or "未指定任务"
 
+        logger.store_cmd(f"DELEGATE {agent_type}")
+
         # 验证子Agent类型有效性
         if not agent_type or agent_type not in self.available_sub_agents:
             error_msg = (
@@ -491,6 +624,8 @@ class CentralAgent:
                 goto="central_agent",
             )
 
+        logger.store_cmd(f"TASK")
+        logger.store_content(task_description)
         logger.info(f"中枢Agent委派 {agent_type} 执行任务: {task_description}")
 
         # 记录委派动作到记忆栈
@@ -511,6 +646,8 @@ class CentralAgent:
         }
 
         logger.info(f"central_delegate: 委派{agent_type}执行: {task_description}")
+
+        logger.store_cmd("DELEGATE END")
         return Command(
             update={
                 "messages": [
@@ -534,10 +671,12 @@ class CentralAgent:
     ) -> Command:
         """处理完成动作，生成最终报告并结束任务"""
         logger.info("中枢Agent完成任务...")
+        # logger.store_cmd("FINISH")
 
         final_report = state.get("final_report", None)
         if not final_report:
             logger.info("未找到最终报告，委派Reporter Agent生成报告...")
+            logger.store_cmd("DELEGATE reporter")
 
             # 记录委派动作到记忆栈
             memory_entry = MemoryStackEntry(
@@ -562,6 +701,11 @@ class CentralAgent:
                 ],
             }
 
+            logger.store_cmd("CONTEXT")
+            logger.store_content(delegation_context)
+
+            logger.store_cmd("DELEGATE END")
+
             logger.info("central_delegate_reporter: 委派Reporter Agent生成最终报告")
             return Command(
                 update={
@@ -580,6 +724,15 @@ class CentralAgent:
                 },
                 goto="reporter",
             )
+
+        longmemory = state.get("lmem_new", None)
+        if not longmemory:
+            logger.info("未找到本次长期记忆，委派中枢Agent更新长期记忆...")
+            return self._handle_longmemory(decision, state, config)
+
+        logger.store_cmd("FINISH")
+        logger.store_cmd("REPORT")
+        logger.store_content(final_report)
         logger.info(f"final_report: {final_report}")
 
         # 构建执行摘要（包含完整记忆栈历史）
@@ -607,5 +760,6 @@ class CentralAgent:
             report_msg = f"任务完成，但报告保存失败: {str(e)}"
             execution_summary["error"] = str(e)
 
+        logger.store_cmd("FINISH END")
         logger.info(report_msg)
         logger.info(global_statistics.get_statistics())

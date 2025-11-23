@@ -8,12 +8,14 @@ class SubAgentType(Enum):
     CODER = "coder"  # 负责代码生成与执行
     REPORTER = "reporter"  # 负责结果整理与报告生成
     PLANNER = "replanner"  # 负责复杂任务分解和规划
+    EXPERIENCE_AGENT = "experience_agent"  # 负责经验总结与提炼
 
 
 from src.graph.sp_nodes import (
     researcher_node,
     coder_node,
     reporter_node,
+    experience_agent_node,
     researcher_xxqg_node,
     reporter_xxqg_node,
     sp_planner_node,
@@ -23,7 +25,7 @@ from src.graph.sp_nodes import (
 sub_agents_sp = [
     {
         "name": SubAgentType.RESEARCHER.value,
-        "description": "Information collection and research",
+        "description": "(Before you try it, use Experience Agent first!!!) Information collection and research, but before you try to research or DELEGATE the RESEARCHER AGENT, invoke the Experience Agent FRIST using only domain-related keywords (without any username) to discover experiences or insights from other users or past cases that may inform your reasoning. And if there are not suffcient results you can decide to research.",
         "node": researcher_node,
     },
     {
@@ -35,6 +37,11 @@ sub_agents_sp = [
         "name": SubAgentType.REPORTER.value,
         "description": "Result organization and report generation",
         "node": reporter_node,
+    },
+    {
+        "name": SubAgentType.EXPERIENCE_AGENT.value,
+        "description": "The Experience Agent is responsible for searching and retrieving long-term experiences from the centralized memory library. Each memory entry is associated with a username and contains structured long-term knowledge, including core, semantic, and episodic components. You FIRST decision should ALWAYS be query this agent using the username specified to load the user's personal long-term memory context, ensuring that your reasoning starts with all relevant prior knowledge. (!!IMPORTANT!!)  Before you try to research or DELEGATE the RESEARCHER AGENT, invoke the Experience Agent FRIST using only domain-related keywords (without any username) to discover experiences or insights from other users or past cases that may inform your reasoning. And if there are not suffcient results you can decide to research. **AND REMEMBER: you can use it any time if it is necessary for you to query the context or background knowledges (with or without username), especially when you needs information of the user's and your history, intention and role.**",
+        "node": experience_agent_node,
     },
 ]
 

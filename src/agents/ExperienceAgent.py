@@ -7,11 +7,11 @@ from src.utils.logger import logger
 import os
 
 
-class ResearcherAgentSP(CommonReactAgent):
+class ExperienceAgent(CommonReactAgent):
     """Agent for conducting research and gathering information."""
 
-    agent_name: str = "researcher"
-    description: str = "Researcher agent for gathering information and resources."
+    agent_name: str = "experience_agent"
+    description: str = "Agent that utilizes long-term memory for information retrieval."
 
     def __init__(self, *args, **kwargs):
         agent_type = kwargs.pop("agent_type", "default_agent")
@@ -96,18 +96,10 @@ class ResearcherAgentSP(CommonReactAgent):
             ]
         }
 
-        if state.get("resources"):
-            resources_info = "**The user mentioned the following resource files:**\n\n"
-            for resource in state.get("resources"):
-                resources_info += f"- {resource.title} ({resource.description})\n"
-
-            agent_input["messages"].append(
-                HumanMessage(
-                    content=resources_info
-                    + "\n\n"
-                    + "You MUST use the **local_search_tool** to retrieve the information from the resource files.",
-                )
-            )
+        # if state.get("resources"):
+        #     resources_info = "**The user mentioned the following resource files:**\n\n"
+        #     for resource in state.get("resources"):
+        #         resources_info += f"- {resource.title} ({resource.description})\n"
 
         agent_input["messages"].append(
             HumanMessage(

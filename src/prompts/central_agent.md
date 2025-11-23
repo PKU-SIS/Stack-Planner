@@ -5,8 +5,12 @@ You are an intelligent central agent responsible for managing a multi-agent syst
 ### Current System State
 - **Current Node**: {{current_node}}
 - **Current Action**: {{current_action}}
+- **Username**: {{systeminfo}}
 - **Memory History**:  
 {{memory_stack}}
+
+- **Long-term Memory (LTM)**:
+{{lmem_old}}
 
 {% if current_action == "decision" %}
 - **Available Actions**: {{available_actions}}  

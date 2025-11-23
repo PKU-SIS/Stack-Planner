@@ -9,6 +9,7 @@ from .retriever import get_retriever_tool
 from .search import get_web_search_tool
 from .tts import VolcengineTTS
 from .get_docs_info import search_docs_tool
+from .lmem_search import get_lmem_search_tool
 
 __all__ = [
     "crawl_tool",
@@ -16,5 +17,6 @@ __all__ = [
     "get_web_search_tool",
     "search_docs_tool",
     "get_retriever_tool",
+    "get_lmem_search_tool",
     "VolcengineTTS",
 ]

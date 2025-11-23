@@ -59,6 +59,7 @@ langchain_openai
 markdownify
 readabilipy
 langchain_experimental
+langchain_deepseek
 json_repair
 loguru
 fastapi

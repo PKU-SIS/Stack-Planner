@@ -51,6 +51,12 @@ async def researcher_node(state: State, config: RunnableConfig) -> Command:
     return await sub_agent_manager.execute_researcher(state, config)
 
 
+async def experience_agent_node(state: State, config: RunnableConfig) -> Command:
+    """经验Agent节点处理函数"""
+    _check_agents_initialized()
+    return await sub_agent_manager.execute_experience_agent(state, config)
+
+
 async def coder_node(state: State, config: RunnableConfig) -> Command:
     """编码Agent节点处理函数"""
     _check_agents_initialized()

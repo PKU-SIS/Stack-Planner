@@ -29,6 +29,9 @@ class State(MessagesState):
     dst_question: str = None
     hitl_feedback: str = ""
     report_outline: str = None
+    lmem_old: str = None
+    lmem_new: str = None
+    systeminfo: str = None
 
     delegation_context: dict = None
     current_node: str = None
