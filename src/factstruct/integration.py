@@ -103,7 +103,8 @@ def run_factstruct_stage1(
     if search_engine is None:
         search_engine = create_search_engine_adapter()
 
-    embedder = Embedder()
+    # embedder = Embedder()
+    embedder = Embedder(model_name="../../Model/MiniLM/all-MiniLM-L6-v2")
     llm_wrapper = FactStructLLMWrapper(llm)
 
     # 创建 Batch-MAB 实例

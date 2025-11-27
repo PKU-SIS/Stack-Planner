@@ -150,7 +150,7 @@ def _build_graph_sp_xxqg():
         builder.add_node(sub_agent["name"], sub_agent["node"])
     # builder.add_node("researcher", sp_xxqg_researcher_node)
     # builder.add_node("coder", sp_coder_node)
-    # builder.add_node("reporter", sp_xxqg_reporter_node)
+    builder.add_node("reporter", sp_xxqg_reporter_node)
 
     # 下面这些暂时没有算sub agent
     builder.add_node("zip_data", zip_data)
