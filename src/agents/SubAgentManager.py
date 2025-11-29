@@ -604,6 +604,51 @@ class SubAgentManager:
 
     @timed_step("execute_outline")
     async def execute_outline(self, state: State, config: RunnableConfig) -> Command:
+        user_query = state.get("user_query", "")
+        # check if the plan is auto accepted
+        outline_llm = get_llm_by_type(AGENT_LLM_MAP.get("outline", "default"))
+        wait_stage = state.get("wait_stage", "")
+        if wait_stage != "outline":
+            bg_investigation = search_docs(user_query, top_k=5)
+            user_dst = state.get("user_dst", "")
+            try:
+                messages = [
+                    HumanMessage(
+                        f"##用户原始问题\n\n{user_query}\n\n##用户补充需求\n\n{user_dst}\n\n##可能用到的相关数据\n\n{bg_investigation}\n\n"
+                    )
+                ] + apply_prompt_template("outline", state)
+                response = outline_llm.invoke(messages)
+                outline_response = response.content
+                outline_response = repair_json_output(outline_response)
+                logger.info(f"大纲生成完成: {outline_response}")
+
+            except Exception as e:
+                logger.error(f"大纲生成执行失败: {str(e)}")
+                # 返回最简单的默认大纲
+                import json
+
+                outline_response = json.dumps(
+                    {"title": user_query, "children": []}, ensure_ascii=False
+                )
+
+
+            outline_confirmed = outline_response.strip()
+            logger.info(f"大纲自动确认: {outline_confirmed}")
+
+            return Command(
+                update={
+                    "messages": [
+                        HumanMessage(content=f"大纲确认: {outline_confirmed}", name="outline")
+                    ],
+                    "report_outline": outline_confirmed,
+                    "current_node": "outline",
+                },
+                goto="central_agent",
+            )
+
+
+    @timed_step("execute_outline_factstruct")
+    async def execute_outline_factstruct(self, state: State, config: RunnableConfig) -> Command:
         """
         执行大纲生成（使用 FactStruct Stage 1 Batch-MAB 算法）
 
@@ -677,44 +722,59 @@ class SubAgentManager:
                         {"title": user_query, "children": []}, ensure_ascii=False
                     )
 
-            feedback = interrupt(
-                "Please Confirm or Edit the Outline.[OUTLINE]"
-                + outline_response
-                + "[/OUTLINE]"
+
+            outline_confirmed = outline_response.strip()
+            logger.info(f"大纲自动确认: {outline_confirmed}")
+
+            return Command(
+                update={
+                    "messages": [
+                        HumanMessage(content=f"大纲确认: {outline_confirmed}", name="outline")
+                    ],
+                    "report_outline": outline_confirmed,
+                    "current_node": "outline",
+                },
+                goto="central_agent",
             )
+            #不要确认了
+            # feedback = interrupt(
+            #     "Please Confirm or Edit the Outline.[OUTLINE]"
+            #     + outline_response
+            #     + "[/OUTLINE]"
+            # )
 
-            # if the feedback is not accepted, return the planner node
-            if feedback and str(feedback).upper().startswith("[CONFIRMED_OUTLINE]"):
-                outline_confirmed = feedback[len("[CONFIRMED_OUTLINE]") :].strip()
-                logger.info(f"大纲确认: {outline_confirmed}")
+            # # if the feedback is not accepted, return the planner node
+            # if feedback and str(feedback).upper().startswith("[CONFIRMED_OUTLINE]"):
+            #     outline_confirmed = feedback[len("[CONFIRMED_OUTLINE]") :].strip()
+            #     logger.info(f"大纲确认: {outline_confirmed}")
 
-                return Command(
-                    update={
-                        "messages": [
-                            HumanMessage(
-                                content=f"大纲确认: {outline_confirmed}", name="outline"
-                            )
-                        ],
-                        "report_outline": outline_confirmed,
-                        "current_node": "outline",
-                    },
-                    goto="central_agent",
-                )
-            elif feedback and str(feedback).upper().startswith("[SKIP]"):
-                outline_confirmed = feedback[len("[SKIP]") :].strip()
-                logger.info(f"大纲确认: {outline_confirmed}")
+            #     return Command(
+            #         update={
+            #             "messages": [
+            #                 HumanMessage(
+            #                     content=f"大纲确认: {outline_confirmed}", name="outline"
+            #                 )
+            #             ],
+            #             "report_outline": outline_confirmed,
+            #             "current_node": "outline",
+            #         },
+            #         goto="central_agent",
+            #     )
+            # elif feedback and str(feedback).upper().startswith("[SKIP]"):
+            #     outline_confirmed = feedback[len("[SKIP]") :].strip()
+            #     logger.info(f"大纲确认: {outline_confirmed}")
 
-                return Command(
-                    update={
-                        "messages": [
-                            HumanMessage(
-                                content=f"大纲确认: {outline_confirmed}", name="outline"
-                            )
-                        ],
-                        "report_outline": outline_confirmed,
-                        "current_node": "outline",
-                    },
-                    goto="central_agent",
-                )
-            else:
-                raise TypeError(f"Interrupt value of {feedback} is not supported.")
+            #     return Command(
+            #         update={
+            #             "messages": [
+            #                 HumanMessage(
+            #                     content=f"大纲确认: {outline_confirmed}", name="outline"
+            #                 )
+            #             ],
+            #             "report_outline": outline_confirmed,
+            #             "current_node": "outline",
+            #         },
+            #         goto="central_agent",
+            #     )
+            # else:
+            #     raise TypeError(f"Interrupt value of {feedback} is not supported.")

@@ -21,7 +21,7 @@ from .nodes import (
     researcher_xxqg_node,
 )
 
-from .sp_nodes import central_agent_node, perception_node, outline_node
+from .sp_nodes import central_agent_node, perception_node, outline_node,outline_node_factstruct
 from src.agents.sub_agent_registry import get_sub_agents_by_global_type
 
 
@@ -139,7 +139,8 @@ def _build_graph_sp_xxqg():
     builder = StateGraph(State)
 
     # 添加center planner agent
-    builder.add_node("perception", perception_node)
+    # 不要问卷了
+    # builder.add_node("perception", perception_node)
     builder.add_node("central_agent", central_agent_node)
     builder.add_node("outline", outline_node)
 
@@ -150,17 +151,64 @@ def _build_graph_sp_xxqg():
         builder.add_node(sub_agent["name"], sub_agent["node"])
     # builder.add_node("researcher", sp_xxqg_researcher_node)
     # builder.add_node("coder", sp_coder_node)
-    builder.add_node("reporter", sp_xxqg_reporter_node)
+    # builder.add_node("reporter", sp_xxqg_reporter_node)
 
     # 下面这些暂时没有算sub agent
     builder.add_node("zip_data", zip_data)
 
     # 感知层，包括search before plan、human in the loop
-    builder.add_edge(START, "perception")
-    builder.add_edge("perception", "outline")
+
+    builder.add_edge(START, "outline")
+    # builder.add_edge(START, "perception")
+    # builder.add_edge("perception", "outline")
 
     # 核心流程
     builder.add_edge("outline", "central_agent")
+    builder.add_edge("central_agent", "zip_data")
+
+    # 后处理部分
+    builder.add_edge("zip_data", END)
+
+    return builder
+
+
+def _build_graph_FactStruct():
+    """
+    构建多Agent系统状态图，定义系统状态转移逻辑
+
+    Returns:
+        编译后的状态图对象
+    """
+    from langgraph.graph import StateGraph, START, END
+
+    builder = StateGraph(State)
+
+    # 添加center planner agent
+    # 不要问卷了
+    # builder.add_node("perception", perception_node)
+    builder.add_node("central_agent", central_agent_node)
+    builder.add_node("outline_factstruct", outline_node_factstruct)
+
+    # 添加sub agent
+    sub_agents = get_sub_agents_by_global_type("sp_xxqg")
+
+    for sub_agent in sub_agents:
+        builder.add_node(sub_agent["name"], sub_agent["node"])
+    # builder.add_node("researcher", sp_xxqg_researcher_node)
+    # builder.add_node("coder", sp_coder_node)
+    # builder.add_node("reporter", sp_xxqg_reporter_node)
+
+    # 下面这些暂时没有算sub agent
+    builder.add_node("zip_data", zip_data)
+
+    # 感知层，包括search before plan、human in the loop
+
+    builder.add_edge(START, "outline_factstruct")
+    # builder.add_edge(START, "perception")
+    # builder.add_edge("perception", "outline")
+
+    # 核心流程
+    builder.add_edge("outline_factstruct", "central_agent")
     builder.add_edge("central_agent", "zip_data")
 
     # 后处理部分
@@ -186,13 +234,14 @@ def build_graph_with_memory_from_builder(builder):
 
 
 sp_xxqg_graph_builder = _build_graph_sp_xxqg()
-
+FactStruct_graph_builder = _build_graph_FactStruct()
 
 _GRAPH_BUILDER_CLASS_MAP = {
     "base": None,
     "sp": None,
     "xxqg": None,
     "sp_xxqg": sp_xxqg_graph_builder,
+    "factstruct":FactStruct_graph_builder
 }
 
 _GRAPH_CLASS_MAP = {
@@ -200,6 +249,7 @@ _GRAPH_CLASS_MAP = {
     "sp": {"memory": None, "no_memory": sp_graph},
     "xxqg": {"memory": None, "no_memory": xxqg_graph},
     "sp_xxqg": {"memory": None, "no_memory": sp_xxqg_graph_builder.compile()},
+    "factstruct": {"memory": None, "no_memory": FactStruct_graph_builder.compile()},
 }
 
 
@@ -219,7 +269,7 @@ def get_graph_by_format(graph_format: str, with_memory: bool = False):
 
     graph_builder = _GRAPH_BUILDER_CLASS_MAP[graph_format]
     if with_memory:
-        if graph_format != "sp_xxqg":
+        if graph_format != "sp_xxqg" and graph_format != "factstruct":
             logger.error("Memory功能目前仅支持 sp_xxqg 图格式")
             return _GRAPH_CLASS_MAP[graph_format]["no_memory"]
         else:

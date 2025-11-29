@@ -82,8 +82,12 @@ async def perception_node(state: State, config: RunnableConfig) -> Command:
     _check_agents_initialized()
     return await sub_agent_manager.execute_perception(state, config)
 
-
 async def outline_node(state: State, config: RunnableConfig) -> Command:
     """大纲生成节点处理函数"""
     _check_agents_initialized()
     return await sub_agent_manager.execute_outline(state, config)
+
+async def outline_node_factstruct(state: State, config: RunnableConfig) -> Command:
+    """factstruct大纲生成节点处理函数"""
+    _check_agents_initialized()
+    return await sub_agent_manager.execute_outline_factstruct(state, config)
