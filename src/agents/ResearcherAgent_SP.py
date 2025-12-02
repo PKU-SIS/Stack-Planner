@@ -16,7 +16,7 @@ class ResearcherAgentSP(CommonReactAgent):
     def __init__(self, *args, **kwargs):
         agent_type = kwargs.pop("agent_type", "default_agent")
         config = kwargs.pop("config", None)
-        default_tools = kwargs.pop("default_tools", [])
+        x = kwargs.pop("default_tools", [])
         """Initialize the ResearcherAgent with additional attributes."""
         configurable = Configuration.from_runnable_config(config)
         mcp_servers = {}
