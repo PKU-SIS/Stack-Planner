@@ -767,6 +767,19 @@ async def researcher_xxqg_node(
     return await research_agent.execute_agent_step(state)
 
 
+async def researcher_web_node(
+    state: State, config: RunnableConfig
+) -> Command[Literal["research_team"]]:
+    """Researcher node that do research"""
+    logger.info("Researcher node is researching.")
+
+    tools = [get_web_search_tool(configurable.max_search_results)]
+    logger.info(f"Researcher tools: {tools}")
+    research_agent = ResearcherAgent(
+        config=config, agent_type="researcher_web", default_tools=tools
+    )
+    return await research_agent.execute_agent_step(state)
+
 async def coder_node(
     state: State, config: RunnableConfig
 ) -> Command[Literal["research_team"]]:

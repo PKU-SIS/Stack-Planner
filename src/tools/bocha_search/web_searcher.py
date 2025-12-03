@@ -1,5 +1,6 @@
 import json
 import requests
+import aiohttp
 
 class WebSearcher:
     def __init__(self, api_key: str, url: str):
@@ -37,6 +38,31 @@ class WebSearcher:
             for result in results.get("webpage", [])[:count]  
         ]
 
+    async def search_async(self, query: str, count: int = 10) -> list[dict]:
+        payload = {
+            "query": query,
+            "freshness": "noLimit",
+            "summary": True,
+            "count": count,
+            "page": 1,
+        }
+        headers = {
+            'Authorization': f'Bearer {self.api_key}',
+            'Content-Type': 'application/json'
+        }
+        async with aiohttp.ClientSession() as session:
+            async with session.post(self.url, headers=headers, json=payload) as resp:
+                resp.raise_for_status()
+                data = await resp.json()
+                results = self._parse_response(data)
+                return [
+                    {
+                        "link": result["url"], 
+                        "title": result.get("name"), 
+                        "snippet": result.get("summary")
+                    }
+                    for result in results.get("webpage", [])[:count]  
+                ]
 
     @staticmethod
     def _parse_response(response: dict):

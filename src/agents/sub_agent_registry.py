@@ -15,6 +15,7 @@ from src.graph.sp_nodes import (
     coder_node,
     reporter_node,
     researcher_xxqg_node,
+    researcher_web_node,
     reporter_xxqg_node,
     sp_planner_node,
 )
@@ -49,7 +50,7 @@ sub_agents_sp_xxqg = [
     {
         "name": SubAgentType.RESEARCHER.value,
         "description": "Information collection and research",
-        "node": researcher_xxqg_node,
+        "node": researcher_web_node, #researcher_xxqg_node, #
     },
     {
         "name": SubAgentType.REPORTER.value,

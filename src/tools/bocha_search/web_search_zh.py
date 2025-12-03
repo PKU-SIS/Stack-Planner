@@ -1,5 +1,5 @@
 import os
-from src.rag_web import WebSearcher
+from src.tools.bocha_search import WebSearcher
 
 class WebSearcherChinese(WebSearcher):
     def __init__(self, api_key: str = None):
@@ -7,7 +7,7 @@ class WebSearcherChinese(WebSearcher):
             api_key = os.getenv("BOCHA_API_KEY")
             assert api_key is not None, "BOCHA_API_KEY is not set"
 
-        super().__init__(api_key, "https://api.bocha.cn/v1/web-search")
+        super().__init__(api_key, "https://api.bochaai.com/v1/web-search")
 
 def web_search(query: str, count: int = 10):
     searcher = WebSearcherChinese()

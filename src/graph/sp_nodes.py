@@ -70,6 +70,11 @@ async def researcher_xxqg_node(state: State, config: RunnableConfig) -> Command:
     _check_agents_initialized()
     return await sub_agent_manager.execute_xxqg_researcher(state, config)
 
+async def researcher_web_node(state: State, config: RunnableConfig) -> Command:
+    """研究Agent节点处理函数"""
+    _check_agents_initialized()
+    return await sub_agent_manager.execute_web_researcher(state, config)
+
 
 async def sp_planner_node(state: State, config: RunnableConfig) -> Command:
     """规划Agent节点处理函数"""

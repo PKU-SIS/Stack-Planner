@@ -24,6 +24,7 @@ from src.prompts.template import apply_prompt_template
 from src.memory import MemoryStack, MemoryStackEntry
 from src.agents.CentralAgent import CentralAgent
 from src.tools.get_docs_info import search_docs
+from src.tools.bocha_search.web_search_en import web_search
 from src.factstruct import (
     run_factstruct_stage1,
     outline_node_to_markdown,
@@ -157,6 +158,90 @@ class SubAgentManager:
         # 实例化研究Agent
         research_agent = ResearcherAgentSP(
             config=config, agent_type="researcher_xxqg", default_tools=tools
+        )
+
+        # 执行研究任务并处理异常
+        try:
+            result_command = await research_agent.execute_agent_step(state)
+
+            # 从结果中提取数据用于记忆栈
+            result_observations = []
+            result_data_collections = []
+
+            if result_command and result_command.update:
+                result_observations = result_command.update.get("observations", [])
+                result_data_collections = result_command.update.get(
+                    "data_collections", []
+                )
+
+        except Exception as e:
+            logger.error(f"研究Agent执行失败: {str(e)}")
+            return Command(
+                update={
+                    "messages": [
+                        HumanMessage(
+                            content=f"研究任务失败: {str(e)}", name="researcher"
+                        )
+                    ],
+                    "current_node": "central_agent",
+                    "memory_stack": self.central_agent.memory_stack.to_dict(),
+                },
+                goto="central_agent",
+            )
+
+        # 记录到中枢Agent记忆栈
+        memory_entry = MemoryStackEntry(
+            timestamp=datetime.now().isoformat(),
+            action="delegate",
+            agent_type="researcher",
+            content=f"研究任务: {task_description}",
+            result={
+                "observations": result_observations,
+                # "data_collections": result_data_collections,
+            },
+        )
+        self.central_agent.memory_stack.push(memory_entry)
+
+        logger.info("研究任务完成，返回中枢Agent")
+        return Command(
+            update={
+                "messages": [
+                    HumanMessage(
+                        content="研究任务完成，返回中枢Agent", name="researcher"
+                    )
+                ],
+                "current_node": "central_agent",
+                "memory_stack": self.central_agent.memory_stack.to_dict(),
+                "data_collections": result_data_collections,
+            },
+            goto="central_agent",
+        )
+
+    @timed_step("execute_web_researcher")
+    async def execute_web_researcher(
+        self, state: State, config: RunnableConfig
+    ) -> Command:
+        """
+        执行研究Agent，负责信息检索与分析
+
+        Args:
+            state: 当前系统状态
+            config: 运行配置
+
+        Returns:
+            执行结果Command对象
+        """
+        logger.info("Web Agent开始执行...")
+        delegation_context = state.get("delegation_context", {})
+        task_description = delegation_context.get("task_description", "未知研究任务")
+
+        # 配置研究工具链
+        # tools = [search_docs_tool]
+        tools = [get_web_search_tool(10)]
+        
+        # 实例化研究Agent
+        research_agent = ResearcherAgentSP(
+            config=config, agent_type="researcher_web", default_tools=tools
         )
 
         # 执行研究任务并处理异常
@@ -609,7 +694,8 @@ class SubAgentManager:
         outline_llm = get_llm_by_type(AGENT_LLM_MAP.get("outline", "default"))
         wait_stage = state.get("wait_stage", "")
         if wait_stage != "outline":
-            bg_investigation = search_docs(user_query, top_k=5)
+            # bg_investigation = search_docs(user_query, top_k=5)
+            bg_investigation = web_search(user_query, top_k=5)
             user_dst = state.get("user_dst", "")
             try:
                 messages = [
@@ -702,7 +788,8 @@ class SubAgentManager:
                 # Fallback: 使用传统方法生成大纲
                 logger.warning("回退到传统大纲生成方法...")
                 outline_llm = get_llm_by_type(AGENT_LLM_MAP.get("outline", "default"))
-                bg_investigation = search_docs(user_query, top_k=5)
+                # bg_investigation = search_docs(user_query, top_k=5)
+                bg_investigation = web_search(user_query, top_k=5)
                 try:
                     messages = [
                         HumanMessage(

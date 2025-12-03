@@ -10,6 +10,8 @@ class SearchEngine(enum.Enum):
     DUCKDUCKGO = "duckduckgo"
     BRAVE_SEARCH = "brave_search"
     ARXIV = "arxiv"
+    BING = "bing"
+    BOCHA="bocha"
 
 
 # Tool configuration
