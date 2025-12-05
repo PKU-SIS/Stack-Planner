@@ -6,6 +6,38 @@ import json
 import os
 import re
 import argparse
+
+def get_unique_output_path(base_path):
+    """
+    给定 base_path (如 /path/to/SP.jsonl)，
+    如果该文件存在，则尝试 SP_2.jsonl, SP_3.jsonl, ...
+    直到找到一个不存在的路径。
+    """
+    if not os.path.exists(base_path):
+        return base_path
+
+    dir_name = os.path.dirname(base_path)
+    file_name = os.path.basename(base_path)
+
+    # 分离主名和扩展名（支持 .jsonl, .txt 等）
+    if '.' in file_name:
+        name_part, ext = os.path.splitext(file_name)
+    else:
+        name_part, ext = file_name, ""
+
+    # 检查是否已经是带数字后缀的（可选：避免 SP_2_2.jsonl）
+    # 这里简单处理：直接从 2 开始递增
+    counter = 2
+    while True:
+        new_name = f"{name_part}_{counter}{ext}"
+        new_path = os.path.join(dir_name, new_name)
+        if not os.path.exists(new_path):
+            return new_path
+        counter += 1
+
+
+
+
 def get_latest_log_file(log_dir):
     """返回 logs/ 中最新的日志文件路径"""
     files = [f for f in os.listdir(log_dir) if f.endswith(".log")]
@@ -359,8 +391,9 @@ def parse_args():
     parser.add_argument("--url", type=str,  default="http://localhost:8513/api/chat/sp_stream", help="API URL，例如 http://localhost:8513/api/chat/sp_stream")
     parser.add_argument("--jsonl_path", type=str, default="/data1/Yangzb/Wenzhi/CTG/deep_research_bench/data/prompt_data/query.jsonl", help="输入 jsonl 文件路径")
     parser.add_argument("--log_dir", type=str, default="logs", help="日志目录")
-    parser.add_argument( "--graph-format",type=str,default="sp_xxqg",choices=["sp", "xxqg", "sp_xxqg", "base","FactStruct"],help="Graph format to use (default: 'sp')",)
+    parser.add_argument("--graph-format",type=str,default="sp_xxqg",choices=["sp", "xxqg", "sp_xxqg", "base","FactStruct"],help="Graph format to use (default: 'sp')",)
     parser.add_argument("--output_path", type=str, default="/data1/Yangzb/Wenzhi/CTG/deep_research_bench/data/test_data/raw_data/SP.jsonl", help="输出文件路径")
+    parser.add_argument("--skip_exist", action="store_true", help="跳过已经生成过的样本")
 
     return parser.parse_args()
 
@@ -370,6 +403,20 @@ if __name__ == "__main__":
     args = parse_args()
 
     print("args",args)
+    
+    # ========== 新增：读取已有样本 ==========
+    existing_prompts = set()
+    if args.skip_exist and os.path.exists(args.output_path):
+        with open(args.output_path, "r", encoding="utf-8") as f:
+            for line in f:
+                try:
+                    item = json.loads(line)
+                    existing_prompts.add(item["prompt"])
+                except:
+                    pass
+
+    print(f"已存在样本数量：{len(existing_prompts)}")
+
     # -------- 读取输入 jsonl --------
     with open(args.jsonl_path, "r", encoding="utf-8") as f:
         queries = [json.loads(line) for line in f if line.strip()]
@@ -377,9 +424,15 @@ if __name__ == "__main__":
     count=0
     for q in queries:
 
+    # ========== 新增：跳过已生成样本 ==========
+        if args.skip_exist and q["prompt"] in existing_prompts:
+            print(f"[跳过] prompt 已存在：{q['prompt'][:30]}...")
+            continue
+
         count=count+1
-        if count==40:
+        if count==3:
             break
+
         content = q["prompt"]
         data = {
             "messages": [
@@ -401,10 +454,9 @@ if __name__ == "__main__":
         }
 
 
-
         run_agent(args.url, data)
 
-
+    exit()
     LOG_DIR = "logs"
     latest_log_path = get_latest_log_file(args.log_dir)
     print(f"读取最新日志文件：{latest_log_path}")
@@ -421,14 +473,20 @@ if __name__ == "__main__":
     results = []
     for i in range(n):
         results.append({
-            "id": i,
+            "id": i+1,
             "prompt": queries[i],
             "article": reports[i]
         })
+    # 替换原来的写入逻辑
+    output_path = args.output_path
+    if args.skip_exist and os.path.exists(output_path):
+        output_path = get_unique_output_path(args.output_path)
 
-    with open(args.output_path, "w", encoding="utf-8") as f:
+    # 无论如何，把结果写入 output_path（可能是原路径，也可能是 SP_2.jsonl）
+    with open(output_path, "w", encoding="utf-8") as f:
         for item in results:
             f.write(json.dumps(item, ensure_ascii=False) + "\n")
-    print(f"{args.output_path} 已生成 (共 {n} 条记录)".format(n))
+
+    print(f"{output_path} 已生成 (共 {len(results)} 条记录)")
 
 

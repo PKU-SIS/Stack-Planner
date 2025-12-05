@@ -387,7 +387,18 @@ async def _astream_workflow_generator_sp(
             }
             yield _make_event("node_status", current_node_state)
 
-        logger.debug(f"Event data: {event_data}")
+        #第一个元素是 AIMessageChunk太多了，影响阅读
+        if isinstance(event_data, (tuple, list)) and len(event_data) > 0:
+            if isinstance(event_data[0], AIMessageChunk):
+                # 跳过日志
+                pass
+            else:
+                logger.debug(f"Event data: {event_data}")
+        else:
+            # 非 tuple/list 结构（比如普通 dict {'zip_data': None}），正常记录
+            logger.debug(f"Event data: {event_data}")
+
+
         if isinstance(event_data, dict):
             if "__interrupt__" in event_data:
                 data_value = event_data["__interrupt__"][0].value

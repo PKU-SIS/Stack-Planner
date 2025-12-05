@@ -589,6 +589,7 @@ class CentralAgent:
                 entry.to_dict() for entry in self.memory_stack.get_all()
             ],
             "final_report": final_report,
+            "research": state.get("data_collections", []),
             "completion_time": datetime.now().isoformat(),
             "statistics": global_statistics.get_statistics(),
         }

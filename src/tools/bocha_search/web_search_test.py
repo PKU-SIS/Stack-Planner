@@ -54,16 +54,8 @@ def test_unsupported_language(api_key):
 
 
 if __name__ == "__main__":
-    #bocha的
-    api_key_zh="sk-7e8e5cab9e7d48b29a149ba2405a3395"
-    #对应链接
-    #"https://api.bocha.cn/v1/web-search"
-    #"https://api.bochaai.com/v1/web-search"
-    
-    #LangSearch(日宏的)
-    api_key_en="sk-f2452ad87c2749fb93b24fc03d102265"
-    # 对应链接
-    # "https://api.langsearch.com/v1/web-search"
+    api_key_zh="aaaa"
+    api_key_en="aaaa"
 
     test_english_web_searcher(api_key_en)
     test_chinese_web_searcher(api_key_zh)

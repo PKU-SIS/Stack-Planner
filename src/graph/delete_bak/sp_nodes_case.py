@@ -486,12 +486,12 @@ class CentralAgent:
         }
 
         # 保存到文件
-        os.makedirs("./reports", exist_ok=True)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"./reports/execution_report_{timestamp}.json"
+        # os.makedirs("./reports", exist_ok=True)
+        # timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        # filename = f"./reports/execution_report_{timestamp}.json"
 
-        with open(filename, "w", encoding="utf-8") as f:
-            json.dump(execution_summary, f, ensure_ascii=False, indent=4)
+        # with open(filename, "w", encoding="utf-8") as f:
+        #     json.dump(execution_summary, f, ensure_ascii=False, indent=4)
 
         logger.info(f"执行报告已保存: {filename}")
 

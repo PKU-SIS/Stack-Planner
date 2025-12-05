@@ -854,9 +854,9 @@ def zip_data(state: State):
     }
 
     # Generate filename with current timestamp
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"./reports/report_{timestamp}.json"
+    # timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    # filename = f"./reports/report_{timestamp}.json"
 
-    # Save data as JSON
-    with open(filename, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=4)
+    # # Save data as JSON
+    # with open(filename, "w", encoding="utf-8") as f:
+    #     json.dump(data, f, ensure_ascii=False, indent=4)
