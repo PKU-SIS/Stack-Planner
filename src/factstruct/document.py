@@ -52,3 +52,15 @@ class FactStructDocument:
             "url": self.url,
             "title": self.title,
         }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "FactStructDocument":
+        """从字典恢复 Document 实例"""
+        return cls(
+            id=data["id"],
+            text=data["text"],
+            source_type=data["source_type"],
+            timestamp=datetime.fromisoformat(data["timestamp"]),
+            url=data.get("url"),
+            title=data.get("title"),
+        )

@@ -17,6 +17,7 @@ from src.graph.sp_nodes import (
     researcher_xxqg_node,
     researcher_web_node,
     reporter_xxqg_node,
+    reporter_factstruct_node,
     sp_planner_node,
 )
 
@@ -55,7 +56,7 @@ sub_agents_sp_xxqg = [
     {
         "name": SubAgentType.REPORTER.value,
         "description": "Result organization and report generation",
-        "node": reporter_xxqg_node,
+        "node": reporter_factstruct_node,
     },
 ]
 
