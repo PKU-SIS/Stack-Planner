@@ -1,7 +1,7 @@
 import json
 from typing import Dict, List, Optional, Tuple, Union
 
-from langchain.callbacks.manager import (
+from langchain_core.callbacks.manager import (
     AsyncCallbackManagerForToolRun,
     CallbackManagerForToolRun,
 )

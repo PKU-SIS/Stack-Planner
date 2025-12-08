@@ -26,7 +26,7 @@ def web_search(query: str, top_k: int = 10):
     api_key = os.getenv("BOCHA_API_KEY")
     if not api_key:
         logger.error("环境变量 BOCHA_API_KEY 未设置")
-        return results
+        return None
 
 
     try:

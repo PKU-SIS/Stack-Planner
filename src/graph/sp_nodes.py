@@ -65,6 +65,12 @@ def reporter_xxqg_node(state: State, config: RunnableConfig) -> Command:
     return sub_agent_manager.execute_xxqg_reporter(state, config)
 
 
+def reporter_factstruct_node(state: State, config: RunnableConfig) -> Command:
+    """报告Agent节点处理函数（使用 FactStruct Stage 2）"""
+    _check_agents_initialized()
+    return sub_agent_manager.execute_xxqg_reporter_factstruct(state, config)
+
+
 async def researcher_xxqg_node(state: State, config: RunnableConfig) -> Command:
     """研究Agent节点处理函数"""
     _check_agents_initialized()

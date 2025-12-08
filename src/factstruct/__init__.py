@@ -13,11 +13,15 @@ from .embedder import Embedder
 from .llm_wrapper import FactStructLLMWrapper
 from .integration import (
     run_factstruct_stage1,
+    run_factstruct_stage2,
     create_search_engine_adapter,
     outline_node_to_text,
     outline_node_to_markdown,
     outline_node_to_json,
     memory_to_dict,
+    outline_node_to_dict,
+    dict_to_outline_node,
+    dict_to_memory,
 )
 
 __all__ = [
@@ -29,9 +33,13 @@ __all__ = [
     "Embedder",
     "FactStructLLMWrapper",
     "run_factstruct_stage1",
+    "run_factstruct_stage2",
     "create_search_engine_adapter",
     "outline_node_to_text",
     "outline_node_to_markdown",
     "outline_node_to_json",
     "memory_to_dict",
+    "outline_node_to_dict",
+    "dict_to_outline_node",
+    "dict_to_memory",
 ]

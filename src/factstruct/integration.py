@@ -103,8 +103,7 @@ def run_factstruct_stage1(
     if search_engine is None:
         search_engine = create_search_engine_adapter()
 
-    # embedder = Embedder()
-    embedder = Embedder(model_name="../../Model/MiniLM/all-MiniLM-L6-v2")
+    embedder = Embedder()
     llm_wrapper = FactStructLLMWrapper(llm)
 
     # 创建 Batch-MAB 实例
@@ -248,3 +247,226 @@ def memory_to_dict(memory: Memory) -> dict:
             doc_id: doc.to_dict() for doc_id, doc in memory.documents.items()
         },
     }
+
+
+def outline_node_to_dict(node: OutlineNode) -> dict:
+    """
+    将 OutlineNode 完整转换为字典（保留所有字段，包括 MAB 状态）
+
+    参数:
+        node: OutlineNode 实例
+
+    返回:
+        字典格式的节点数据（可递归包含子节点）
+    """
+    return {
+        "id": node.id,
+        "title": node.title,
+        "pull_count": node.pull_count,
+        "reward_history": node.reward_history,
+        "children": [outline_node_to_dict(child) for child in node.children],
+    }
+
+
+def dict_to_outline_node(data: dict, parent: Optional[OutlineNode] = None) -> OutlineNode:
+    """
+    从字典恢复 OutlineNode（递归构建子树）
+
+    参数:
+        data: 节点字典数据
+        parent: 父节点（可选）
+
+    返回:
+        OutlineNode 实例
+    """
+    node = OutlineNode(
+        id=data["id"],
+        title=data["title"],
+        parent=parent,
+        children=[],
+        pull_count=data.get("pull_count", 0),
+        reward_history=data.get("reward_history", []),
+    )
+
+    for child_data in data.get("children", []):
+        child = dict_to_outline_node(child_data, parent=node)
+        node.children.append(child)
+
+    return node
+
+
+def dict_to_memory(data: dict) -> Memory:
+    """
+    从字典恢复 Memory 实例
+
+    参数:
+        data: 内存字典数据
+
+    返回:
+        Memory 实例
+    """
+    from .memory import Memory
+    from .document import FactStructDocument
+
+    memory = Memory(embedding_dim=384)
+
+    for doc_id, doc_data in data.get("documents", {}).items():
+        doc = FactStructDocument.from_dict(doc_data)
+        memory.documents[doc_id] = doc
+
+    for node_id, doc_ids in data.get("node_to_docs", {}).items():
+        memory.node_to_docs[node_id] = set(doc_ids)
+
+    return memory
+
+def run_factstruct_stage2(
+    outline_dict: dict,
+    memory_dict: dict,
+    user_query: str,
+    llm_type: str = "basic",
+    locale: str = "zh-CN",
+) -> str:
+    """
+    FactStruct Stage 2: 基于大纲的递归分段文本生成
+
+    采用深度优先遍历策略，递归生成报告：
+    1. 从根节点开始递归遍历整棵大纲树
+    2. 遇到叶子节点：
+       - 从 Memory 中直接获取 Stage 1 关联的文档（使用节点-文档映射）
+       - 使用 LLM 生成该节点的段落内容
+       - 添加到报告中
+    3. 中间节点：添加标题，继续递归子节点
+
+    参数:
+        outline_dict: OutlineNode 序列化字典
+        memory_dict: Memory 序列化字典
+        user_query: 用户原始查询
+        llm_type: LLM 类型（默认 "basic"）
+        locale: 语言区域设置（默认 "zh-CN"），用于 prompt 模板
+
+    返回:
+        完整的 Markdown 格式报告
+    """
+    from src.llms.llm import get_llm_by_type
+    from src.prompts.template import apply_prompt_template
+
+    logger.info(f"开始 FactStruct Stage 2: 基于大纲分段生成内容...")
+
+    outline_root = dict_to_outline_node(outline_dict)
+    memory = dict_to_memory(memory_dict)
+
+    # 生成完整大纲的 Markdown 表示
+    full_outline = outline_node_to_markdown(outline_root, max_depth=None, include_root=True)
+
+    llm = get_llm_by_type(llm_type)
+    report_parts = []
+    path_stack = [[]]
+
+    def get_progress_context(stack, will_complete_chapters: list, next_chapter: str):
+        context_lines = []
+
+        for i, level_nodes in enumerate(stack):
+            indent = "  " * i
+            current_node_title = level_nodes[-1]
+            completed_siblings = level_nodes[:-1]
+            if completed_siblings:
+                siblings_str = "、".join(completed_siblings)
+                context_lines.append(f"{indent}其中已完成{siblings_str}，")
+            context_lines.append(f"{indent}正在完成{current_node_title}")
+
+        if will_complete_chapters:
+            chapters_str = "、".join([f"「{title}」" for title in will_complete_chapters])
+            context_lines.append(f"\n完成当前章节后，以下父章节也将完成：{chapters_str}")
+
+        if next_chapter:
+            context_lines.append(f"接下来将开始：{next_chapter}")
+        else:
+            context_lines.append("至此整篇文章将全部完成")
+
+        return "\n".join(context_lines)
+
+    def generate(node: OutlineNode, level: int = 1, will_complete_chapters: list = None, next_chapter: str = None):
+        logger.debug(f"正在生成子章节: {node.title}（ID: {node.id}）")
+
+        path_stack[-1].append(node.title)
+
+        if level <= 6:
+            report_parts.append(f"{'#' * level} {node.title}\n")
+
+        if node.is_leaf():
+            relevant_docs = memory.get_docs_by_node(node.id)
+
+            if not relevant_docs:
+                logger.warning(
+                    f"节点 '{node.title}' (ID: {node.id}) 未找到关联文档"
+                )
+                relevant_docs_text = "（无相关资料）"
+            else:
+                logger.debug(
+                    f"获取到 {len(relevant_docs)} 个 Stage 1 关联文档"
+                )
+                relevant_docs_text = "\n\n".join(
+                    [
+                        f"[文档 {idx + 1}] 来源: {doc.source_type}\n{doc.text[:500]}..."
+                        for idx, doc in enumerate(relevant_docs)
+                    ]
+                )
+
+            progress_context = get_progress_context(path_stack, will_complete_chapters, next_chapter)
+
+            completed_content = "".join(report_parts).strip()
+            if not completed_content:
+                completed_content = "（尚未生成任何内容）"
+
+            temp_state = {
+                "messages": [],
+                "user_query": user_query,
+                "full_outline": full_outline,
+                "progress_context": progress_context,
+                "completed_content": completed_content,
+                "reference_materials": relevant_docs_text,
+                "locale": locale,
+            }
+
+            try:
+                messages = apply_prompt_template(
+                    "reporter_factstruct",
+                    temp_state,
+                    extra_context={
+                        "user_query": user_query,
+                        "full_outline": full_outline,
+                        "progress_context": progress_context,
+                        "completed_content": completed_content,
+                        "reference_materials": relevant_docs_text,
+                        "locale": locale,
+                    }
+                )
+                response = llm.invoke(messages)
+                content = response.content.strip()
+                report_parts.append(f"{content}\n")
+                logger.debug(f"  生成了 {len(content)} 个字符")
+
+            except Exception as e:
+                logger.error(f"  生成失败: {str(e)}")
+
+        if node.children:
+            path_stack.append([])
+            for i, child in enumerate(node.children):
+                if (i == len(node.children) - 1):
+                    child_will_complete = will_complete_chapters + [node.title]
+                    child_next_chapter = next_chapter
+                else:
+                    child_will_complete = []
+                    child_next_chapter = node.children[i + 1].title
+                generate(child, level + 1, child_will_complete, child_next_chapter)
+            path_stack.pop()
+
+    generate(outline_root, level=1, will_complete_chapters=[], next_chapter=None)
+
+    final_report = "\n".join(report_parts)
+
+    logger.info(
+        f"FactStruct Stage 2 完成: 生成了 {len(final_report)} 个字符的报告"
+    )
+
+    return final_report

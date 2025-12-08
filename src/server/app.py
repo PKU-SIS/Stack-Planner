@@ -66,7 +66,7 @@ async def chat_stream(request: ChatRequest):
     if thread_id == "__default__":
         thread_id = str(uuid4())
     return StreamingResponse(
-        _astream_workflow_generator(
+        _astream_workflow_generator_sp(
             request.model_dump()["messages"],
             thread_id,
             request.resources,
@@ -77,6 +77,7 @@ async def chat_stream(request: ChatRequest):
             request.interrupt_feedback,
             request.mcp_settings,
             request.enable_background_investigation,
+            request.graph_format,
         ),
         media_type="text/event-stream",
     )
@@ -344,6 +345,7 @@ async def _astream_workflow_generator_sp(
         "enable_background_investigation": enable_background_investigation,
         "user_query": messages[-1]["content"] if messages else "",
         "data_collections": [],
+        "skip_perception": True,
     }
     if not auto_accepted_plan and interrupt_feedback:
         if interrupt_feedback.startswith("["):

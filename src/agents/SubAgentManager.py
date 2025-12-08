@@ -461,11 +461,20 @@ class SubAgentManager:
                 "reporter_xxqg", state, extra_context=context
             )  # 修复：参数顺序
             data_collections = state.get("data_collections", [])
-            messages.append(
-                HumanMessage(
-                    f"##User Query\n\n{state.get('user_query', '')}\n\n##用户约束\n\n{state.get("user_dst","")}\n\n##报告大纲{state.get('report_outline','用户未提供大纲')}\n\nBelow are data collected in previous tasks:\n\n{"\n\n".join(data_collections)}"
-                )
+            data_joined = "\n\n".join(data_collections)
+            user_query_str = state.get("user_query", "")
+            user_dst_str = state.get("user_dst", "")
+            report_outline_str = state.get("report_outline", "用户未提供大纲")
+
+            reporter_content = (
+                f"##User Query\n\n{user_query_str}\n\n"
+                f"##用户约束\n\n{user_dst_str}\n\n"
+                f"##报告大纲\n{report_outline_str}\n\n"
+                "Below are data collected in previous tasks:\n\n"
+                f"{data_joined}"
             )
+
+            messages.append(HumanMessage(content=reporter_content))
 
             logger.debug(f"Reporter messages: {messages}")
             llm = get_llm_by_type(AGENT_LLM_MAP.get("reporter", "default"))
@@ -493,6 +502,85 @@ class SubAgentManager:
             update={
                 "messages": [
                     HumanMessage(content="报告生成完成，返回中枢Agent", name="reporter")
+                ],
+                "final_report": final_report,
+                "current_node": "central_agent",
+                "memory_stack": self.central_agent.memory_stack.to_dict(),
+            },
+            goto="central_agent",
+        )
+
+    @timed_step("execute_xxqg_reporter_factstruct")
+    def execute_xxqg_reporter_factstruct(
+        self, state: State, config: RunnableConfig
+    ) -> Command:
+        """
+        执行报告Agent（使用 FactStruct Stage 2）
+
+        基于 FactStruct Stage 1 生成的大纲和 Memory，为每个叶子节点
+        分别生成内容，最终合并为完整报告。
+
+        Args:
+            state: 当前系统状态
+            config: 运行配置
+
+        Returns:
+            执行结果Command对象
+        """
+        logger.info("报告Agent开始执行（FactStruct Stage 2）...")
+
+        factstruct_outline = state.get("factstruct_outline")
+        factstruct_memory = state.get("factstruct_memory")
+
+        if not factstruct_outline or not factstruct_memory:
+            logger.warning(
+                "FactStruct 数据缺失，回退到传统 Reporter 方法"
+            )
+            return self.execute_xxqg_reporter(state, config)
+
+        user_query = state.get("user_query", "")
+
+        final_report = "报告生成失败: 未知错误"
+        try:
+            from src.factstruct import run_factstruct_stage2
+            from src.config.agents import AGENT_LLM_MAP
+
+            final_report = run_factstruct_stage2(
+                outline_dict=factstruct_outline,
+                memory_dict=factstruct_memory,
+                user_query=user_query,
+                llm_type=AGENT_LLM_MAP.get("reporter_factstruct", "basic"),
+                locale=state.get("locale", "zh-CN"),
+            )
+
+            logger.info(
+                f"FactStruct Stage 2 报告生成完成: {len(final_report)} 个字符"
+            )
+
+        except Exception as e:
+            import traceback
+
+            logger.error(traceback.format_exc())
+            logger.error(f"FactStruct Stage 2 报告生成失败: {str(e)}")
+            final_report = f"报告生成失败: {str(e)}"
+
+        memory_entry = MemoryStackEntry(
+            timestamp=datetime.now().isoformat(),
+            action="delegate",
+            agent_type="reporter",
+            content="报告任务: 使用 FactStruct Stage 2 生成报告",
+            result={"final_report": final_report},
+        )
+        self.central_agent.memory_stack.push(memory_entry)
+
+        logger.info("报告生成完成（FactStruct Stage 2），返回中枢Agent")
+        return Command(
+            update={
+                "messages": [
+                    HumanMessage(
+                        content="报告生成完成（FactStruct Stage 2），返回中枢Agent",
+                        name="reporter",
+                    )
                 ],
                 "final_report": final_report,
                 "current_node": "central_agent",
@@ -616,6 +704,25 @@ class SubAgentManager:
         # check if the plan is auto accepted
         perception_llm = get_llm_by_type(AGENT_LLM_MAP.get("perception", "default"))
         auto_accepted_plan = state.get("auto_accepted_plan", False)
+        skip_perception = state.get("skip_perception", False)
+        
+        if skip_perception:
+            logger.info("跳过感知层，直接进入大纲生成")
+            return Command(
+                update={
+                    "messages": [
+                        HumanMessage(
+                            content="感知层已跳过",
+                            name="perception",
+                        )
+                    ],
+                    "user_dst": "",
+                    "current_node": "perception",
+                    "wait_for_user": False,
+                },
+                goto="outline",
+            )
+
         if auto_accepted_plan:
             try:
                 messages = apply_prompt_template("perception", state) + [
@@ -745,6 +852,9 @@ class SubAgentManager:
         auto_accepted_plan = state.get("auto_accepted_plan", False)
 
         if auto_accepted_plan:
+            factstruct_outline_dict = None
+            factstruct_memory_dict = None
+
             # 使用 FactStruct Stage 1 生成大纲
             try:
                 logger.info("开始使用 FactStruct Stage 1 生成大纲...")
@@ -770,9 +880,12 @@ class SubAgentManager:
                     outline_root, max_depth=None, include_root=True
                 )
 
-                # 保存到 state（可选，供后续 Stage 使用）
-                # 注意：OutlineNode 和 Memory 对象无法直接序列化到 State
-                # 如果需要保存，可以使用 memory_to_dict 转换
+                # 保存到 state（供 FactStruct Stage 2 使用）
+                from src.factstruct import outline_node_to_dict, memory_to_dict
+
+                factstruct_outline_dict = outline_node_to_dict(outline_root)
+                factstruct_memory_dict = memory_to_dict(memory)
+
                 logger.info(
                     f"FactStruct Stage 1 大纲生成完成: "
                     f"{len(outline_root.get_all_nodes())} 个节点, "
@@ -819,6 +932,8 @@ class SubAgentManager:
                         HumanMessage(content=f"大纲确认: {outline_confirmed}", name="outline")
                     ],
                     "report_outline": outline_confirmed,
+                    "factstruct_outline": factstruct_outline_dict,
+                    "factstruct_memory": factstruct_memory_dict,
                     "current_node": "outline",
                 },
                 goto="central_agent",
