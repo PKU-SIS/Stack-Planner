@@ -10,9 +10,16 @@ from langchain_openai import AzureChatOpenAI, ChatOpenAI
 from src.config import load_yaml_config
 from src.config.agents import LLMType
 from src.llms.providers.dashscope import ChatDashscope
-
+import re
 # Cache for LLM instances
 _llm_cache: dict[LLMType, BaseChatModel] = {}
+
+# Helper: check if base_url is an IP-based or local URL (not openai, not dashscope official)
+def is_private_or_ip_url(url):
+    # Match IP address (v4 or v6) or localhost
+    ip_pattern = re.compile(r'^https?://(?:\d{1,3}\.){3}\d{1,3}|localhost|127\.0\.0\.1|\[::1\]')
+    return bool(ip_pattern.match(url))
+
 
 
 def _get_config_file_path() -> str:
@@ -91,6 +98,15 @@ def _create_llm_use_conf(llm_type: LLMType, conf: Dict[str, Any]) -> BaseChatMod
         else:
             merged_conf["extra_body"] = {"enable_thinking": False}
         return ChatDashscope(**merged_conf)
+
+    #这个地方如果是自己的 api
+    elif "base_url" in merged_conf and is_private_or_ip_url(merged_conf["base_url"]):
+        if llm_type == "reasoning":
+            merged_conf["extra_body"] = {"enable_thinking": True}
+        else:
+            merged_conf["extra_body"] = {"enable_thinking": False}
+        return ChatDashscope(**merged_conf)
+
 
     if llm_type == "reasoning":
         merged_conf["api_base"] = merged_conf.pop("base_url", None)

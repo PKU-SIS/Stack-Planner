@@ -1,1 +1,2 @@
-python src/tests/test_factstruct.py --skip_exist
+python src/tests/test_factstruct.py --skip_exist  --output_path /data1/Yangzb/Wenzhi/CTG/deep_research_bench/data/test_data/raw_data/Draft.jsonl
+#--graph-format FactStruct --output_path /data1/Yangzb/Wenzhi/CTG/deep_research_bench/data/test_data/raw_data/FactStruct.jsonl

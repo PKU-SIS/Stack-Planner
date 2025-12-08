@@ -38,14 +38,15 @@ def get_unique_output_path(base_path):
 
 
 
-def get_latest_log_file(log_dir):
-    """返回 logs/ 中最新的日志文件路径"""
-    files = [f for f in os.listdir(log_dir) if f.endswith(".log")]
+def get_latest_report_file(reports_dir):
+    """返回 reports/ 中最新的 execution_report_*.json 文件路径"""
+    files = [f for f in os.listdir(reports_dir) if f.startswith("execution_report_") and f.endswith(".json")]
     if not files:
-        raise FileNotFoundError("logs/ 目录中找不到任何 .log 文件！")
-    
+        raise FileNotFoundError(f"{reports_dir}/ 目录中找不到任何 execution_report_*.json 文件！")
+    # 按文件名排序（时间戳在文件名中，字典序即时间序）
     latest = sorted(files)[-1]
-    return os.path.join(log_dir, latest)
+    return os.path.join(reports_dir, latest)
+
 
 
 def extract_queries(log_text):
@@ -390,7 +391,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Run agent with streaming API")
     parser.add_argument("--url", type=str,  default="http://localhost:8513/api/chat/sp_stream", help="API URL，例如 http://localhost:8513/api/chat/sp_stream")
     parser.add_argument("--jsonl_path", type=str, default="/data1/Yangzb/Wenzhi/CTG/deep_research_bench/data/prompt_data/query.jsonl", help="输入 jsonl 文件路径")
-    parser.add_argument("--log_dir", type=str, default="logs", help="日志目录")
+    parser.add_argument("--reports_dir", type=str, default="reports", help="日志目录")
     parser.add_argument("--graph-format",type=str,default="sp_xxqg",choices=["sp", "xxqg", "sp_xxqg", "base","FactStruct"],help="Graph format to use (default: 'sp')",)
     parser.add_argument("--output_path", type=str, default="/data1/Yangzb/Wenzhi/CTG/deep_research_bench/data/test_data/raw_data/SP.jsonl", help="输出文件路径")
     parser.add_argument("--skip_exist", action="store_true", help="跳过已经生成过的样本")
@@ -430,7 +431,7 @@ if __name__ == "__main__":
             continue
 
         count=count+1
-        if count==3:
+        if count==41:
             break
 
         content = q["prompt"]
@@ -455,38 +456,38 @@ if __name__ == "__main__":
 
 
         run_agent(args.url, data)
+        # ========== 关键修改：立即读取最新生成的 report 文件 ==========
+        try:
+            latest_report_path = get_latest_report_file(args.reports_dir)
+            with open(latest_report_path, "r", encoding="utf-8") as rf:
+                report_data = json.load(rf)
+        except Exception as e:
+            print(f"❌ 读取最新报告失败: {e}")
+            continue
+        # 提取所需字段
+        final_report = report_data.get("final_report", "")
+        research = report_data.get("research", [])
 
-    exit()
-    LOG_DIR = "logs"
-    latest_log_path = get_latest_log_file(args.log_dir)
-    print(f"读取最新日志文件：{latest_log_path}")
+        # 可选：校验 user_query 是否匹配（防止并发错乱）
+        reported_query = report_data.get("user_query", "").strip('"')
+        if reported_query != content:
+            print(f"⚠️  WARNING: reported query 不匹配！预期: {content[:30]}... 实际: {reported_query[:30]}...")
 
-    with open(latest_log_path, "r", encoding="utf-8") as f:
-        log_text = f.read()
+        # 构造结果项
+        result_item = {
+            "id": q.get("id", count+1),
+            "prompt": reported_query,
+            "article": final_report,
+            "research": research
+        }
+        results.append(result_item)
 
-    queries = extract_queries(log_text)
-    reports = extract_reports(log_text)
+        # 写入输出文件（追加模式，避免丢失）
+        with open(args.output_path, "a", encoding="utf-8") as out_f:
+            out_f.write(json.dumps(result_item, ensure_ascii=False) + "\n")
 
-    # 对齐数量（一般 1:1，如果数量不一致，则按最短对齐）
-    n = min(len(queries), len(reports))
+        print(f"✅ 已写入结果 (共 {len(results)} 条)")
 
-    results = []
-    for i in range(n):
-        results.append({
-            "id": i+1,
-            "prompt": queries[i],
-            "article": reports[i]
-        })
-    # 替换原来的写入逻辑
-    output_path = args.output_path
-    if args.skip_exist and os.path.exists(output_path):
-        output_path = get_unique_output_path(args.output_path)
-
-    # 无论如何，把结果写入 output_path（可能是原路径，也可能是 SP_2.jsonl）
-    with open(output_path, "w", encoding="utf-8") as f:
-        for item in results:
-            f.write(json.dumps(item, ensure_ascii=False) + "\n")
-
-    print(f"{output_path} 已生成 (共 {len(results)} 条记录)")
+    print(f"全部完成！输出文件: {args.output_path} (新增 {len(results)} 条记录)")
 
 

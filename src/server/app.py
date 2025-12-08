@@ -398,7 +398,6 @@ async def _astream_workflow_generator_sp(
             # 非 tuple/list 结构（比如普通 dict {'zip_data': None}），正常记录
             logger.debug(f"Event data: {event_data}")
 
-
         if isinstance(event_data, dict):
             if "__interrupt__" in event_data:
                 data_value = event_data["__interrupt__"][0].value

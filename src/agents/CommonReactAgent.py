@@ -7,7 +7,7 @@ from langchain.tools import BaseTool
 from langgraph.types import Command
 from abc import ABCMeta, abstractmethod
 from langgraph.prebuilt import create_react_agent
-
+from src.utils.logger import logger
 from src.prompts import apply_prompt_template
 from src.llms.llm import get_llm_by_type
 from src.config.agents import AGENT_LLM_MAP

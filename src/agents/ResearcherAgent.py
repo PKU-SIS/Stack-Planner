@@ -154,7 +154,9 @@ class ResearcherAgent(CommonReactAgent):
         result = await self.ainvoke(
             input=agent_input, config={"recursion_limit": recursion_limit}
         )
-
+        logger.info(
+            f"{self.agent_name.capitalize()} result: {result}"
+        )
         # Process the result
         response_content = result["messages"][-1].content
         logger.debug(

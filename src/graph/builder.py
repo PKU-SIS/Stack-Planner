@@ -241,7 +241,7 @@ _GRAPH_BUILDER_CLASS_MAP = {
     "sp": None,
     "xxqg": None,
     "sp_xxqg": sp_xxqg_graph_builder,
-    "factstruct":FactStruct_graph_builder
+    "FactStruct":FactStruct_graph_builder
 }
 
 _GRAPH_CLASS_MAP = {
@@ -249,7 +249,7 @@ _GRAPH_CLASS_MAP = {
     "sp": {"memory": None, "no_memory": sp_graph},
     "xxqg": {"memory": None, "no_memory": xxqg_graph},
     "sp_xxqg": {"memory": None, "no_memory": sp_xxqg_graph_builder.compile()},
-    "factstruct": {"memory": None, "no_memory": FactStruct_graph_builder.compile()},
+    "FactStruct": {"memory": None, "no_memory": FactStruct_graph_builder.compile()},
 }
 
 
@@ -269,7 +269,7 @@ def get_graph_by_format(graph_format: str, with_memory: bool = False):
 
     graph_builder = _GRAPH_BUILDER_CLASS_MAP[graph_format]
     if with_memory:
-        if graph_format != "sp_xxqg" and graph_format != "factstruct":
+        if graph_format != "sp_xxqg" and graph_format != "FactStruct":
             logger.error("Memory功能目前仅支持 sp_xxqg 图格式")
             return _GRAPH_CLASS_MAP[graph_format]["no_memory"]
         else:

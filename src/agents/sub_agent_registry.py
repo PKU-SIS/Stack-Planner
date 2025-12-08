@@ -50,7 +50,7 @@ sub_agents_sp_xxqg = [
     {
         "name": SubAgentType.RESEARCHER.value,
         "description": "Information collection and research",
-        "node": researcher_web_node, #researcher_xxqg_node, #
+        "node": researcher_web_node, #researcher_xxqg_node, # 
     },
     {
         "name": SubAgentType.REPORTER.value,
@@ -70,7 +70,7 @@ def get_sub_agents_by_global_type(graph_type: str):
     """
     if graph_type == "sp" or graph_type == "base":
         return sub_agents_sp
-    elif graph_type == "sp_xxqg"or graph_type == "factstruct":
+    elif graph_type == "sp_xxqg"or graph_type == "FactStruct":
         return sub_agents_sp_xxqg
     else:
         raise ValueError(f"Unknown graph type: {graph_type}")

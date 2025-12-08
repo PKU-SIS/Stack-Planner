@@ -17,6 +17,7 @@ node_modules/
 venv/
 logs/
 reports/
+reports2/
 /node_modules
 
 # Environment variables
