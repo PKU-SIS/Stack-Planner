@@ -126,10 +126,10 @@ class CentralAgent:
                 method="json_mode",
             )
             response = llm.invoke(messages)
-
+            
             # 解析决策结果
             action = CentralAgentAction(response.action)
-            reasoning = response.reasoning
+            reasoning = response.reasoning.replace('[STYLE_ROLE]','')
             params = response.params or {}
             instruction = response.instruction or self.action_instructions.get(
                 action, ""
@@ -217,6 +217,7 @@ class CentralAgent:
             "sub_agents_description": self.sub_agents_description,
             "current_action": "decision",
             "messages_history": converted_messages,
+            "locale": state.get("locale", "zh-CN"),  # 确保locale被传递到模板
         }
         action_options = list(CentralAgentAction)
         # 加载正确的模板名称并合并动作选项
@@ -275,6 +276,7 @@ class CentralAgent:
             "current_progress": state.get("observations", []),
             "decision_reasoning": decision.reasoning,
             "instruction": decision.instruction,
+            "locale": state.get("locale", "zh-CN"),  # 确保locale被传递到模板
         }
 
         # 应用统一的决策提示模板
@@ -326,6 +328,7 @@ class CentralAgent:
             "current_action": "reflect",
             "decision_reasoning": decision.reasoning,
             "instruction": decision.instruction,
+            "locale": state.get("locale", "zh-CN"),  # 确保locale被传递到模板
         }
 
         # 应用反思提示模板
@@ -417,6 +420,7 @@ class CentralAgent:
             "current_action": "summarize",
             "summarization_focus": decision.reasoning,
             "instruction": decision.instruction,
+            "locale": state.get("locale", "zh-CN"),  # 确保locale被传递到模板
         }
 
         # 打印上下文用于调试

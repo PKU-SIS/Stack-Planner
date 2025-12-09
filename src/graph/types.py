@@ -22,14 +22,17 @@ class State(MessagesState):
     enable_background_investigation: bool = True
     background_investigation_results: str = None
     user_dst: str = None
-    wait_for_user: bool = False
+    wait_stage: str = ""
+    dst_question: str = None
+    hitl_feedback: str = ""
     report_outline: str = None
     skip_perception: bool = False
 
     delegation_context: dict = None
     current_node: str = None
     memory_stack: str = None
-
+    
     # FactStruct Stage 1 相关字段
     factstruct_outline: Any = None  # OutlineNode 根节点
     factstruct_memory: Any = None  # Memory 实例（需要序列化时转换为 dict）
+    ref_map: dict = None

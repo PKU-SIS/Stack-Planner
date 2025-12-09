@@ -130,6 +130,7 @@ class SubAgentManager:
                 "current_node": "central_agent",
                 "memory_stack": self.central_agent.memory_stack.to_dict(),
                 "data_collections": result_data_collections,
+                "observations": result_observations,
             },
             goto="central_agent",
         )
@@ -213,6 +214,92 @@ class SubAgentManager:
                 "current_node": "central_agent",
                 "memory_stack": self.central_agent.memory_stack.to_dict(),
                 "data_collections": result_data_collections,
+                "observations": result_observations,
+            },
+            goto="central_agent",
+        )
+
+    @timed_step("execute_web_researcher")
+    async def execute_web_researcher(
+        self, state: State, config: RunnableConfig
+    ) -> Command:
+        """
+        执行研究Agent，负责信息检索与分析
+
+        Args:
+            state: 当前系统状态
+            config: 运行配置
+
+        Returns:
+            执行结果Command对象
+        """
+        logger.info("Web Agent开始执行...")
+        delegation_context = state.get("delegation_context", {})
+        task_description = delegation_context.get("task_description", "未知研究任务")
+
+        # 配置研究工具链
+        # tools = [search_docs_tool]
+        tools = [get_web_search_tool(10)]
+        
+        # 实例化研究Agent
+        research_agent = ResearcherAgentSP(
+            config=config, agent_type="researcher_web", default_tools=tools
+        )
+
+        # 执行研究任务并处理异常
+        try:
+            result_command = await research_agent.execute_agent_step(state)
+
+            # 从结果中提取数据用于记忆栈
+            result_observations = []
+            result_data_collections = []
+
+            if result_command and result_command.update:
+                result_observations = result_command.update.get("observations", [])
+                result_data_collections = result_command.update.get(
+                    "data_collections", []
+                )
+
+        except Exception as e:
+            logger.error(f"研究Agent执行失败: {str(e)}")
+            return Command(
+                update={
+                    "messages": [
+                        HumanMessage(
+                            content=f"研究任务失败: {str(e)}", name="researcher"
+                        )
+                    ],
+                    "current_node": "central_agent",
+                    "memory_stack": self.central_agent.memory_stack.to_dict(),
+                },
+                goto="central_agent",
+            )
+
+        # 记录到中枢Agent记忆栈
+        memory_entry = MemoryStackEntry(
+            timestamp=datetime.now().isoformat(),
+            action="delegate",
+            agent_type="researcher",
+            content=f"研究任务: {task_description}",
+            result={
+                "observations": result_observations,
+                # "data_collections": result_data_collections,
+            },
+        )
+        self.central_agent.memory_stack.push(memory_entry)
+
+        logger.info("研究任务完成，返回中枢Agent")
+        return Command(
+            update={
+                "messages": [
+                    HumanMessage(
+                        content="研究任务完成，返回中枢Agent", name="researcher"
+                    )
+                ],
+                "current_node": "central_agent",
+                "memory_stack": self.central_agent.memory_stack.to_dict(),
+                "data_collections": result_data_collections,
+                "observations": result_observations,
             },
             goto="central_agent",
         )
@@ -461,20 +548,17 @@ class SubAgentManager:
                 "reporter_xxqg", state, extra_context=context
             )  # 修复：参数顺序
             data_collections = state.get("data_collections", [])
-            data_joined = "\n\n".join(data_collections)
-            user_query_str = state.get("user_query", "")
-            user_dst_str = state.get("user_dst", "")
-            report_outline_str = state.get("report_outline", "用户未提供大纲")
-
-            reporter_content = (
-                f"##User Query\n\n{user_query_str}\n\n"
-                f"##用户约束\n\n{user_dst_str}\n\n"
-                f"##报告大纲\n{report_outline_str}\n\n"
-                "Below are data collected in previous tasks:\n\n"
-                f"{data_joined}"
-            )
-
-            messages.append(HumanMessage(content=reporter_content))
+            observations = state.get("observations", [])
+            # messages.append(
+            #     HumanMessage(
+            #         f"##User Query\n\n{state.get('user_query', '')}\n\n##用户约束\n\n{state.get("user_dst","")}\n\n##报告大纲{state.get('report_outline','用户未提供大纲')}\n\nBelow are data collected in previous tasks:\n\n{"\n\n".join(data_collections)}"
+            #     )
+            # )
+            messages.append(
+                HumanMessage(
+                    f"##User Query\n\n{state.get('user_query', '')}\n\n##用户约束\n\n{state.get("user_dst","")}\n\n##报告大纲{state.get('report_outline','用户未提供大纲')}\n\nBelow are information collected in previous tasks:\n\n{"\n\n".join(observations)}"
+                )
+            )        
 
             logger.debug(f"Reporter messages: {messages}")
             llm = get_llm_by_type(AGENT_LLM_MAP.get("reporter", "default"))
@@ -698,6 +782,72 @@ class SubAgentManager:
             goto="central_agent",
         )
 
+
+    @timed_step("execute_human_feedback")
+    async def execute_human_feedback(self, state: State, config: RunnableConfig) -> Command:
+        stage = state.get("wait_stage", "perception")
+        if stage == "perception":
+            dst_question = state.get("dst_question", "")
+            feedback = interrupt(
+                    "Please Fill the Question.[DST]" + dst_question + "[/DST]"
+                )
+            logger.info(f"用户反馈的DST问题: {feedback}. goto perception node again.")
+            return Command(
+                update={
+                    "hitl_feedback": feedback,
+                    "current_node": "human_feedback",
+                },
+                goto="perception",
+            )
+        elif stage == "outline":
+            outline = state.get("report_outline", "")
+            feedback = interrupt(
+                    "Please Confirm or Edit the Outline.[OUTLINE]"
+                    + outline
+                    + "[/OUTLINE]"
+                )
+            logger.info(f"用户反馈的大纲: {feedback}. goto outline node again.")
+            return Command(
+                update={
+                    "hitl_feedback": feedback,
+                    "current_node": "human_feedback",
+                },
+                goto="outline",
+            )
+
+
+    @timed_step("execute_human_feedback")
+    async def execute_human_feedback(self, state: State, config: RunnableConfig) -> Command:
+        stage = state.get("wait_stage", "perception")
+        if stage == "perception":
+            dst_question = state.get("dst_question", "")
+            feedback = interrupt(
+                    "Please Fill the Question.[DST]" + dst_question + "[/DST]"
+                )
+            logger.info(f"用户反馈的DST问题: {feedback}. goto perception node again.")
+            return Command(
+                update={
+                    "hitl_feedback": feedback,
+                    "current_node": "human_feedback",
+                },
+                goto="perception",
+            )
+        elif stage == "outline":
+            outline = state.get("report_outline", "")
+            feedback = interrupt(
+                    "Please Confirm or Edit the Outline.[OUTLINE]"
+                    + outline
+                    + "[/OUTLINE]"
+                )
+            logger.info(f"用户反馈的大纲: {feedback}. goto outline node again.")
+            return Command(
+                update={
+                    "hitl_feedback": feedback,
+                    "current_node": "human_feedback",
+                },
+                goto="outline",
+            )
+
     @timed_step("execute_perception")
     async def execute_perception(self, state: State, config: RunnableConfig) -> Command:
         user_query = state.get("user_query", "")
@@ -725,21 +875,31 @@ class SubAgentManager:
 
         if auto_accepted_plan:
             try:
-                messages = apply_prompt_template("perception", state) + [
-                    HumanMessage(f"##User Query\n\n{user_query}\n\n")
-                ]
+                # messages = apply_prompt_template("perception", state) + [
+                #     HumanMessage(f"##User Query\n\n{user_query}\n\n")
+                # ]
+                messages = apply_prompt_template("perception", state)
+
+                # logger.debug("messages"+str(messages))
                 response = perception_llm.invoke(messages)
                 dst_question = response.content
+                # logger.debug("dst_question"+str(dst_question))
                 dst_question = repair_json_output(dst_question)
                 logger.info(f"感知层完成，生成DST问题: {dst_question}")
-                state["wait_for_user"] = True
+                return Command(
+                    update={
+                        "dst_question": dst_question,
+                        "wait_stage": "perception",
+                        "current_node": "perception",
+                    },
+                    goto="human_feedback",
+                )
             except Exception as e:
                 logger.error(f"感知层执行失败: {str(e)}")
 
-            feedback = interrupt(
-                "Please Fill the Question.[DST]" + dst_question + "[/DST]"
-            )
-
+        if wait_stage == "perception":
+            feedback = state.get("hitl_feedback", "")
+            dst_question = state.get("dst_question", "")
             # if the feedback is not accepted, return the planner node
             if feedback and str(feedback).upper().startswith("[FILLED_QUESTION]"):
                 messages = apply_prompt_template("perception", state) + [
@@ -747,6 +907,8 @@ class SubAgentManager:
                         f"##User Query\n\n{user_query}\n\n##希望用户回答的问题\n\n{dst_question}\n\n##用户回答的结果\n\n{feedback}\n\n"
                     )
                 ]
+                # logger.debug("messages"+str(messages))
+                # exit()
                 response = perception_llm.invoke(messages)
                 summary = response.content
                 logger.info(f"感知层完成，收集用户反馈: {summary}")
@@ -761,7 +923,7 @@ class SubAgentManager:
                         ],
                         "user_dst": summary,
                         "current_node": "perception",
-                        "wait_for_user": False,
+                        "wait_stage": "",
                     },
                     goto="outline",
                 )
@@ -787,7 +949,7 @@ class SubAgentManager:
                         ],
                         "user_dst": summary,
                         "current_node": "perception",
-                        "wait_for_user": False,
+                        "wait_stage": "",
                     },
                     goto="outline",
                 )

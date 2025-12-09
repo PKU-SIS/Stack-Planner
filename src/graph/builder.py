@@ -21,7 +21,7 @@ from .nodes import (
     researcher_xxqg_node,
 )
 
-from .sp_nodes import central_agent_node, perception_node, outline_node,outline_node_factstruct
+from .sp_nodes import central_agent_node, perception_node, outline_node,outline_node_factstruct,human_feedback_node
 from src.agents.sub_agent_registry import get_sub_agents_by_global_type
 
 
@@ -127,6 +127,29 @@ def build_multi_agent_graph():
     return builder.compile()
 
 
+def get_next_perception(state: State) -> str:
+    wait_stage = state.get("wait_stage", "")
+    if wait_stage == "perception":
+        return "human_feedback"
+    else:
+        return "outline"
+
+def get_next_outline(state: State) -> str:
+    wait_stage = state.get("wait_stage", "")
+    if wait_stage == "outline":
+        return "human_feedback"
+    else:
+        return "central_agent"
+
+def get_next_feedback(state: State) -> str:
+    wait_stage = state.get("wait_stage", "")
+    if wait_stage == "perception":
+        return "perception"
+    elif wait_stage == "outline":
+        return "outline"
+    else:
+        return "central_agent"
+
 def _build_graph_sp_xxqg():
     """
     构建多Agent系统状态图，定义系统状态转移逻辑
@@ -143,6 +166,7 @@ def _build_graph_sp_xxqg():
     # builder.add_node("perception", perception_node)
     builder.add_node("central_agent", central_agent_node)
     builder.add_node("outline", outline_node)
+    builder.add_node("human_feedback", human_feedback_node)
 
     # 添加sub agent
     sub_agents = get_sub_agents_by_global_type("sp_xxqg")
@@ -162,8 +186,51 @@ def _build_graph_sp_xxqg():
     # builder.add_edge(START, "perception")
     # builder.add_edge("perception", "outline")
 
+    builder.add_edge("central_agent", "zip_data")
+
+    # 后处理部分
+    builder.add_edge("zip_data", END)
+
+    return builder
+
+
+def _build_graph_FactStruct():
+    """
+    构建多Agent系统状态图，定义系统状态转移逻辑
+
+    Returns:
+        编译后的状态图对象
+    """
+    from langgraph.graph import StateGraph, START, END
+
+    builder = StateGraph(State)
+
+    # 添加center planner agent
+    # 不要问卷了
+    # builder.add_node("perception", perception_node)
+    builder.add_node("central_agent", central_agent_node)
+    builder.add_node("outline_factstruct", outline_node_factstruct)
+
+    # 添加sub agent
+    sub_agents = get_sub_agents_by_global_type("sp_xxqg")
+
+    for sub_agent in sub_agents:
+        builder.add_node(sub_agent["name"], sub_agent["node"])
+    # builder.add_node("researcher", sp_xxqg_researcher_node)
+    # builder.add_node("coder", sp_coder_node)
+    # builder.add_node("reporter", sp_xxqg_reporter_node)
+
+    # 下面这些暂时没有算sub agent
+    builder.add_node("zip_data", zip_data)
+
+    # 感知层，包括search before plan、human in the loop
+
+    builder.add_edge(START, "outline_factstruct")
+    # builder.add_edge(START, "perception")
+    # builder.add_edge("perception", "outline")
+
     # 核心流程
-    builder.add_edge("outline", "central_agent")
+    builder.add_edge("outline_factstruct", "central_agent")
     builder.add_edge("central_agent", "zip_data")
 
     # 后处理部分

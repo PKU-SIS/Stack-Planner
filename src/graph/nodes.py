@@ -28,6 +28,7 @@ from src.llms.llm import get_llm_by_type
 from src.prompts.planner_model import Plan, StepType
 from src.prompts.template import apply_prompt_template
 from src.utils.json_utils import repair_json_output
+from src.utils.reference_utils import global_reference_map
 
 from .types import State
 from ..config import SELECTED_SEARCH_ENGINE, SearchEngine
@@ -838,7 +839,7 @@ def speech_node(state: State):
     return {"final_report": response_content}
 
 
-def zip_data(state: State):
+def zip_data(state: State,config: RunnableConfig):
     final_report = state.get("final_report")
     user_query = state.get("user_query")
     plan = state.get("current_plan")
@@ -857,6 +858,13 @@ def zip_data(state: State):
     # timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     # filename = f"./reports/report_{timestamp}.json"
 
-    # # Save data as JSON
+    # Save data as JSON
     # with open(filename, "w", encoding="utf-8") as f:
     #     json.dump(data, f, ensure_ascii=False, indent=4)
+    session_id = config["configurable"]["thread_id"]
+    global_reference_map.save_session(session_id)
+    return Command(
+        update={
+            "ref_map": global_reference_map.get_session_ref_map(session_id)
+        }
+    )
