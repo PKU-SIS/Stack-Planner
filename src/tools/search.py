@@ -13,7 +13,7 @@ from src.tools.tavily_search.tavily_search_results_with_images import (
 # from src.tools.bocha_search import BoChaSearchResults
 from src.tools.bocha_search.bocha_search_sp import BoChaSearchResults
 from src.tools.decorators import create_logged_tool
-
+from src.utils.reference_utils import global_reference_map
 
 # Create logged versions of the search tools
 LoggedTavilySearch = create_logged_tool(TavilySearchResultsWithImages)

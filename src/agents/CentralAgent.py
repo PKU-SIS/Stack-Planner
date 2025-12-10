@@ -18,7 +18,7 @@ from src.utils.json_utils import repair_json_output
 from src.utils.logger import logger
 from src.utils.statistics import global_statistics
 from src.prompts.central_decision import Decision, DelegateParams
-
+from src.utils.reference_utils import global_reference_map
 from ..graph.types import State
 
 # from .SubAgentConfig import get_sub_agents_by_global_type
@@ -585,7 +585,9 @@ class CentralAgent:
                 goto="reporter",
             )
         logger.info(f"final_report: {final_report}")
-
+        
+        session_id = config["configurable"]["thread_id"]
+        global_reference_map.save_session(session_id)
         # 构建执行摘要（包含完整记忆栈历史）
         execution_summary = {
             "user_query": state.get("user_query", "未知查询"),
@@ -593,7 +595,7 @@ class CentralAgent:
                 entry.to_dict() for entry in self.memory_stack.get_all()
             ],
             "final_report": final_report,
-            "research": state.get("data_collections", []),
+            "research": global_reference_map.get_session_ref_map(session_id),#state.get("data_collections", []),
             "completion_time": datetime.now().isoformat(),
             "statistics": global_statistics.get_statistics(),
         }

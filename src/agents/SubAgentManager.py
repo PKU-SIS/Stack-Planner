@@ -549,11 +549,7 @@ class SubAgentManager:
             )  # 修复：参数顺序
             data_collections = state.get("data_collections", [])
             observations = state.get("observations", [])
-            # messages.append(
-            #     HumanMessage(
-            #         f"##User Query\n\n{state.get('user_query', '')}\n\n##用户约束\n\n{state.get("user_dst","")}\n\n##报告大纲{state.get('report_outline','用户未提供大纲')}\n\nBelow are data collected in previous tasks:\n\n{"\n\n".join(data_collections)}"
-            #     )
-            # )
+
             messages.append(
                 HumanMessage(
                     f"##User Query\n\n{state.get('user_query', '')}\n\n##用户约束\n\n{state.get("user_dst","")}\n\n##报告大纲{state.get('report_outline','用户未提供大纲')}\n\nBelow are information collected in previous tasks:\n\n{"\n\n".join(observations)}"
