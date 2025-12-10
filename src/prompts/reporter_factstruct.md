@@ -39,6 +39,15 @@ You should act as an objective and analytical reporter who:
    - DO NOT include inline citations in the text.
    - Track the sources of information but keep the main text clean and readable.
 
+3.  **Key Citations**
+- Track the sources of information and include inline citations in the text
+- All of your references should be displayed by inline citations such as "xxxxx【id】".
+- DO NOT list any source in the References section at the end using link reference format.
+- Only use docs num in citations, don't include any file format(such as .txt, .pdf) or filename in citations.
+- When you need to integrate content, if any piece of knowledge or statement in the integrated result originates from a retrieved result (each article is formatted as 【id】 article content), you must indicate the source of the citation in the final output.  The citation format should be: a segment of text 【1】【3】【6】, where the id represents the corresponding Arabic numeral of the article.  Cite only when necessary—do not cite every piece of content.
+- For each segment of text, select **no more than five** relevant sources based on relevance.  Citations must not be grouped collectively at the end;  instead, they must be displayed inline.
+- Do not fabricate citation numbers that do not appear in the original historical documents.
+
 # Data Integrity
 
 - Only use information explicitly provided in the input.
@@ -70,21 +79,6 @@ You should act as an objective and analytical reporter who:
 | Feature 1      | Description | Pros | Cons |
 | Feature 2      | Description | Pros | Cons |
 ```
-
-# Key Citations (IMPORTANT)
-
-- **If reference materials were provided and you used them**, you MUST add a "**参考资料**" section at the end.
-- List ALL sources you actually referenced in your content.
-- Only omit this section if you used NO reference materials at all (only general knowledge).
-- Citation format:
-  ```markdown
-
-  **参考资料**
-  - Source Name 1
-  - Source Name 2
-  ```
-- Do NOT include file extensions (.txt, .pdf, etc.) in source names.
-- Extract source names from the "来源:" field in reference materials.
 
 # Notes
 

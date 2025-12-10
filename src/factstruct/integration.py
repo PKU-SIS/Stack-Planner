@@ -11,13 +11,14 @@ from src.utils.logger import logger
 from src.llms.llm import get_llm_by_type
 from src.config.agents import AGENT_LLM_MAP
 from src.tools.get_docs_info import search_docs
+from src.tools.bocha_search.web_search_en import web_search
 from .batch_mab import BatchMAB
 from .embedder import Embedder
 from .llm_wrapper import FactStructLLMWrapper
 from .document import FactStructDocument
 from .outline_node import OutlineNode
 from .memory import Memory
-
+from datetime import datetime
 
 def create_search_engine_adapter(
     search_func: Callable = None,
@@ -35,8 +36,9 @@ def create_search_engine_adapter(
         适配后的搜索函数，签名 (query: str, k: int) -> List[FactStructDocument]
     """
     if search_func is None:
-        search_func = search_docs
-
+        #这个地方要改成网络搜索
+        # search_func = search_docs
+        search_func = web_search
     def adapter(query: str, k: int) -> List[FactStructDocument]:
         """
         适配后的搜索函数
@@ -55,16 +57,46 @@ def create_search_engine_adapter(
 
         # 转换为 FactStructDocument
         documents = []
+        # for i, result in enumerate(results):
+        #     doc_id = f"doc_{hash(result.get('content', ''))}_{i}"
+        #     doc = FactStructDocument(
+        #         id=doc_id,
+        #         text=result.get("content", ""),
+        #         source_type=result.get("source", "unknown"),
+        #         timestamp=datetime.now(),  # 如果没有时间戳，使用当前时间
+        #         url=None,
+        #         title=None,
+        #     )
+        #     documents.append(doc)
+
         for i, result in enumerate(results):
-            doc_id = f"doc_{hash(result.get('content', ''))}_{i}"
+            # 文本内容优先级：content > snippet > title
+            content = result.get("content")
+            if not content:
+                content = result.get("snippet")
+            if not content:
+                content = result.get("title")
+            if not content:
+                # 如果连 title 都没有，就无法作为文档输入，跳过
+                continue
+
+            # source_type 优先级：source > title > "unknown"
+            source_type = result.get("source")
+            if not source_type:
+                source_type = result.get("title") or "unknown"
+
+            # 使用有效内容生成 doc_id
+            doc_id = f"doc_{hash(content)}_{i}"
+
             doc = FactStructDocument(
                 id=doc_id,
-                text=result.get("content", ""),
-                source_type=result.get("source", "unknown"),
-                timestamp=datetime.now(),  # 如果没有时间戳，使用当前时间
-                url=None,
-                title=None,
+                text=content,
+                source_type=source_type,
+                timestamp=datetime.now(),
+                url=result.get("link"),
+                title=result.get("title"),
             )
+
             documents.append(doc)
 
         return documents
