@@ -1031,6 +1031,7 @@ class SubAgentManager:
                         "factstruct_max_iterations", 20
                     ),  # 默认 10 次迭代
                     batch_size=state.get("factstruct_batch_size", 5),  # 默认批量大小 3
+                    config=config,
                 )
 
                 # 转换为 Markdown 格式（完整大纲，不限制深度）

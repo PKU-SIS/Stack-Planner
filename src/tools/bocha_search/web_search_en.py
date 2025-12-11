@@ -31,7 +31,9 @@ def web_search(query: str, top_k: int = 10):
 
     try:
         searcher = WebSearcherEnglish()
-        return searcher.search(query, top_k)
+        raw_result=searcher.search(query, top_k)
+        clean_results=_clean_results(raw_result)
+        return clean_results
     
     except requests.RequestException as e:
         logger.error(f"BoCha 搜索请求异常: {e}")
@@ -39,8 +41,20 @@ def web_search(query: str, top_k: int = 10):
     return None
 
 
+# 这个地方封装一下
+def _clean_results(raw_results: List[Dict]) -> List[Dict]:
+    """Convert BoCha results into a unified structure."""
+    cleaned = []
+    for item in raw_results:
+        cleaned_item = {
+            "source": "page",  # <-- 专门用于 FactStructDocument.source_type
+            "title": item.get("title", ""),
+            "url": item.get("link", ""),
+            "content": item.get("snippet", item.get("content", "")),
+        }
+        cleaned.append(cleaned_item)
 
-
+    return cleaned
 
 
 if __name__ == "__main__":

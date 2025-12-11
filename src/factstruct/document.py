@@ -26,6 +26,7 @@ class FactStructDocument:
     """
 
     id: str
+    cite_id: str
     text: str
     source_type: str
     timestamp: datetime
@@ -46,6 +47,7 @@ class FactStructDocument:
         """转换为字典格式（用于序列化，不包含 embedding）"""
         return {
             "id": self.id,
+            "cite_id": self.cite_id,
             "text": self.text,
             "source_type": self.source_type,
             "timestamp": self.timestamp.isoformat(),
@@ -58,6 +60,7 @@ class FactStructDocument:
         """从字典恢复 Document 实例"""
         return cls(
             id=data["id"],
+            cite_id=data["cite_id"],
             text=data["text"],
             source_type=data["source_type"],
             timestamp=datetime.fromisoformat(data["timestamp"]),

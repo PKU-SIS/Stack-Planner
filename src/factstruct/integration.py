@@ -6,6 +6,8 @@ FactStruct Stage 1 集成模块
 
 from typing import List, Optional, Callable, Tuple
 from langchain_core.language_models import BaseChatModel
+import traceback
+
 
 from src.utils.logger import logger
 from src.llms.llm import get_llm_by_type
@@ -19,10 +21,11 @@ from .document import FactStructDocument
 from .outline_node import OutlineNode
 from .memory import Memory
 from datetime import datetime
-
+from src.utils.reference_utils import global_reference_map
+from langchain_core.runnables import RunnableConfig
 def create_search_engine_adapter(
     search_func: Callable = None,
-) -> Callable[[str, int], List[FactStructDocument]]:
+) -> Callable[[str, int,RunnableConfig], List[FactStructDocument]]:
     """
     创建搜索引擎适配器
 
@@ -39,7 +42,7 @@ def create_search_engine_adapter(
         #这个地方要改成网络搜索
         # search_func = search_docs
         search_func = web_search
-    def adapter(query: str, k: int) -> List[FactStructDocument]:
+    def adapter(query: str, k: int, config:RunnableConfig=None) -> List[FactStructDocument]:
         """
         适配后的搜索函数
 
@@ -54,50 +57,52 @@ def create_search_engine_adapter(
 
         # 调用原始搜索函数
         results = search_func(query, top_k=k)
+        logger.info(f"results:{results}")
+        ids = None
+        if config!=None:
+            session_id = config["configurable"]["thread_id"]
+            # logger.info(f"config:{config}")
+            ids = global_reference_map.add_references(session_id, results)
+        else:
+            # logger.debug("config为None，无法存储 reference_map")
+            logger.debug("config为None，无法存储 reference_map\n" + "".join(traceback.format_stack()))        
+        if not ids:
+            # 没有 ids，说明 config=None 或 add_references 失败
+            # 直接 fallback：用 enumerate 的顺序作为临时 id
+            ids = list(range(1, len(results) + 1))
+        ids, sorted_results = zip(*sorted(zip(ids, results), key=lambda x: x[0]))
 
+
+        
         # 转换为 FactStructDocument
-        documents = []
+        # documents = []
         # for i, result in enumerate(results):
         #     doc_id = f"doc_{hash(result.get('content', ''))}_{i}"
         #     doc = FactStructDocument(
         #         id=doc_id,
+        #         cite_id=ids[i] if ids is not None and i < len(ids) else None,
         #         text=result.get("content", ""),
         #         source_type=result.get("source", "unknown"),
         #         timestamp=datetime.now(),  # 如果没有时间戳，使用当前时间
-        #         url=None,
-        #         title=None,
+        #         url=result.get("url", None),
+        #         title=result.get("title", None),
         #     )
         #     documents.append(doc)
-
-        for i, result in enumerate(results):
-            # 文本内容优先级：content > snippet > title
-            content = result.get("content")
-            if not content:
-                content = result.get("snippet")
-            if not content:
-                content = result.get("title")
-            if not content:
-                # 如果连 title 都没有，就无法作为文档输入，跳过
-                continue
-
-            # source_type 优先级：source > title > "unknown"
-            source_type = result.get("source")
-            if not source_type:
-                source_type = result.get("title") or "unknown"
-
-            # 使用有效内容生成 doc_id
-            doc_id = f"doc_{hash(content)}_{i}"
-
+        documents = []
+        
+        for cite_id, result in zip(ids, sorted_results):
+            doc_id = f"doc_{hash(result.get('content', ''))}_{cite_id}"
             doc = FactStructDocument(
-                id=doc_id,
-                text=content,
-                source_type=source_type,
+                id=doc_id,            # 直接使用 reference id（排序后的）
+                cite_id=cite_id,            # cite_id 同 doc_id
+                text=result.get("content", ""),
+                source_type=result.get("source", "unknown"),
                 timestamp=datetime.now(),
-                url=result.get("link"),
-                title=result.get("title"),
+                url=result.get("url", None),
+                title=result.get("title", None),
             )
-
             documents.append(doc)
+
 
         return documents
 
@@ -111,6 +116,7 @@ def run_factstruct_stage1(
     batch_size: int = 5,
     initial_docs: Optional[List[FactStructDocument]] = None,
     search_engine: Optional[Callable] = None,
+    config: RunnableConfig=None,
 ) -> Tuple[OutlineNode, Memory]:
     """
     运行 FactStruct Stage 1（便捷接口）
@@ -152,6 +158,7 @@ def run_factstruct_stage1(
     outline_root, memory = batch_mab.run(
         initial_query=query,
         initial_docs=initial_docs,
+        config=config,
     )
 
     return outline_root, memory
@@ -435,16 +442,17 @@ def run_factstruct_stage2(
                 )
                 relevant_docs_text = "（无相关资料）"
             else:
-                logger.debug(
-                    f"获取到 {len(relevant_docs)} 个 Stage 1 关联文档"
-                )
+
+                # logger.debug(
+                #     f"获取到 {len(relevant_docs)} 个 Stage 1 关联文档"
+                # )
                 relevant_docs_text = "\n\n".join(
                     [
-                        f"[文档 {idx + 1}] 来源: {doc.source_type}\n{doc.text[:500]}..."
+                        f"[{doc.cite_id}] 来源: {doc.source_type}\n{doc.text[:500]}..."
                         for idx, doc in enumerate(relevant_docs)
                     ]
                 )
-
+                logger.info(f"relevant_docs_text :{relevant_docs_text }")
             progress_context = get_progress_context(path_stack, will_complete_chapters, next_chapter)
 
             completed_content = "".join(report_parts).strip()

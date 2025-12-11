@@ -17,7 +17,7 @@ from .memory import Memory
 from .embedder import Embedder
 from .reward_calculator import RewardCalculator
 from .llm_wrapper import FactStructLLMWrapper
-
+from langchain_core.runnables import RunnableConfig
 
 class BatchMAB:
     """
@@ -87,6 +87,7 @@ class BatchMAB:
         self,
         initial_query: str,
         initial_docs: Optional[List[FactStructDocument]] = None,
+        config:RunnableConfig=None,
     ) -> Tuple[OutlineNode, Memory]:
         """
         运行 Batch-MAB 算法
@@ -104,7 +105,7 @@ class BatchMAB:
         # 1. 初始检索与大纲生成
         if initial_docs is None:
             logger.info("Performing initial search...")
-            initial_docs = self.search_engine(initial_query, k=5)
+            initial_docs = self.search_engine(initial_query, k=5,config=config)
 
         # 嵌入初始文档
         initial_docs_with_embed = self.embedder.embed_docs(initial_docs)
@@ -176,7 +177,7 @@ class BatchMAB:
 
             # 并行执行检索（按照 proposal 要求实现真正的并行检索）
             logger.info(f"Performing parallel search for {len(queries)} queries...")
-            new_docs_list = self._parallel_search(queries, k=3)
+            new_docs_list = self._parallel_search(queries, k=3,config=config)
 
             # 预处理新文档（嵌入）
             new_docs_list_with_embed = []
@@ -336,6 +337,7 @@ class BatchMAB:
         self,
         queries: List[str],
         k: int = 3,
+        config:RunnableConfig=None,
     ) -> List[List[FactStructDocument]]:
         """
         并行执行检索
@@ -359,7 +361,7 @@ class BatchMAB:
         ) as executor:
             # 提交所有任务
             future_to_index = {
-                executor.submit(self.search_engine, query, k): i
+                executor.submit(self.search_engine, query, k,config): i
                 for i, query in enumerate(queries)
             }
 
