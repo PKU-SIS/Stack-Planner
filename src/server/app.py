@@ -420,6 +420,19 @@ async def _astream_workflow_generator_sp(
                             "outline": outline,
                         },
                     )
+                elif "[REPORT]" in data_value:
+                    # 报告生成完成，支持风格切换
+                    report = data_value.split("[REPORT]")[-1].split("[/REPORT]")[0]
+                    yield _make_event(
+                        "interrupt",
+                        {
+                            "thread_id": thread_id,
+                            "id": event_data["__interrupt__"][0].ns[0],
+                            "role": "assistant",
+                            "content": f"[REPORT]{report}[/REPORT]",
+                            "finish_reason": "interrupt",
+                        },
+                    )
             elif "tools" in event_data:
                 toolMessage = event_data["tools"]["messages"][0]
                 yield _make_event(
