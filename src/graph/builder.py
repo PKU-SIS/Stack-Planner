@@ -28,7 +28,7 @@ from .sp_nodes import (
     central_agent_node,
     perception_node,
     outline_node,
-    reporter_xxqg_feedback_node,
+    human_feedback_node as sp_human_feedback_node,
 )
 from src.agents.sub_agent_registry import get_sub_agents_by_global_type
 
@@ -176,7 +176,7 @@ def _build_graph_sp_xxqg():
     builder.add_node("perception", perception_node)
     builder.add_node("central_agent", central_agent_node)
     builder.add_node("outline", outline_node)
-    builder.add_node("human_feedback", human_feedback_node)
+    builder.add_node("human_feedback", sp_human_feedback_node)
 
     # 添加sub agent
     sub_agents = get_sub_agents_by_global_type("sp_xxqg")
@@ -186,9 +186,6 @@ def _build_graph_sp_xxqg():
     # builder.add_node("researcher", sp_xxqg_researcher_node)
     # builder.add_node("coder", sp_coder_node)
     # builder.add_node("reporter", sp_xxqg_reporter_node)
-
-    # 添加 reporter_feedback 节点用于处理风格切换
-    builder.add_node("reporter_feedback", reporter_xxqg_feedback_node)
 
     # 下面这些暂时没有算sub agent
     builder.add_node("zip_data", zip_data)

@@ -457,7 +457,8 @@ class SubAgentManager:
     def execute_xxqg_reporter(self, state: State, config: RunnableConfig) -> Command:
         """
         执行报告Agent，负责结果整理与报告生成。
-        生成报告后将结果存入 state，然后跳转到 reporter_feedback 节点处理用户反馈。
+        使用 wait_stage 模式：首次进入生成报告后跳转到 human_feedback，
+        从 human_feedback 返回后处理用户反馈。
 
         Args:
             state: 当前系统状态
@@ -478,35 +479,76 @@ class SubAgentManager:
         else:
             current_style = ""
 
-        # 生成报告
-        logger.info(f"使用风格 '{current_style}' 生成报告...")
-        final_report = self._generate_report_with_style(state, current_style)
+        wait_stage = state.get("wait_stage", "")
+        if wait_stage != "reporter":
+            # 首次进入：生成报告
+            logger.info(f"使用风格 '{current_style}' 生成报告...")
+            final_report = self._generate_report_with_style(state, current_style)
 
-        # 记录到中枢Agent记忆栈
-        memory_entry = MemoryStackEntry(
-            timestamp=datetime.now().isoformat(),
-            action="delegate",
-            agent_type="reporter",
-            content=f"报告任务: {task_description}，风格: {current_style}",
-            result={"final_report": final_report},
-        )
-        self.central_agent.memory_stack.push(memory_entry)
+            # 记录到中枢Agent记忆栈
+            memory_entry = MemoryStackEntry(
+                timestamp=datetime.now().isoformat(),
+                action="delegate",
+                agent_type="reporter",
+                content=f"报告任务: {task_description}，风格: {current_style}",
+                result={"final_report": final_report},
+            )
+            self.central_agent.memory_stack.push(memory_entry)
 
-        # check if the plan is auto accepted
-        auto_accepted_plan = state.get("auto_accepted_plan", False)
-        if auto_accepted_plan:
-            # 跳转到 reporter_feedback 节点处理用户反馈
-            logger.info("报告生成完成，跳转到 reporter_feedback 节点等待用户反馈")
+            # 跳转到 human_feedback 节点等待用户反馈
+            logger.info("报告生成完成，跳转到 human_feedback 节点等待用户反馈")
             return Command(
                 update={
                     "final_report": final_report,
                     "current_style": current_style,
-                    "current_node": "reporter_feedback",
+                    "wait_stage": "reporter",
+                    "current_node": "reporter",
                 },
-                goto="reporter_feedback",
+                goto="human_feedback",
             )
-        else:
-            # auto_accepted_plan 为 False 时，直接返回中枢Agent
+
+        # 从 human_feedback 返回：处理用户反馈
+        if wait_stage == "reporter":
+            feedback = state.get("hitl_feedback", "")
+            final_report = state.get("final_report", "")
+            current_style = state.get("current_style", "")
+
+            if feedback and str(feedback).upper().startswith("[CHANGED_STYLE]"):
+                # 解析新风格，清空 wait_stage 后重新进入 reporter 节点生成报告
+                # 提取风格名称：取第一个空格或换行之前的内容，避免客户端附带多余内容
+                raw_style = str(feedback)[len("[CHANGED_STYLE]") :].strip()
+                # 风格名称只取第一部分（空格、换行、[STYLE_ROLE] 之前的内容）
+                new_style = raw_style.split()[0] if raw_style.split() else raw_style
+                # 如果风格名称中包含 [STYLE_ROLE]，截断它
+                if "[STYLE_ROLE]" in new_style:
+                    new_style = new_style.split("[STYLE_ROLE]")[0]
+                new_style = new_style.strip()
+                logger.info(f"用户请求切换风格: {current_style} -> {new_style}")
+
+                # 更新 user_query 中的风格标记
+                if "[STYLE_ROLE]" in user_query:
+                    user_query = (
+                        user_query.split("[STYLE_ROLE]")[0] + "[STYLE_ROLE]" + new_style
+                    )
+                else:
+                    user_query = user_query + "[STYLE_ROLE]" + new_style
+
+                return Command(
+                    update={
+                        "user_query": user_query,
+                        "current_style": new_style,
+                        "wait_stage": "",  # 清空 wait_stage，下次进入时重新生成报告
+                        "current_node": "reporter",
+                    },
+                    goto="reporter",
+                )
+            elif feedback and str(feedback).upper().startswith("[SKIP]"):
+                # 用户跳过，正常结束
+                logger.info("用户跳过风格切换，报告生成完成")
+            else:
+                # 其他反馈，正常结束
+                logger.info(f"收到其他反馈: {feedback}，报告生成完成")
+
             logger.info("报告生成完成，返回中枢Agent")
             return Command(
                 update={
@@ -517,80 +559,11 @@ class SubAgentManager:
                     ],
                     "final_report": final_report,
                     "current_node": "central_agent",
+                    "wait_stage": "",
                     "memory_stack": self.central_agent.memory_stack.to_dict(),
                 },
                 goto="central_agent",
             )
-
-    @timed_step("execute_xxqg_reporter_feedback")
-    def execute_xxqg_reporter_feedback(
-        self, state: State, config: RunnableConfig
-    ) -> Command:
-        """
-        处理报告生成后的用户反馈，支持风格切换。
-        收到 [CHANGED_STYLE]xxx 后跳回 reporter 节点重新生成；
-        收到 [SKIP] 或其他反馈则结束流程。
-
-        Args:
-            state: 当前系统状态
-            config: 运行配置
-
-        Returns:
-            执行结果Command对象
-        """
-        logger.info("Reporter Feedback 节点开始处理用户反馈...")
-
-        final_report = state.get("final_report", "")
-        current_style = state.get("current_style", "")
-
-        # 中断等待用户反馈（风格切换或结束）
-        feedback = interrupt(
-            "Report generated. You can change style or finish.[REPORT]"
-            + final_report
-            + "[/REPORT]"
-        )
-
-        if feedback and str(feedback).upper().startswith("[CHANGED_STYLE]"):
-            # 解析新风格，跳回 reporter 节点重新生成
-            new_style = str(feedback)[len("[CHANGED_STYLE]") :].strip()
-            logger.info(f"用户请求切换风格: {current_style} -> {new_style}")
-
-            # 更新 user_query 中的风格标记
-            user_query = state.get("user_query", "")
-            if "[STYLE_ROLE]" in user_query:
-                user_query = (
-                    user_query.split("[STYLE_ROLE]")[0] + "[STYLE_ROLE]" + new_style
-                )
-            else:
-                user_query = user_query + "[STYLE_ROLE]" + new_style
-
-            return Command(
-                update={
-                    "user_query": user_query,
-                    "current_style": new_style,
-                    "current_node": "reporter",
-                },
-                goto="reporter",
-            )
-        elif feedback and str(feedback).upper().startswith("[SKIP]"):
-            # 用户跳过，正常结束
-            logger.info("用户跳过风格切换，报告生成完成")
-        else:
-            # 其他反馈，正常结束
-            logger.info(f"收到其他反馈: {feedback}，报告生成完成")
-
-        logger.info("报告生成完成，返回中枢Agent")
-        return Command(
-            update={
-                "messages": [
-                    HumanMessage(content="报告生成完成，返回中枢Agent", name="reporter")
-                ],
-                "final_report": final_report,
-                "current_node": "central_agent",
-                "memory_stack": self.central_agent.memory_stack.to_dict(),
-            },
-            goto="central_agent",
-        )
 
     @timed_step("execute_sp_planner")
     def execute_sp_planner(self, state: State, config: RunnableConfig) -> Command:
@@ -732,37 +705,20 @@ class SubAgentManager:
                 },
                 goto="outline",
             )
-
-    @timed_step("execute_human_feedback")
-    async def execute_human_feedback(
-        self, state: State, config: RunnableConfig
-    ) -> Command:
-        stage = state.get("wait_stage", "perception")
-        if stage == "perception":
-            dst_question = state.get("dst_question", "")
+        elif stage == "reporter":
+            final_report = state.get("final_report", "")
             feedback = interrupt(
-                "Please Fill the Question.[DST]" + dst_question + "[/DST]"
+                "Report generated. You can change style or finish.[REPORT]"
+                + final_report
+                + "[/REPORT]"
             )
-            logger.info(f"用户反馈的DST问题: {feedback}. goto perception node again.")
+            logger.info(f"用户反馈的报告风格: {feedback}. goto reporter node again.")
             return Command(
                 update={
                     "hitl_feedback": feedback,
                     "current_node": "human_feedback",
                 },
-                goto="perception",
-            )
-        elif stage == "outline":
-            outline = state.get("report_outline", "")
-            feedback = interrupt(
-                "Please Confirm or Edit the Outline.[OUTLINE]" + outline + "[/OUTLINE]"
-            )
-            logger.info(f"用户反馈的大纲: {feedback}. goto outline node again.")
-            return Command(
-                update={
-                    "hitl_feedback": feedback,
-                    "current_node": "human_feedback",
-                },
-                goto="outline",
+                goto="reporter",
             )
 
     @timed_step("execute_perception")

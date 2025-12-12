@@ -69,12 +69,6 @@ def reporter_xxqg_node(state: State, config: RunnableConfig) -> Command:
     return sub_agent_manager.execute_xxqg_reporter(state, config)
 
 
-def reporter_xxqg_feedback_node(state: State, config: RunnableConfig) -> Command:
-    """报告反馈节点处理函数，处理用户风格切换请求"""
-    _check_agents_initialized()
-    return sub_agent_manager.execute_xxqg_reporter_feedback(state, config)
-
-
 async def researcher_xxqg_node(state: State, config: RunnableConfig) -> Command:
     """研究Agent节点处理函数"""
     _check_agents_initialized()
