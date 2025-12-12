@@ -48,11 +48,6 @@ Structure your report in the following format:
    - Can include comparative analysis, tables, and detailed feature breakdowns.
    - This section is optional for shorter reports.
 
-6. **Key Citations**
-   - List all references at the end in link reference format.
-   - Include an empty line between each citation for better readability.
-   - Format: `- [Source Title](URL)`
-
 # Writing Guidelines
 
 1. Writing style:
@@ -113,9 +108,6 @@ Structure your report in the following format:
 
 - If uncertain about any information, acknowledge the uncertainty.
 - Only include verifiable facts from the provided source material.
-- Place all citations in the "Key Citations" section at the end, not inline in the text.
-- For each citation, use the format: `- [Source Title](URL)`
-- Include an empty line between each citation for better readability.
 - Include images using `![Image Description](image_url)`. The images should be in the middle of the report, not at the end or separate section.
 - The included images should **only** be from the information gathered **from the previous steps**. **Never** include images that are not from the previous steps
 - Directly output the Markdown raw content without "```markdown" or "```".

@@ -124,6 +124,7 @@ class SubAgentManager:
                 "current_node": "central_agent",
                 "memory_stack": self.central_agent.memory_stack.to_dict(),
                 "data_collections": result_data_collections,
+                "observations": result_observations,
             },
             goto="central_agent",
         )
@@ -207,6 +208,7 @@ class SubAgentManager:
                 "current_node": "central_agent",
                 "memory_stack": self.central_agent.memory_stack.to_dict(),
                 "data_collections": result_data_collections,
+                "observations": result_observations,
             },
             goto="central_agent",
         )
@@ -699,29 +701,103 @@ class SubAgentManager:
             goto="central_agent",
         )
 
+    @timed_step("execute_human_feedback")
+    async def execute_human_feedback(
+        self, state: State, config: RunnableConfig
+    ) -> Command:
+        stage = state.get("wait_stage", "perception")
+        if stage == "perception":
+            dst_question = state.get("dst_question", "")
+            feedback = interrupt(
+                "Please Fill the Question.[DST]" + dst_question + "[/DST]"
+            )
+            logger.info(f"用户反馈的DST问题: {feedback}. goto perception node again.")
+            return Command(
+                update={
+                    "hitl_feedback": feedback,
+                    "current_node": "human_feedback",
+                },
+                goto="perception",
+            )
+        elif stage == "outline":
+            outline = state.get("report_outline", "")
+            feedback = interrupt(
+                "Please Confirm or Edit the Outline.[OUTLINE]" + outline + "[/OUTLINE]"
+            )
+            logger.info(f"用户反馈的大纲: {feedback}. goto outline node again.")
+            return Command(
+                update={
+                    "hitl_feedback": feedback,
+                    "current_node": "human_feedback",
+                },
+                goto="outline",
+            )
+
+    @timed_step("execute_human_feedback")
+    async def execute_human_feedback(
+        self, state: State, config: RunnableConfig
+    ) -> Command:
+        stage = state.get("wait_stage", "perception")
+        if stage == "perception":
+            dst_question = state.get("dst_question", "")
+            feedback = interrupt(
+                "Please Fill the Question.[DST]" + dst_question + "[/DST]"
+            )
+            logger.info(f"用户反馈的DST问题: {feedback}. goto perception node again.")
+            return Command(
+                update={
+                    "hitl_feedback": feedback,
+                    "current_node": "human_feedback",
+                },
+                goto="perception",
+            )
+        elif stage == "outline":
+            outline = state.get("report_outline", "")
+            feedback = interrupt(
+                "Please Confirm or Edit the Outline.[OUTLINE]" + outline + "[/OUTLINE]"
+            )
+            logger.info(f"用户反馈的大纲: {feedback}. goto outline node again.")
+            return Command(
+                update={
+                    "hitl_feedback": feedback,
+                    "current_node": "human_feedback",
+                },
+                goto="outline",
+            )
+
     @timed_step("execute_perception")
     async def execute_perception(self, state: State, config: RunnableConfig) -> Command:
         user_query = state.get("user_query", "")
         # check if the plan is auto accepted
         perception_llm = get_llm_by_type(AGENT_LLM_MAP.get("perception", "default"))
-        auto_accepted_plan = state.get("auto_accepted_plan", False)
-        if auto_accepted_plan:
+        wait_stage = state.get("wait_stage", "")
+        if wait_stage != "perception":
             try:
-                messages = apply_prompt_template("perception", state) + [
-                    HumanMessage(f"##User Query\n\n{user_query}\n\n")
-                ]
+                # messages = apply_prompt_template("perception", state) + [
+                #     HumanMessage(f"##User Query\n\n{user_query}\n\n")
+                # ]
+                messages = apply_prompt_template("perception", state)
+
+                # logger.debug("messages"+str(messages))
                 response = perception_llm.invoke(messages)
                 dst_question = response.content
+                # logger.debug("dst_question"+str(dst_question))
                 dst_question = repair_json_output(dst_question)
                 logger.info(f"感知层完成，生成DST问题: {dst_question}")
-                state["wait_for_user"] = True
+                return Command(
+                    update={
+                        "dst_question": dst_question,
+                        "wait_stage": "perception",
+                        "current_node": "perception",
+                    },
+                    goto="human_feedback",
+                )
             except Exception as e:
                 logger.error(f"感知层执行失败: {str(e)}")
 
-            feedback = interrupt(
-                "Please Fill the Question.[DST]" + dst_question + "[/DST]"
-            )
-
+        if wait_stage == "perception":
+            feedback = state.get("hitl_feedback", "")
+            dst_question = state.get("dst_question", "")
             # if the feedback is not accepted, return the planner node
             if feedback and str(feedback).upper().startswith("[FILLED_QUESTION]"):
                 messages = apply_prompt_template("perception", state) + [
@@ -729,6 +805,8 @@ class SubAgentManager:
                         f"##User Query\n\n{user_query}\n\n##希望用户回答的问题\n\n{dst_question}\n\n##用户回答的结果\n\n{feedback}\n\n"
                     )
                 ]
+                # logger.debug("messages"+str(messages))
+                # exit()
                 response = perception_llm.invoke(messages)
                 summary = response.content
                 logger.info(f"感知层完成，收集用户反馈: {summary}")
@@ -743,7 +821,7 @@ class SubAgentManager:
                         ],
                         "user_dst": summary,
                         "current_node": "perception",
-                        "wait_for_user": False,
+                        "wait_stage": "",
                     },
                     goto="outline",
                 )
@@ -769,7 +847,7 @@ class SubAgentManager:
                         ],
                         "user_dst": summary,
                         "current_node": "perception",
-                        "wait_for_user": False,
+                        "wait_stage": "",
                     },
                     goto="outline",
                 )
@@ -781,8 +859,8 @@ class SubAgentManager:
         user_query = state.get("user_query", "")
         # check if the plan is auto accepted
         outline_llm = get_llm_by_type(AGENT_LLM_MAP.get("outline", "default"))
-        auto_accepted_plan = state.get("auto_accepted_plan", False)
-        if auto_accepted_plan:
+        wait_stage = state.get("wait_stage", "")
+        if wait_stage != "outline":
             bg_investigation = search_docs(user_query, top_k=5)
             user_dst = state.get("user_dst", "")
             try:
@@ -795,15 +873,18 @@ class SubAgentManager:
                 outline_response = response.content
                 outline_response = repair_json_output(outline_response)
                 logger.info(f"大纲生成完成: {outline_response}")
+                return Command(
+                    update={
+                        "report_outline": outline_response,
+                        "wait_stage": "outline",
+                        "current_node": "outline",
+                    },
+                    goto="human_feedback",
+                )
             except Exception as e:
                 logger.error(f"大纲生成执行失败: {str(e)}")
-
-            feedback = interrupt(
-                "Please Confirm or Edit the Outline.[OUTLINE]"
-                + outline_response
-                + "[/OUTLINE]"
-            )
-
+        if wait_stage == "outline":
+            feedback = state.get("hitl_feedback", "")
             # if the feedback is not accepted, return the planner node
             if feedback and str(feedback).upper().startswith("[CONFIRMED_OUTLINE]"):
                 outline_confirmed = feedback[len("[CONFIRMED_OUTLINE]") :].strip()
@@ -818,6 +899,7 @@ class SubAgentManager:
                         ],
                         "report_outline": outline_confirmed,
                         "current_node": "outline",
+                        "wait_stage": "",
                     },
                     goto="central_agent",
                 )
@@ -834,6 +916,7 @@ class SubAgentManager:
                         ],
                         "report_outline": outline_confirmed,
                         "current_node": "outline",
+                        "wait_stage": "",
                     },
                     goto="central_agent",
                 )

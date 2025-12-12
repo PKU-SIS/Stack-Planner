@@ -135,6 +135,32 @@ def build_multi_agent_graph():
     return builder.compile()
 
 
+def get_next_perception(state: State) -> str:
+    wait_stage = state.get("wait_stage", "")
+    if wait_stage == "perception":
+        return "human_feedback"
+    else:
+        return "outline"
+
+
+def get_next_outline(state: State) -> str:
+    wait_stage = state.get("wait_stage", "")
+    if wait_stage == "outline":
+        return "human_feedback"
+    else:
+        return "central_agent"
+
+
+def get_next_feedback(state: State) -> str:
+    wait_stage = state.get("wait_stage", "")
+    if wait_stage == "perception":
+        return "perception"
+    elif wait_stage == "outline":
+        return "outline"
+    else:
+        return "central_agent"
+
+
 def _build_graph_sp_xxqg():
     """
     构建多Agent系统状态图，定义系统状态转移逻辑
@@ -150,6 +176,7 @@ def _build_graph_sp_xxqg():
     builder.add_node("perception", perception_node)
     builder.add_node("central_agent", central_agent_node)
     builder.add_node("outline", outline_node)
+    builder.add_node("human_feedback", human_feedback_node)
 
     # 添加sub agent
     sub_agents = get_sub_agents_by_global_type("sp_xxqg")
@@ -168,10 +195,19 @@ def _build_graph_sp_xxqg():
 
     # 感知层，包括search before plan、human in the loop
     builder.add_edge(START, "perception")
-    builder.add_edge("perception", "outline")
+    # builder.add_conditional_edge(
+    #     "perception",
+    #     get_next_perception
+    # )
+    # builder.add_conditional_edge(
+    #     "outline",
+    #     get_next_outline
+    # )
+    # builder.add_conditional_edge(
+    #     "human_feedback",
+    #     get_next_feedback
+    # )
 
-    # 核心流程
-    builder.add_edge("outline", "central_agent")
     builder.add_edge("central_agent", "zip_data")
 
     # 后处理部分
