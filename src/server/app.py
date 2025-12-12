@@ -81,6 +81,7 @@ async def chat_stream(request: ChatRequest):
             request.interrupt_feedback,
             request.mcp_settings,
             request.enable_background_investigation,
+            request.knowledge_base_name,
         ),
         media_type="text/event-stream",
     )
@@ -97,6 +98,7 @@ async def _astream_workflow_generator(
     interrupt_feedback: str,
     mcp_settings: dict,
     enable_background_investigation,
+    knowledge_base_name,
 ):
     input_ = {
         "messages": messages,
@@ -123,6 +125,7 @@ async def _astream_workflow_generator(
             "max_step_num": max_step_num,
             "max_search_results": max_search_results,
             "mcp_settings": mcp_settings,
+            "knowledge_base_name":knowledge_base_name,
         },
         stream_mode=["messages", "updates"],
         subgraphs=True,
@@ -199,6 +202,7 @@ async def chat_stream(request: ChatRequest):
             request.interrupt_feedback,
             request.mcp_settings,
             request.enable_background_investigation,
+            request.knowledge_base_name,
         ),
         media_type="text/event-stream",
     )
@@ -215,6 +219,7 @@ async def _astream_workflow_generator_xxqg(
     interrupt_feedback: str,
     mcp_settings: dict,
     enable_background_investigation,
+    knowledge_base_name,
 ):
     input_ = {
         "messages": messages,
@@ -242,6 +247,7 @@ async def _astream_workflow_generator_xxqg(
             "max_step_num": max_step_num,
             "max_search_results": max_search_results,
             "mcp_settings": mcp_settings,
+            "knowledge_base_name":knowledge_base_name,
         },
         stream_mode=["messages", "updates"],
         subgraphs=True,
@@ -320,6 +326,7 @@ async def chat_stream(request: ChatRequest):
             request.mcp_settings,
             request.enable_background_investigation,
             request.graph_format,
+            request.knowledge_base_name,
         ),
         media_type="text/event-stream",
     )
@@ -337,6 +344,7 @@ async def _astream_workflow_generator_sp(
     mcp_settings: dict,
     enable_background_investigation,
     graph_format: str = "sp",
+    knowledge_base_name ="学习强国_new",
 ):
     input_ = {
         "messages": messages,
@@ -377,6 +385,7 @@ async def _astream_workflow_generator_sp(
             "max_step_num": max_step_num,
             "max_search_results": max_search_results,
             "mcp_settings": mcp_settings,
+            "knowledge_base_name":knowledge_base_name,
         },
         stream_mode=["messages", "updates"],
         subgraphs=True,
