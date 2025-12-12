@@ -817,7 +817,7 @@ class SubAgentManager:
         outline_llm = get_llm_by_type(AGENT_LLM_MAP.get("outline", "default"))
         wait_stage = state.get("wait_stage", "")
         if wait_stage != "outline":
-            bg_investigation = search_docs(user_query, top_k=5)
+            bg_investigation = search_docs(user_query, top_k=5, config=config)
             user_dst = state.get("user_dst", "")
             try:
                 messages = [

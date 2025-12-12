@@ -9,12 +9,19 @@ from src.utils.reference_utils import global_reference_map
 
 # 8509 学习强国
 # 8401 国家安全部知识库
-def search_docs(question, top_k=5):
+def search_docs(question, top_k=5, config: RunnableConfig = None):
     docs = []
     api_url = "http://60.28.106.46:8509/knowledge_base/search_docs"
+    if config == None:
+        knowledge_base_name = "学习强国_new"
+        logger.info("knowledge_base_name使用的默认参数")
+    else:
+        knowledge_base_name = config["configurable"]["knowledge_base_name"]
+        logger.info("knowledge_base_name使用的自定义参数")
+    logger.info(f"knowledge_base_name: {knowledge_base_name}")
     query = {
         "query": question,
-        "knowledge_base_name": "学习强国_new",
+        "knowledge_base_name": knowledge_base_name,
         "score_threshold": 1,
         "file_name": "",
         "metadata": {},
@@ -22,8 +29,10 @@ def search_docs(question, top_k=5):
     }
     try:
         response = requests.post(api_url, json=query)
+        # logger.info(f"response: {response}")
         if response.status_code == 200:
             results = response.json()
+            logger.info(f"results: {results}")
             # results 去重
             seen = set()
             unique_results = []
@@ -68,7 +77,7 @@ def search_docs_tool(
     """
     logger.debug(f"config:{config}")
     session_id = config["configurable"]["thread_id"]
-    docs = search_docs(question, 20)
+    docs = search_docs(question, 20, config)
     # return {"query": question, "docs": docs}
 
     if session_id is None:
