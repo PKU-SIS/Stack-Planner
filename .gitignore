@@ -30,6 +30,7 @@ conf.yaml
 .langgraph_api/
 *.log
 tests/
+draft.py
 
 # coverage report
 coverage.xml
