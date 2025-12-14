@@ -436,7 +436,11 @@ def reporter_node(state: State):
 
 
 def reporter_xxqg_node(state: State):
-    """Reporter node that write a final report."""
+    """
+    Reporter node that write a final report.
+    生成文档后进入循环，等待用户风格切换请求 [CHANGED_STYLE]xxx，
+    收到后用新风格重新生成文档；收到 [SKIP] 或其他反馈则结束。
+    """
     logger.info("Reporter write final report")
     current_plan = state.get("current_plan")
     user_query = state.get("user_query")
@@ -461,57 +465,169 @@ def reporter_xxqg_node(state: State):
     demos_str = "\n\n".join(
         [f"### Demonstration {i+1}\n\n{d}" for i, d in enumerate(demos)]
     )
-    input_ = {
-        "messages": [
-            HumanMessage(
-                f"# Research Requirements\n\n##User Query\n\n{demos_str}\n\n请严格仿照以上示例。{user_query}\n\n## Task\n\n{current_plan.title}\n\n## Description\n\n{current_plan.thought}"
-            )
-        ],
-        "locale": state.get("locale", "en-US"),
+
+    # 风格约束定义
+    role_constraints = {
+        "鲁迅": """我希望生成的文字具备鲁迅式风格，语言尖锐、冷峻、带讽刺，但保持自然白话表达，可以使用少量文言。
+标题要求：文章必须包含一个标题，标题应简短有力、富隐喻或冷讽意味，可为一句或两句并列句。标题风格应与正文一致，具有鲁迅式的锋芒与余味，不得中性或平淡。标题必须使用 Markdown 一级标题格式呈现（即 # 标题），不得使用书名号、引号、括号等符号。
+重要禁止项：文中不要有“鲁迅”这个词，严禁在生成的文本中出现任何提及或引用“鲁迅”、“鲁迅先生”、“鲁迅笔下”、“他的作品”、“他的笔下的人物”等字眼的语句。文本风格应是直接的、沉浸式的鲁迅式表达，而非对鲁迅风格的引用或评论。此禁令在任何标题或正文中均适用，绝不可出现任何直接或间接的提及。
+风格应用强制要求：请确保文章的每一个自然段，乃至每一句的行文，都贯彻鲁迅式用词、句式和节奏。特别是在文章的中间部分，必须维持并强化这种尖锐、冷峻的语感。全篇保持一致的鲁迅式节奏与语气，特别在中段保持最高的语言张力与思想锋芒。
+正文开头必须紧接标题生成一个呼语（如‘诸君！’），用于称呼听众。
+
+句式与节奏：
+采用短句、并列句和重复句（如“不是为了……，而是为了……”，“我们不能……再……”，“然而……”）；
+逻辑紧凑，节奏鲜明，读来有推力；
+可以用反问、讽刺、比喻、小见大，表达社会或人性的荒谬；
+偶尔自嘲或旁观者冷笑，保持“孤独知识分子”的视角。
+可出现明显的鲁迅式呼喊与强调，如“我要说的是……”，“我们不能……”，或“人类的悲欢并不相通”式的冷峻洞察。
+情感与气质：
+理性中带愤怒与冷漠，情感压抑而清醒；
+既有悲悯，也有讽刺与愤世嫉俗感；
+文字有“铁屋呐喊”的张力，让读者感受到现实的紧迫与不容回避。
+目标效果：
+生成文字中，应多出现类似“我今日站在这里，不是为了说些空话，而是为了……”、“我们不能让那些已经站起来的人，再倒下去”这种短句反复、强调现实责任与道德选择的表达；
+用词可带有鲁迅的语感，如“诸君”“呐喊”“罢了”“然而”“我想”之类。
+保证整体风格既现代白话，又显鲁迅式锋利、冷峻、理性批判。""",
+        "赵树理": """
+我希望你写一篇具有赵树理式风格的文字。
+
+标题要求求如下：
+- 必须生成一个标题，标题放在开头，独立一行。
+- 标题必须使用 Markdown 一级标题格式呈现（即 # 标题），不得使用书名号、引号、括号等符号。
+- 标题应带有乡土气息和讽刺意味，像村里人说的俏皮话或民间俗语，可用双关、反讽或生活化比喻。
+- 标题不宜过长，最好一句话或短语，如《谁家的锅糊了》《这买卖不亏》《要不是老张那张嘴》。
+- 标题与正文的风格要统一，读来就能听出“赵树理式说书味”。
+- 正文开头必须紧接标题生成一个呼语（如‘同志们’‘各位朋友！’等），用于称呼听众。
+  
+风格要求如下：
+- 语言质朴、俏皮、有讽刺意味，带浓厚乡土气息。
+- 用词自然，不做作，可用“咱们”“你要问我说”“他那一伙”“这话得好好想想”等日常口语。
+- 句式短促通俗，可用民间比喻、对话穿插叙述。
+- 整体有“说书式”的节奏感，语气平和、有观察力，体现民间智慧。
+- 文字可带幽默与讽喻，但要冷静、克制。
+- 内容上要讲一个具体的人或事，不空谈道理。
+- 每一段都要有推进，不在同一句式上来回打转，避免机械重复。
+- 每一段可有轻微转折或反思，像一个清醒的乡村叙述者慢慢讲理。
+- 叙述者口吻要像村里一个明白人，既有点打趣，又不失公道。
+- 可适当出现人物间的对话，像“老李说……”“我就笑他：你这不是自找的吗？”这种自然插话，增强活气。
+- 全篇最好像是“说理带故事”，故事里有人情味，理里带一点反讽的劲。
+- 结尾要自然收束，像“话说到这儿也就明白了”那种收口，不要突兀或反复强调。
+""",
+        "侠客岛": """
+我希望这篇文字具有“侠客岛式”风格。
+
+标题要求:必须生成一个标题，标题单独成行，置于开头。标题不宜空洞或平铺，应让人“一看就像媒体评论标题”，既有理性，也有锋芒。标题与正文风格必须统一，不得割裂。标题必须使用 Markdown 一级标题格式呈现（即 # 标题），不得使用书名号、引号、括号等符号。
+
+语言上，应当稳健、凝练、带有理性克制的批评与分析气质；文风应兼具媒体的客观与评论的锋锐，体现出“冷静叙事 + 犀利观点”的融合。
+
+务必保持我在提示词中指定的叙述者身份，不得擅自替换为“侠客岛”“岛叔”“评论员”等其他主体。
+
+用词应体现，具备权威媒体评论的庄重感，同时不失亲切；避免空洞口号和套话，多用现实感、新闻语体、分析性句式。
+
+语气上，应平实理智，不浮夸、不喊口号。可适度带有讽刺或反问，但要有分寸感，始终保持理性、冷静、逻辑清晰。
+
+正文开头必须紧接标题生成一个呼语（如‘同志们’等），用于称呼听众
+
+文风要求：
+
+句式以短句和中长句结合，节奏稳健、有呼吸感；  
+描写注重事实、逻辑递进与背景铺陈，观点要自然生成于叙述之中；  
+语气要克制而有力，结尾多以总结或警醒收束，形成自然的闭合感。
+
+气质上要体现“有理有据、有温度、有锋芒”的评论者姿态，既有大局观，又有民间温度，传达出媒体理性与现实关怀并存的特质。
+
+注意避免机械复述与句式雷同，应当在逻辑上自洽、在节奏上有层次感，结尾要自然收束而非突兀收尾。
+""",
     }
-    # else:
-    # input_ = {
-    #     "messages": [
-    #         HumanMessage(
-    #             f"# Research Requirements\n\n## User Query\n\n{user_query}\n\n## Task\n\n{current_plan.title}\n\n## Description\n\n{current_plan.thought}"
-    #         )
-    #     ],
-    #     "locale": state.get("locale", "en-US"),
-    # }
-    input_["demonstrations"] = demos
-    input_["rule"] = rule
 
-    # 应用对应文体的prompt模板
-    invoke_messages = apply_prompt_template(f"reporter_xxqg_rule_demo", input_)
-    observations = state.get("observations", [])
+    # 从 user_query 中解析初始风格
+    if "[STYLE_ROLE]" in user_query:
+        current_style = user_query.split("[STYLE_ROLE]")[-1]
+    else:
+        current_style = ""
 
-    # Add a reminder about the new report format, citation style, and table usage
-    invoke_messages.append(
-        HumanMessage(
-            content="IMPORTANT: Structure your report according to the format in the prompt.",
-            name="system",
-        )
-    )
+    def _generate_report_with_style(style_role: str) -> str:
+        """根据指定风格生成报告"""
+        input_ = {
+            "messages": [
+                HumanMessage(
+                    f"# Research Requirements\n\n##User Query\n\n{demos_str}\n\n请严格仿照以上示例。{user_query}\n\n## Task\n\n{current_plan.title}\n\n## Description\n\n{current_plan.thought}"
+                )
+            ],
+            "locale": state.get("locale", "en-US"),
+        }
+        input_["demonstrations"] = demos
+        input_["rule"] = rule
 
-    for observation in observations:
+        # 应用对应文体的prompt模板
+        invoke_messages = apply_prompt_template(f"reporter_xxqg_rule_demo", input_)
+        observations = state.get("observations", [])
+
+        # Add a reminder about the new report format, citation style, and table usage
         invoke_messages.append(
             HumanMessage(
-                content=f"Below are some observations for the research task:\n\n{observation}",
-                name="observation",
+                content="IMPORTANT: Structure your report according to the format in the prompt.",
+                name="system",
             )
         )
-    data_collections = state.get("data_collections", [])
-    for data_collection in data_collections:
-        invoke_messages.append(
-            HumanMessage(
-                content=f"Below are data collected in previous tasks:\n\n{data_collection}",
-                name="observation",
+
+        for observation in observations:
+            invoke_messages.append(
+                HumanMessage(
+                    content=f"Below are some observations for the research task:\n\n{observation}",
+                    name="observation",
+                )
             )
+        data_collections = state.get("data_collections", [])
+        for data_collection in data_collections:
+            invoke_messages.append(
+                HumanMessage(
+                    content=f"Below are data collected in previous tasks:\n\n{data_collection}",
+                    name="observation",
+                )
+            )
+
+        # 添加风格约束
+        constraint = role_constraints.get(style_role, "")
+        if constraint:
+            invoke_messages.append(
+                HumanMessage(
+                    content=f"风格要求：\n{constraint}",
+                    name="style_constraint",
+                )
+            )
+
+        logger.debug(f"Current invoke messages: {invoke_messages}")
+        response = get_llm_by_type(AGENT_LLM_MAP["reporter"]).invoke(invoke_messages)
+        return response.content
+
+    # 风格切换循环
+    while True:
+        logger.info(f"使用风格 '{current_style}' 生成报告...")
+        response_content = _generate_report_with_style(current_style)
+        logger.info(f"reporter response: {response_content}")
+
+        # 中断等待用户反馈（风格切换或结束）
+        feedback = interrupt(
+            "Report generated. You can change style or finish.[REPORT]"
+            + response_content
+            + "[/REPORT]"
         )
-    logger.debug(f"Current invoke messages: {invoke_messages}")
-    response = get_llm_by_type(AGENT_LLM_MAP["reporter"]).invoke(invoke_messages)
-    response_content = response.content
-    logger.info(f"reporter response: {response_content}")
+
+        if feedback and str(feedback).upper().startswith("[CHANGED_STYLE]"):
+            # 解析新风格，继续循环
+            new_style = str(feedback)[len("[CHANGED_STYLE]") :].strip()
+            logger.info(f"用户请求切换风格: {current_style} -> {new_style}")
+            current_style = new_style
+            continue
+        elif feedback and str(feedback).upper().startswith("[SKIP]"):
+            # 用户跳过，正常结束
+            logger.info("用户跳过风格切换，报告生成完成")
+            break
+        else:
+            # 其他反馈，正常结束
+            logger.info(f"收到其他反馈: {feedback}，报告生成完成")
+            break
 
     return {"final_report": response_content}
 
@@ -829,7 +945,7 @@ def speech_node(state: State):
     return {"final_report": response_content}
 
 
-def zip_data(state: State,config: RunnableConfig):
+def zip_data(state: State, config: RunnableConfig):
     final_report = state.get("final_report")
     user_query = state.get("user_query")
     plan = state.get("current_plan")
@@ -854,7 +970,5 @@ def zip_data(state: State,config: RunnableConfig):
     session_id = config["configurable"]["thread_id"]
     global_reference_map.save_session(session_id)
     return Command(
-        update={
-            "ref_map": global_reference_map.get_session_ref_map(session_id)
-        }
+        update={"ref_map": global_reference_map.get_session_ref_map(session_id)}
     )

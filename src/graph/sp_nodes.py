@@ -92,6 +92,7 @@ async def outline_node(state: State, config: RunnableConfig) -> Command:
     _check_agents_initialized()
     return await sub_agent_manager.execute_outline(state, config)
 
+
 async def human_feedback_node(state: State, config: RunnableConfig) -> Command:
     """人工反馈节点处理函数"""
     _check_agents_initialized()

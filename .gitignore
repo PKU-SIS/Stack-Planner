@@ -39,3 +39,5 @@ cases/*
 test_*.py
 shells/*
 .cursor/
+.windsurf/
+Stack Planner流式接口文档.md

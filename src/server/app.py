@@ -125,7 +125,7 @@ async def _astream_workflow_generator(
             "max_step_num": max_step_num,
             "max_search_results": max_search_results,
             "mcp_settings": mcp_settings,
-            "knowledge_base_name":knowledge_base_name,
+            "knowledge_base_name": knowledge_base_name,
         },
         stream_mode=["messages", "updates"],
         subgraphs=True,
@@ -247,7 +247,7 @@ async def _astream_workflow_generator_xxqg(
             "max_step_num": max_step_num,
             "max_search_results": max_search_results,
             "mcp_settings": mcp_settings,
-            "knowledge_base_name":knowledge_base_name,
+            "knowledge_base_name": knowledge_base_name,
         },
         stream_mode=["messages", "updates"],
         subgraphs=True,
@@ -344,7 +344,7 @@ async def _astream_workflow_generator_sp(
     mcp_settings: dict,
     enable_background_investigation,
     graph_format: str = "sp",
-    knowledge_base_name ="学习强国_new",
+    knowledge_base_name="学习强国_new",
 ):
     input_ = {
         "messages": messages,
@@ -385,7 +385,7 @@ async def _astream_workflow_generator_sp(
             "max_step_num": max_step_num,
             "max_search_results": max_search_results,
             "mcp_settings": mcp_settings,
-            "knowledge_base_name":knowledge_base_name,
+            "knowledge_base_name": knowledge_base_name,
         },
         stream_mode=["messages", "updates"],
         subgraphs=True,
@@ -437,6 +437,19 @@ async def _astream_workflow_generator_sp(
                             "content": "Please Confirm or Edit the Outline",
                             "finish_reason": "interrupt",
                             "outline": outline,
+                        },
+                    )
+                elif "[REPORT]" in data_value:
+                    # 报告生成完成，支持风格切换
+                    report = data_value.split("[REPORT]")[-1].split("[/REPORT]")[0]
+                    yield _make_event(
+                        "interrupt",
+                        {
+                            "thread_id": thread_id,
+                            "id": event_data["__interrupt__"][0].ns[0],
+                            "role": "assistant",
+                            "content": f"[REPORT]{report}[/REPORT]",
+                            "finish_reason": "interrupt",
                         },
                     )
             elif "tools" in event_data:

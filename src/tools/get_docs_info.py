@@ -134,7 +134,7 @@ def search_docs(question, top_k=5,config: RunnableConfig=None):
         knowledge_base_name="学习强国-习总书记-无Raptor"
         logger.info("knowledge_base_name使用的默认参数")
     else:
-        knowledge_base_name=config["configurable"]["knowledge_base_name"]
+        knowledge_base_name = config["configurable"]["knowledge_base_name"]
         logger.info("knowledge_base_name使用的自定义参数")
     
     kb_id = get_kb_id_by_name(knowledge_base_name)
@@ -190,11 +190,11 @@ def search_docs(question, top_k=5,config: RunnableConfig=None):
         logger.error(f"请求过程中出现异常: {e}")
         return docs
 
+
 @tool
 @log_io
 def search_docs_tool(
-    question: Annotated[str, "检索的问题，使用语义相似度匹配"],
-    config: RunnableConfig
+    question: Annotated[str, "检索的问题，使用语义相似度匹配"], config: RunnableConfig
 ) -> dict:
     """
     使用这个工具查询本地存储的领域知识库，检索方式为语义相似度匹配，返回与question相关的文档内容。
@@ -211,16 +211,22 @@ def search_docs_tool(
     if session_id is None:
         logger.error("session_id is None in config")
         return {"query": question, "docs": docs}
-    #logger.debug(f"检索到的文档{docs}")
+    # logger.debug(f"检索到的文档{docs}")
     ids = global_reference_map.add_references(session_id, docs)
     if not ids or not docs:
         logger.warning("ids or docs is empty, returning empty result")
         return {"query": question, "docs": []}
     # 先把docs按ids升序排序
     # ["【文档x】name\ncontent\n",...]
-    ids , docs = zip(*sorted(zip(ids, docs)))
+    ids, docs = zip(*sorted(zip(ids, docs)))
     # rename_docs = ["【文档" + str(doc_id) + "】" + doc.get("source", "") + "\n" + doc.get("content", "") for doc_id, doc in zip(ids, docs)]
-    rename_docs = [{"source":"【文档" + str(doc_id) + "】" + doc.get("source", ""), "content": doc.get("content", "")} for doc_id, doc in zip(ids, docs)]
+    rename_docs = [
+        {
+            "source": "【文档" + str(doc_id) + "】" + doc.get("source", ""),
+            "content": doc.get("content", ""),
+        }
+        for doc_id, doc in zip(ids, docs)
+    ]
     return {"query": question, "docs": rename_docs}
 
 

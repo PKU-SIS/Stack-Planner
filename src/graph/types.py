@@ -33,4 +33,4 @@ class State(MessagesState):
     delegation_context: dict = None
     current_node: str = None
     memory_stack: str = None
-    ref_map: dict = None
+    current_style: str = ""  # 当前报告风格，用于风格切换功能

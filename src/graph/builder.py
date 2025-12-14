@@ -24,7 +24,12 @@ from .nodes import (
     researcher_xxqg_node,
 )
 
-from .sp_nodes import central_agent_node, perception_node, outline_node,human_feedback_node
+from .sp_nodes import (
+    central_agent_node,
+    perception_node,
+    outline_node,
+    human_feedback_node as sp_human_feedback_node,
+)
 from src.agents.sub_agent_registry import get_sub_agents_by_global_type
 
 
@@ -137,12 +142,14 @@ def get_next_perception(state: State) -> str:
     else:
         return "outline"
 
+
 def get_next_outline(state: State) -> str:
     wait_stage = state.get("wait_stage", "")
     if wait_stage == "outline":
         return "human_feedback"
     else:
         return "central_agent"
+
 
 def get_next_feedback(state: State) -> str:
     wait_stage = state.get("wait_stage", "")
@@ -152,6 +159,7 @@ def get_next_feedback(state: State) -> str:
         return "outline"
     else:
         return "central_agent"
+
 
 def _build_graph_sp_xxqg():
     """
@@ -168,7 +176,7 @@ def _build_graph_sp_xxqg():
     builder.add_node("perception", perception_node)
     builder.add_node("central_agent", central_agent_node)
     builder.add_node("outline", outline_node)
-    builder.add_node("human_feedback", human_feedback_node)
+    builder.add_node("human_feedback", sp_human_feedback_node)
 
     # 添加sub agent
     sub_agents = get_sub_agents_by_global_type("sp_xxqg")
