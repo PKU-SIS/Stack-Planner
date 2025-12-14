@@ -23,6 +23,13 @@ from .memory import Memory
 from datetime import datetime
 from src.utils.reference_utils import global_reference_map
 from langchain_core.runnables import RunnableConfig
+
+import re
+from collections import defaultdict
+# from modelscope.pipelines import pipeline
+# from modelscope.utils.constant import Tasks
+from sentence_transformers import CrossEncoder
+from .cite_verify import filter_content_by_relevant_docs,mark_content_with_support,repair_unknown_citations
 def create_search_engine_adapter(
     search_func: Callable = None,
 ) -> Callable[[str, int,RunnableConfig], List[FactStructDocument]]:
@@ -402,6 +409,12 @@ def run_factstruct_stage2(
     report_parts = []
     path_stack = [[]]
 
+    #初始化 NLI 模型
+    nli_model_path="/data1/Yangzb/Model/nlp_structbert_nli_chinese-tiny"
+    # semantic_cls = pipeline(Tasks.nli,nli_model_path,model_revision='master')
+    semantic_cls = CrossEncoder("/data1/Yangzb/Model/StructBert/cross-encoder/nli-deberta-v3-small")
+
+
     def get_progress_context(stack, will_complete_chapters: list, next_chapter: str):
         context_lines = []
 
@@ -425,7 +438,7 @@ def run_factstruct_stage2(
 
         return "\n".join(context_lines)
 
-    def generate(node: OutlineNode, level: int = 1, will_complete_chapters: list = None, next_chapter: str = None):
+    def generate(node: OutlineNode, level: int = 1, will_complete_chapters: list = None, next_chapter: str = None,semantic_cls=None):
         logger.debug(f"正在生成子章节: {node.title}（ID: {node.id}）")
 
         path_stack[-1].append(node.title)
@@ -442,7 +455,6 @@ def run_factstruct_stage2(
                 )
                 relevant_docs_text = "（无相关资料）"
             else:
-
                 # logger.debug(
                 #     f"获取到 {len(relevant_docs)} 个 Stage 1 关联文档"
                 # )
@@ -452,7 +464,8 @@ def run_factstruct_stage2(
                         for idx, doc in enumerate(relevant_docs)
                     ]
                 )
-                logger.info(f"relevant_docs_text :{relevant_docs_text }")
+                # logger.info(f"relevant_docs_text :{relevant_docs_text }")
+                logger.info(f"relevant_docs :{relevant_docs}")
             progress_context = get_progress_context(path_stack, will_complete_chapters, next_chapter)
 
             completed_content = "".join(report_parts).strip()
@@ -486,7 +499,37 @@ def run_factstruct_stage2(
                 content = response.content.strip()
                 report_parts.append(f"{content}\n")
                 logger.debug(f"  生成了 {len(content)} 个字符")
-
+                
+                #如果没文档就不做引用检查了，后面再考虑上文的引用
+                if not relevant_docs:
+                    logger.warning(
+                        f"节点 '{node.title}' (ID: {node.id}) 未找到关联文档，不进行引用检查"
+                    )
+                else:
+                    logger.info(f"content :{content}")
+                    #这个是判断引用和句子的关系
+                    supported = filter_content_by_relevant_docs(
+                        content=content,
+                        relevant_docs=relevant_docs,
+                        semantic_cls=semantic_cls
+                    )
+                    logger.info(f"supported :{supported}")
+                    
+                    #这个是把关系应用到生成文章上
+                    new_content = mark_content_with_support(
+                        content=content,
+                        nli_results=supported
+                    )
+                    logger.info(f"new_content :{new_content}")
+                    
+                    #这个是把错误引用进行处理的
+                    content=repair_unknown_citations(
+                        content=new_content,
+                        relevant_docs=relevant_docs,
+                        semantic_cls=semantic_cls
+                    )
+                    logger.info(f"content :{content}")
+                    
             except Exception as e:
                 logger.error(f"  生成失败: {str(e)}")
 
@@ -499,10 +542,10 @@ def run_factstruct_stage2(
                 else:
                     child_will_complete = []
                     child_next_chapter = node.children[i + 1].title
-                generate(child, level + 1, child_will_complete, child_next_chapter)
+                generate(child, level + 1, child_will_complete, child_next_chapter,semantic_cls=semantic_cls)
             path_stack.pop()
 
-    generate(outline_root, level=1, will_complete_chapters=[], next_chapter=None)
+    generate(outline_root, level=1, will_complete_chapters=[], next_chapter=None,semantic_cls=semantic_cls)
 
     final_report = "\n".join(report_parts)
 
