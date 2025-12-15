@@ -2,7 +2,8 @@ import threading
 import json
 import hashlib
 from pathlib import Path
-
+import re
+from typing import Dict, Any
 
 def get_project_root() -> Path:
     """Get the project root directory"""
@@ -187,4 +188,45 @@ class ReferenceMap:
         return session_map.reference_map
 
 
+def process_final_report(content: str, reference_map: Dict[str, Dict[str, Any]]) -> str:
+    # Step 1: 找出所有【数字】形式的引用，并保留顺序（去重但保留首次出现顺序）
+    matches = re.findall(r'【(\d+)】', content)
+    unique_refs_in_order = []
+    seen = set()
+    for ref in matches:
+        if ref not in seen and ref in reference_map:
+            unique_refs_in_order.append(ref)
+            seen.add(ref)
+
+    # Step 2: 建立旧编号 → 新编号的映射
+    old_to_new = {old: str(i + 1) for i, old in enumerate(unique_refs_in_order)}
+
+    # Step 3: 替换原文中的【n】为[new]
+    def replace_ref(match):
+        old_num = match.group(1)
+        if old_num in old_to_new:
+            return f"[{old_to_new[old_num]}]"
+        else:
+            return ""  # 如果不在 reference_map 中，删除该引用
+
+    new_content = re.sub(r'【(\d+)】', replace_ref, content)
+
+    # Step 4: 构建参考文献部分
+    ref_lines = []
+    for new_idx, old_idx in enumerate(unique_refs_in_order, start=1):
+        entry = reference_map[old_idx]
+        url = entry.get("url", "")
+        title = entry.get("title", "无标题")
+        ref_lines.append(f"[{new_idx}] {url} - {title}")
+
+    references_section = "## 参考文献\n\n" + "\n".join(ref_lines)
+
+    # Step 5: 拼接最终结果
+    final_output = new_content.strip() + "\n\n" + references_section
+    return final_output
+
+
+
 global_reference_map = ReferenceMap()
+
+

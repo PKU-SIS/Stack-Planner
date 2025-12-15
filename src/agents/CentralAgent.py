@@ -587,7 +587,7 @@ class CentralAgent:
         logger.info(f"final_report: {final_report}")
         
         session_id = config["configurable"]["thread_id"]
-        global_reference_map.save_session(session_id)
+        # global_reference_map.save_session(session_id)
         # 构建执行摘要（包含完整记忆栈历史）
         execution_summary = {
             "user_query": state.get("user_query", "未知查询"),

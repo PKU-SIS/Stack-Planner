@@ -34,8 +34,10 @@ from src.factstruct import (
 from ..graph.types import State
 from ..config import SELECTED_SEARCH_ENGINE, SearchEngine
 from src.utils.statistics import global_statistics, timed_step
-
-
+import re
+from typing import Dict, Any
+import json
+from src.utils.reference_utils import global_reference_map, process_final_report
 # -------------------------
 # 子Agent管理模块
 # TODO: check sub-agent bugs
@@ -560,6 +562,13 @@ class SubAgentManager:
             llm = get_llm_by_type(AGENT_LLM_MAP.get("reporter", "default"))
             response = llm.invoke(messages)
             final_report = response.content
+            #可以在这个地方加一个对final_report的处理
+            session_id = config["configurable"]["thread_id"]
+            reference_map=global_reference_map.get_session_ref_map(session_id)
+            # logger.info(f"before reference_map:{reference_map}")
+            # logger.info(f"before final_report :{final_report}")
+            final_report = process_final_report(final_report, reference_map)
+            # logger.info(f"after final_report :{final_report}")
         except Exception as e:
             import traceback
 
@@ -632,7 +641,15 @@ class SubAgentManager:
                 llm_type=AGENT_LLM_MAP.get("reporter_factstruct", "basic"),
                 locale=state.get("locale", "zh-CN"),
             )
-
+            
+            #可以在这个地方加一个对final_report的处理
+            session_id = config["configurable"]["thread_id"]
+            reference_map=global_reference_map.get_session_ref_map(session_id)
+            logger.info(f"before reference_map:{reference_map}")
+            logger.info(f"before final_report :{final_report}")
+            final_report = process_final_report(final_report, reference_map)
+            logger.info(f"after final_report :{final_report}")
+            
             logger.info(
                 f"FactStruct Stage 2 报告生成完成: {len(final_report)} 个字符"
             )

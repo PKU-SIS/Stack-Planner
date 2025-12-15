@@ -82,21 +82,7 @@ def create_search_engine_adapter(
 
         
         # 转换为 FactStructDocument
-        # documents = []
-        # for i, result in enumerate(results):
-        #     doc_id = f"doc_{hash(result.get('content', ''))}_{i}"
-        #     doc = FactStructDocument(
-        #         id=doc_id,
-        #         cite_id=ids[i] if ids is not None and i < len(ids) else None,
-        #         text=result.get("content", ""),
-        #         source_type=result.get("source", "unknown"),
-        #         timestamp=datetime.now(),  # 如果没有时间戳，使用当前时间
-        #         url=result.get("url", None),
-        #         title=result.get("title", None),
-        #     )
-        #     documents.append(doc)
-        documents = []
-        
+        documents = []        
         for cite_id, result in zip(ids, sorted_results):
             doc_id = f"doc_{hash(result.get('content', ''))}_{cite_id}"
             doc = FactStructDocument(
