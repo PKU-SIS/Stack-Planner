@@ -131,7 +131,7 @@ def get_kb_id_by_name(kb_name):
 def search_docs(question, top_k=5,config: RunnableConfig=None):
     docs = []
     if config==None:
-        knowledge_base_name="学习强国-习总书记-无Raptor"
+        knowledge_base_name="学习强国"
         logger.info("knowledge_base_name使用的默认参数")
     else:
         knowledge_base_name = config["configurable"]["knowledge_base_name"]

@@ -344,7 +344,7 @@ async def _astream_workflow_generator_sp(
     mcp_settings: dict,
     enable_background_investigation,
     graph_format: str = "sp",
-    knowledge_base_name="学习强国-习总书记-无Raptor",
+    knowledge_base_name="学习强国",
 ):
     input_ = {
         "messages": messages,
