@@ -783,14 +783,11 @@ class SubAgentManager:
                 )
             elif feedback and str(feedback).upper().startswith("[SKIP]"):
                 logger.info("DST question is skipped by user.")
-                messages.append(
-                    AIMessage(content=f"##LLM DST Question\n\n{dst_question}\n\n")
-                )
-                messages.append(
+                messages = apply_prompt_template("perception", state) + [
                     HumanMessage(
-                        content=f"用户跳过了回答，你可以根据自己的理解进行总结\n\n"
+                        f"##User Query\n\n{user_query}\n\n##希望用户回答的问题\n\n{dst_question}\n\n##用户跳过了回答，你可以按照自己的理解总结\n\n"
                     )
-                )
+                ]
                 response = perception_llm.invoke(messages)
                 summary = response.content
                 return Command(
