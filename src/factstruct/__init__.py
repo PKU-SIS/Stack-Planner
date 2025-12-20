@@ -18,6 +18,7 @@ from .integration import (
     outline_node_to_markdown,
     outline_node_to_json,
     memory_to_dict,
+    visualize_outline_with_citations,
 )
 
 __all__ = [
@@ -34,4 +35,5 @@ __all__ = [
     "outline_node_to_markdown",
     "outline_node_to_json",
     "memory_to_dict",
+    "visualize_outline_with_citations",
 ]
