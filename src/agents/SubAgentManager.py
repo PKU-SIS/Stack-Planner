@@ -545,6 +545,9 @@ class SubAgentManager:
             elif feedback and str(feedback).upper().startswith("[SKIP]"):
                 # 用户跳过，正常结束
                 logger.info("用户跳过风格切换，报告生成完成")
+            elif feedback and str(feedback).upper().startswith("[END]"):
+                # 用户跳过，正常结束
+                logger.info("用户跳过风格切换，报告生成完成")
             else:
                 # 其他反馈，正常结束
                 logger.info(f"收到其他反馈: {feedback}，报告生成完成")
