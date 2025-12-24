@@ -516,6 +516,7 @@ def _make_event(event_type: str, data: dict[str, any]):
 @app.get("/api/references/{thread_id}")
 async def get_references(thread_id: str):
     """Get the references for a given thread ID."""
+    logger.info(f"Received request for references with thread_id: {thread_id}")
     try:
         references = global_reference_map.get_session_ref_map(thread_id)
         return {"thread_id": thread_id, "references": references}

@@ -40,7 +40,7 @@ class CommonReactAgent(BaseModel, metaclass=ABCMeta):
             tools=self.tools,
             prompt=lambda state: apply_prompt_template(self.system_prompt, state),
         )
-        self._handler = ToolResultCallbackHandler(self)
+        self._handler = [ToolResultCallbackHandler(self), ReactAgentCallbackHandler(self)] ## todo jxk
 
     async def ainvoke(self, *args, **kwargs):
         from copy import deepcopy
@@ -50,9 +50,9 @@ class CommonReactAgent(BaseModel, metaclass=ABCMeta):
 
         # 合并 callbacks
         if "callbacks" in config:
-            config["callbacks"] = config["callbacks"] + [self._handler]
+            config["callbacks"] = config["callbacks"] + self._handler
         else:
-            config["callbacks"] = [self._handler]
+            config["callbacks"] = self._handler
 
         # 替换 kwargs 中的 config
         kwargs["config"] = config

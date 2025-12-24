@@ -484,12 +484,12 @@ class SubAgentManager:
             )
 
             # 添加用户约束、大纲和数据收集
-            data_collections = state.get("data_collections", [])
-            data_collections_str = "\n\n".join(data_collections)
+            # data_collections = state.get("data_collections", [])
+            # data_collections_str = "\n\n".join(data_collections)
             constraint = self.ROLE_CONSTRAINTS.get(style_role, "")
             messages.append(
                 HumanMessage(
-                    content=f"{constraint}##User Query\n\n{user_query}\n\n##用户约束\n\n{user_dst}\n\n##报告大纲\n\n{report_outline}\n\nBelow are data collected in previous tasks:\n\n{data_collections_str}"
+                    content=f"{constraint}##User Query\n\n{user_query}\n\n##用户约束\n\n{user_dst}\n\n##报告大纲\n\n{report_outline}"
                 )
             )
 
@@ -498,7 +498,7 @@ class SubAgentManager:
             for observation in observations:
                 messages.append(
                     HumanMessage(
-                        content=f"Below are some observations for the research task:\n\n{observation}",
+                        content=f"Below are useful data collected by search agent: \n\n{observation}",
                         name="observation",
                     )
                 )
@@ -890,6 +890,8 @@ class SubAgentManager:
                 response = outline_llm.invoke(messages)
                 outline_response = response.content
                 outline_response = repair_json_output(outline_response)
+                if '[STYLE_ROLE]' in outline_response:
+                    outline_response = outline_response.split('[STYLE_ROLE]')[0]
                 logger.info(f"大纲生成完成: {outline_response}")
                 return Command(
                     update={

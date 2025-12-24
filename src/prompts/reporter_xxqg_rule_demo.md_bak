@@ -43,3 +43,8 @@ The following is a basic introduction and rule set for the intended writing styl
    - Only use filename in citations, don't include any file format(such as .txt, .pdf) in citations.
 
    *Note: Include this section only if the current writing style requires it.*
+
+3. **Attribution Accuracy (Critical)**
+   - **Strictly preserve the correspondence between speakers and their statements**: If a source explicitly states "A said / A stated / A pointed out", the output MUST retain A as the speaker for that content. NEVER attribute it to B or anyone else.
+   - Before integrating citations, extract and note the【speaker】and【specific content】for each citation to ensure accurate one-to-one correspondence in the output.
+   - If uncertain about the original speaker of a statement, use vague expressions such as "some believe" or "it is argued that" rather than making an incorrect attribution.
