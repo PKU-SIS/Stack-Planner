@@ -969,6 +969,8 @@ def zip_data(state: State, config: RunnableConfig):
         json.dump(data, f, ensure_ascii=False, indent=4)
     session_id = config["configurable"]["thread_id"]
     global_reference_map.save_session(session_id)
+    logger.debug(f"Report saved to {filename}")
+    logger.debug(f"Reference map:{global_reference_map.get_session_ref_map(session_id)}")
     return Command(
         update={"ref_map": global_reference_map.get_session_ref_map(session_id)}
     )

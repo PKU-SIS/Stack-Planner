@@ -28,7 +28,8 @@ params = {
     "desc": "true"
 }
 data = {
-    "tenant_id": "cbae14fb8c8411f0bf2ecd6543f8a381"  #这里提供的子然账号，XXQG知识库在这上面
+    "tenant_id": "e38fafc3e07411f0bf2ecd6543f8a381",#"cbae14fb8c8411f0bf2ecd6543f8a381"  #这里提供的子然账号，XXQG知识库在这上面
+    "owner_ids": ["cbae14fb8c8411f0bf2ecd6543f8a381"]
 }
 
 response = requests.post(url, params=params, json=data)
@@ -43,39 +44,40 @@ if result["code"] == 0:
 else:
     print(f"Error: {result.get('message', 'Unknown error')}")
 
-# import requests
+import requests
 
-# url = "https://ragflow.pkubir.cn/v1/chunk_api/retrieval_test"
-# headers = {
-#     "Content-Type": "application/json"
-# }
+url = "https://ragflow.pkubir.cn/v1/chunk_api/retrieval_test"
+headers = {
+    "Content-Type": "application/json"
+}
 
-# # 基础检索
-# data = {
-#     "tenant_id": "cbae14fb8c8411f0bf2ecd6543f8a381",      # zzr账号
-#     "kb_id": ["75d78910a00911f0bf2ecd6543f8a381"],            # XXQG知识库，745篇文档，习总书记相关
-#     "question": "文化八项工程",
-#     "page": 1,
-#     "size": 10
-# }
+# 基础检索
+data = {
+    "tenant_id": "e38fafc3e07411f0bf2ecd6543f8a381",      # zzr账号
+    "owner_ids": ["cbae14fb8c8411f0bf2ecd6543f8a381"],
+    "kb_id": ["75d78910a00911f0bf2ecd6543f8a381"],            # XXQG知识库，745篇文档，习总书记相关
+    "question": "文化八项工程",
+    "page": 1,
+    "size": 10
+}
 
-# response = requests.post(url, headers=headers, json=data)
-# result = response.json()
-# print("result",result)
+response = requests.post(url, headers=headers, json=data)
+result = response.json()
+print("result",result)
 
-# if result["code"] == 0:
-#     total = result["data"]["total"]
-#     chunks = result["data"]["chunks"]
-#     labels = result["data"].get("labels", [])
+if result["code"] == 0:
+    total = result["data"]["total"]
+    chunks = result["data"]["chunks"]
+    labels = result["data"].get("labels", [])
 
-#     print(f"检索到 {total} 个相关chunks")
-#     print(f"标签: {labels}\n")
+    print(f"检索到 {total} 个相关chunks")
+    print(f"标签: {labels}\n")
 
-#     for i, chunk in enumerate(chunks, 1):
-#         print(f"Chunk {i}:")
-#         print(f"  相似度: {chunk.get('similarity', 0):.4f}")
-#         print(f"  文档: {chunk['docnm_kwd']}")
-#         print(f"  内容: {chunk['content_with_weight'][:150]}...")
-#         print()
-# else:
-#     print(f"Error: {result.get('message', 'Unknown error')}")
+    for i, chunk in enumerate(chunks, 1):
+        print(f"Chunk {i}:")
+        print(f"  相似度: {chunk.get('similarity', 0):.4f}")
+        print(f"  文档: {chunk['docnm_kwd']}")
+        print(f"  内容: {chunk['content_with_weight'][:150]}...")
+        print()
+else:
+    print(f"Error: {result.get('message', 'Unknown error')}")
