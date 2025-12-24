@@ -36,7 +36,6 @@ draft.py
 coverage.xml
 coverage/
 cases/*
-test_*.py
 shells/*
 .cursor/
 .windsurf/

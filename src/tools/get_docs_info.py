@@ -7,7 +7,7 @@ from src.utils.logger import logger
 from src.utils.reference_utils import global_reference_map
 
 
-#得到知识库，做筛选的
+# 得到知识库，做筛选的
 # def get_kb_id_by_name(kb_name):
 #     url = "https://ragflow.pkubir.cn/v1/kb_api/list"
 #     params = {
@@ -33,6 +33,7 @@ from src.utils.reference_utils import global_reference_map
 
 #     raise RuntimeError(f"未找到知识库: {kb_name}")
 
+
 def get_kb_id_by_name(kb_name):
     url = "https://ragflow.pkubir.cn/v1/kb_api/list"
     params = {
@@ -40,7 +41,7 @@ def get_kb_id_by_name(kb_name):
         "page_size": 100,
         "keywords": kb_name,
         "orderby": "create_time",
-        "desc": "true"
+        "desc": "true",
     }
     data = {
         "tenant_id":"e38fafc3e07411f0bf2ecd6543f8a381",#"cbae14fb8c8411f0bf2ecd6543f8a381"
@@ -69,7 +70,6 @@ def get_kb_id_by_name(kb_name):
     except Exception as e:
         logger.error(f"解析知识库列表异常: {e}")
         return None
-
 
 
 # 8509 学习强国
@@ -128,8 +128,9 @@ def get_kb_id_by_name(kb_name):
 #         logger.error(f"请求过程中出现异常: {e}")
 #         return docs
 
-#新接口
-def search_docs(question, top_k=5,config: RunnableConfig=None):
+
+# 新接口
+def search_docs(question, top_k=5, config: RunnableConfig = None):
     docs = []
     if config==None:
         knowledge_base_name="学习强国"
@@ -137,9 +138,9 @@ def search_docs(question, top_k=5,config: RunnableConfig=None):
     else:
         knowledge_base_name = config["configurable"]["knowledge_base_name"]
         logger.info("knowledge_base_name使用的自定义参数")
-    
+
     kb_id = get_kb_id_by_name(knowledge_base_name)
-    if kb_id==None:
+    if kb_id == None:
         logger.error(f"知识库 {knowledge_base_name}不存在")
         return docs
     logger.info(f"knowledge_base_name: {knowledge_base_name}")
@@ -150,10 +151,10 @@ def search_docs(question, top_k=5,config: RunnableConfig=None):
         "tenant_id": "e38fafc3e07411f0bf2ecd6543f8a381",#"cbae14fb8c8411f0bf2ecd6543f8a381",
         "owner_ids": ["cbae14fb8c8411f0bf2ecd6543f8a381"],
         "kb_id": [kb_id],
-        "similarity_threshold": 0.3,        # 相似度阈值
+        "similarity_threshold": 0.3,  # 相似度阈值
         "question": question,
         "page": 1,
-        "size": top_k
+        "size": top_k,
     }
     try:
         response = requests.post(api_url, json=query)
@@ -161,9 +162,8 @@ def search_docs(question, top_k=5,config: RunnableConfig=None):
         if response.status_code == 200:
             results = response.json()
             logger.info(f"results: {results}")
-            
-            
-            #results 去重
+
+            # results 去重
             chunks = results.get("data", {}).get("chunks", [])
             seen = set()
             for chunk in chunks:
@@ -179,10 +179,7 @@ def search_docs(question, top_k=5,config: RunnableConfig=None):
                     continue
                 seen.add(identifier)
 
-                docs.append({
-                    "source": source,
-                    "content": content
-                })
+                docs.append({"source": source, "content": content})
         else:
             logger.error(
                 f"请求失败，状态码: {response.status_code}，错误信息: {response.text}"
@@ -202,11 +199,11 @@ def search_docs_tool(
     使用这个工具查询本地存储的领域知识库，检索方式为语义相似度匹配，返回与question相关的文档内容。
     """
     logger.debug(f"config:{config}")
-    if config!=None:
+    if config != None:
         session_id = config["configurable"]["thread_id"]
     else:
-        session_id=None
-    
+        session_id = None
+
     docs = search_docs(question, 20, config)
     # return {"query": question, "docs": docs}
 
