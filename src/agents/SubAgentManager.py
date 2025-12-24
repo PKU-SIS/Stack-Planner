@@ -534,12 +534,8 @@ class SubAgentManager:
         delegation_context = state.get("delegation_context", {})
         task_description = delegation_context.get("task_description", "生成最终报告")
 
-        # 从 user_query 中解析初始风格
-        user_query = state.get("user_query", "")
-        if "[STYLE_ROLE]" in user_query:
-            current_style = user_query.split("[STYLE_ROLE]")[-1]
-        else:
-            current_style = ""
+        # 直接从 state 获取风格（已在入口处提取并存储）
+        current_style = state.get("current_style", "")
 
         wait_stage = state.get("wait_stage", "")
         if wait_stage != "reporter":
@@ -587,17 +583,9 @@ class SubAgentManager:
                 new_style = new_style.strip()
                 logger.info(f"用户请求切换风格: {current_style} -> {new_style}")
 
-                # 更新 user_query 中的风格标记
-                if "[STYLE_ROLE]" in user_query:
-                    user_query = (
-                        user_query.split("[STYLE_ROLE]")[0] + "[STYLE_ROLE]" + new_style
-                    )
-                else:
-                    user_query = user_query + "[STYLE_ROLE]" + new_style
-
+                # 只更新 current_style，不再修改 user_query
                 return Command(
                     update={
-                        "user_query": user_query,
                         "current_style": new_style,
                         "wait_stage": "",  # 清空 wait_stage，下次进入时重新生成报告
                         "current_node": "reporter",

@@ -540,11 +540,8 @@ def reporter_xxqg_node(state: State):
 """,
     }
 
-    # 从 user_query 中解析初始风格
-    if "[STYLE_ROLE]" in user_query:
-        current_style = user_query.split("[STYLE_ROLE]")[-1]
-    else:
-        current_style = ""
+    # 直接从 state 获取风格（已在入口处提取并存储）
+    current_style = state.get("current_style", "")
 
     def _generate_report_with_style(style_role: str) -> str:
         """根据指定风格生成报告"""
@@ -629,7 +626,7 @@ def reporter_xxqg_node(state: State):
             logger.info(f"收到其他反馈: {feedback}，报告生成完成")
             break
 
-    return {"final_report": response_content}
+    return {"final_report": response_content, "current_style": current_style}
 
 
 def research_team_node(
