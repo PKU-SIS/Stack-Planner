@@ -346,15 +346,33 @@ async def _astream_workflow_generator_sp(
     graph_format: str = "sp",
     knowledge_base_name="学习强国-习总书记-无Raptor",
 ):
+    # 从 user_query 中提取 style_role 并清理
+    raw_user_query = messages[-1]["content"] if messages else ""
+    style_role = ""
+    clean_user_query = raw_user_query
+    if "[STYLE_ROLE]" in raw_user_query:
+        parts = raw_user_query.split("[STYLE_ROLE]")
+        clean_user_query = parts[0].strip()
+        style_role = parts[-1].strip()
+
+    # 同时清理 messages 中的 [STYLE_ROLE] 后缀
+    clean_messages = []
+    for msg in messages:
+        clean_msg = msg.copy()
+        if "[STYLE_ROLE]" in clean_msg.get("content", ""):
+            clean_msg["content"] = clean_msg["content"].split("[STYLE_ROLE]")[0].strip()
+        clean_messages.append(clean_msg)
+
     input_ = {
-        "messages": messages,
+        "messages": clean_messages,
         "plan_iterations": 0,
         "final_report": "",
         "current_plan": None,
         "observations": [],
         "auto_accepted_plan": auto_accepted_plan,
         "enable_background_investigation": enable_background_investigation,
-        "user_query": messages[-1]["content"] if messages else "",
+        "user_query": clean_user_query,
+        "current_style": style_role,
         "data_collections": [],
     }
     if not auto_accepted_plan and interrupt_feedback:
@@ -362,9 +380,9 @@ async def _astream_workflow_generator_sp(
             resume_msg = interrupt_feedback
         else:
             resume_msg = f"[{interrupt_feedback}]"
-        # add the last message to the resume message
-        if messages:
-            resume_msg += f" {messages[-1]['content']}"
+        # add the last message to the resume message (使用清理后的内容)
+        if clean_messages:
+            resume_msg += f" {clean_messages[-1]['content']}"
         input_ = Command(resume=resume_msg)
 
     from src.graph.sp_nodes import init_agents

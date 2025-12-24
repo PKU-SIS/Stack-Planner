@@ -6,10 +6,10 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 
 # 暂时禁用代理设置以解决可能的网络代理导致的 502 错误（如需请自行开启）
-os.environ["http_proxy"] = "http://localhost:8888"
-os.environ["https_proxy"] = "http://localhost:8888"
-os.environ["HTTP_PROXY"] = "http://localhost:8888"
-os.environ["HTTPS_PROXY"] = "http://localhost:8888"
+# os.environ["http_proxy"] = "http://localhost:8888"
+# os.environ["https_proxy"] = "http://localhost:8888"
+# os.environ["HTTP_PROXY"] = "http://localhost:8888"
+# os.environ["HTTPS_PROXY"] = "http://localhost:8888"
 
 
 url = "http://localhost:8555/api/chat/sp_stream"
