@@ -294,10 +294,27 @@ class SubAgentManager:
         delegation_context = state.get("delegation_context", {})
         task_description = delegation_context.get("task_description", "生成最终报告")
 
+        # 构建精简的 reporter 输入，只包含必要信息
+        # 避免传入完整 state["messages"]（包含大量 central agent 调度信息）
+        current_plan = state.get("current_plan")
+        plan_info = ""
+        if current_plan:
+            plan_title = getattr(current_plan, "title", str(current_plan))
+            plan_thought = getattr(current_plan, "thought", "")
+            plan_info = f"## Task\n\n{plan_title}\n\n## Description\n\n{plan_thought}"
+
+        reporter_input = {
+            "messages": [
+                HumanMessage(
+                    content=f"# Research Requirements\n\n## User Query\n\n{state.get('user_query', '')}\n\n{plan_info}"
+                )
+            ],
+            "locale": state.get("locale", "zh-CN"),
+        }
+
         # 收集报告生成所需上下文
         context = {
             "user_query": state.get("user_query", ""),
-            "memory_history": self.central_agent.memory_stack.get_all(),
             "task_description": task_description,
         }
 
@@ -305,8 +322,27 @@ class SubAgentManager:
         final_report = "报告生成失败: 未知错误"
         try:
             messages = apply_prompt_template(
-                "reporter", state, extra_context=context
-            )  # 修复：参数顺序
+                "reporter", reporter_input, extra_context=context
+            )
+
+            # 添加 observations 和 data_collections
+            observations = state.get("observations", [])
+            for observation in observations:
+                messages.append(
+                    HumanMessage(
+                        content=f"Below are some observations for the research task:\n\n{observation}",
+                        name="observation",
+                    )
+                )
+            data_collections = state.get("data_collections", [])
+            for data_collection in data_collections:
+                messages.append(
+                    HumanMessage(
+                        content=f"Below are data collected in previous tasks:\n\n{data_collection}",
+                        name="observation",
+                    )
+                )
+
             llm = get_llm_by_type(AGENT_LLM_MAP.get("reporter", "default"))
             response = llm.invoke(messages)
             final_report = response.content
@@ -420,26 +456,52 @@ class SubAgentManager:
         """根据指定风格生成报告（内部辅助方法）"""
         delegation_context = state.get("delegation_context", {})
         task_description = delegation_context.get("task_description", "生成最终报告")
+
+        # 构建精简的 reporter 输入，只包含必要信息
+        # 避免传入完整 state["messages"]（包含大量 central agent 调度信息）
+        user_query = state.get("user_query", "")
+        user_dst = state.get("user_dst", "")
+        report_outline = state.get("report_outline", "用户未提供大纲")
+
+        reporter_input = {
+            "messages": [
+                HumanMessage(
+                    content=f"# Research Requirements\n\n## User Query\n\n{user_query}"
+                )
+            ],
+            "locale": state.get("locale", "zh-CN"),
+        }
+
         context = {
-            "user_query": state.get("user_query", ""),
-            "memory_history": self.central_agent.memory_stack.get_all(),
+            "user_query": user_query,
             "task_description": task_description,
         }
 
         report = "报告生成失败: 未知错误"
         try:
             messages = apply_prompt_template(
-                "reporter_xxqg", state, extra_context=context
+                "reporter_xxqg", reporter_input, extra_context=context
             )
+
+            # 添加用户约束、大纲和数据收集
             data_collections = state.get("data_collections", [])
             data_collections_str = "\n\n".join(data_collections)
+            constraint = self.ROLE_CONSTRAINTS.get(style_role, "")
             messages.append(
                 HumanMessage(
-                    f"##User Query\n\n{state.get('user_query', '')}\n\n##用户约束\n\n{state.get('user_dst', '')}\n\n##报告大纲{state.get('report_outline', '用户未提供大纲')}\n\nBelow are data collected in previous tasks:\n\n{data_collections_str}"
+                    content=f"{constraint}##User Query\n\n{user_query}\n\n##用户约束\n\n{user_dst}\n\n##报告大纲\n\n{report_outline}\n\nBelow are data collected in previous tasks:\n\n{data_collections_str}"
                 )
             )
-            constraint = self.ROLE_CONSTRAINTS.get(style_role, "")
-            messages[-1].content = constraint + messages[-1].content
+
+            # 添加 observations
+            observations = state.get("observations", [])
+            for observation in observations:
+                messages.append(
+                    HumanMessage(
+                        content=f"Below are some observations for the research task:\n\n{observation}",
+                        name="observation",
+                    )
+                )
 
             logger.debug(f"Reporter messages: {messages}")
             llm = get_llm_by_type(AGENT_LLM_MAP.get("reporter", "default"))
