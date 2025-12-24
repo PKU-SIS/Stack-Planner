@@ -8,8 +8,7 @@ os.environ["HTTPS_PROXY"] = "http://localhost:8888"
 
 client = OpenAI(
     base_url="https://api.openai.com/v1",
-    # api_key='<OPENAI_API_KEY>',
-    api_key="<OPENAI_API_KEY>",
+    api_key=os.environ.get("OPENAI_API_KEY"),
 )
 
 response = client.chat.completions.create(
