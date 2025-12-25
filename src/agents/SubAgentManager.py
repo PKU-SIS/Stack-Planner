@@ -500,8 +500,8 @@ class SubAgentManager:
             for observation in observations:
                 messages.append(
                     HumanMessage(
-                        content=f"Below are useful data collected by search agent: \n\n{observation}",
-                        name="observation",
+                        content=f"以下是检索智能体收集到的高质量信息: \n\n{observation}",
+                        name="search_agent",
                     )
                 )
 
