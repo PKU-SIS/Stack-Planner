@@ -71,6 +71,34 @@ def apply_prompt_template(
     try:
         template = env.get_template(f"{prompt_name}.md")
         system_prompt = template.render(**state_vars)
-        return [{"role": "system", "content": system_prompt}] + state["messages"]
+
+        # Validate and clean messages - FIX FOR ROLE VALIDATION ERROR
+        valid_messages = []
+        for msg in state.get("messages", []):
+            if isinstance(msg, dict):
+                # Skip messages with None role or missing content
+                if msg.get("role") and msg.get("content") is not None:
+                    valid_messages.append(msg)
+                else:
+                    logger.warning(
+                        f"Skipped invalid dict message: role={msg.get('role')}, has_content={'content' in msg}"
+                    )
+            elif hasattr(msg, "type") or hasattr(msg, "role"):
+                # Handle LangChain message objects (HumanMessage, AIMessage, etc.)
+                msg_role = getattr(msg, "type", None) or getattr(msg, "role", None)
+                msg_content = getattr(msg, "content", None)
+
+                if msg_role and msg_content is not None:
+                    msg_dict = {"role": msg_role, "content": msg_content}
+                    # Preserve additional_kwargs if present
+                    if hasattr(msg, "additional_kwargs"):
+                        msg_dict["additional_kwargs"] = msg.additional_kwargs
+                    valid_messages.append(msg_dict)
+                else:
+                    logger.warning(
+                        f"Skipped invalid message object: role={msg_role}, has_content={msg_content is not None}"
+                    )
+
+        return [{"role": "system", "content": system_prompt}] + valid_messages
     except Exception as e:
         raise ValueError(f"Error applying template {prompt_name}: {e}")
