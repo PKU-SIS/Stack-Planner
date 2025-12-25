@@ -9,10 +9,6 @@ from sympy import im
 from src.utils.logger import logger
 import os
 
-# Apply langchain patches for API compatibility
-from src.utils.langchain_patch import apply_all_patches
-
-apply_all_patches()
 from typing import Annotated, List, cast
 from uuid import uuid4
 
