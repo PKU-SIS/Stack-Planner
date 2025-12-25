@@ -171,6 +171,7 @@ class SubAgentManager:
 
         except Exception as e:
             import traceback
+
             logger.error(traceback.format_exc())
             logger.error(f"研究Agent执行失败: {str(e)}")
             return Command(
@@ -880,8 +881,8 @@ class SubAgentManager:
                 response = outline_llm.invoke(messages)
                 outline_response = response.content
                 outline_response = repair_json_output(outline_response)
-                if '[STYLE_ROLE]' in outline_response:
-                    outline_response = outline_response.split('[STYLE_ROLE]')[0]
+                if "[STYLE_ROLE]" in outline_response:
+                    outline_response = outline_response.split("[STYLE_ROLE]")[0]
                 logger.info(f"大纲生成完成: {outline_response}")
                 return Command(
                     update={

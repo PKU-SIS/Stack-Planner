@@ -8,6 +8,11 @@ from math import log
 from sympy import im
 from src.utils.logger import logger
 import os
+
+# Apply langchain patches for API compatibility
+from src.utils.langchain_patch import apply_all_patches
+
+apply_all_patches()
 from typing import Annotated, List, cast
 from uuid import uuid4
 
@@ -416,7 +421,7 @@ async def _astream_workflow_generator_sp(
                 "status": "processing",  # 节点状态
             }
             yield _make_event("node_status", current_node_state)
-        
+
         if isinstance(event_data, dict):
             logger.debug(f"Event data: {event_data}")
         else:

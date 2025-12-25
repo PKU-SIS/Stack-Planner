@@ -595,7 +595,9 @@ def reporter_xxqg_node(state: State):
             )
 
         logger.debug(f"Current invoke messages: {invoke_messages}")
-        response = get_llm_by_type(AGENT_LLM_MAP["reporter_xxqg"]).invoke(invoke_messages)
+        response = get_llm_by_type(AGENT_LLM_MAP["reporter_xxqg"]).invoke(
+            invoke_messages
+        )
         return response.content
 
     # 风格切换循环
@@ -969,6 +971,4 @@ def zip_data(state: State, config: RunnableConfig):
     ref_map = global_reference_map.get_session_ref_map(session_id)
     logger.debug(f"Report saved to {filename}")
     logger.debug(f"Reference map:{ref_map}")
-    return Command(
-        update={"ref_map": ref_map}
-    )
+    return Command(update={"ref_map": ref_map})

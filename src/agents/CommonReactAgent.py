@@ -13,7 +13,8 @@ from src.llms.llm import get_llm_by_type
 from src.config.agents import AGENT_LLM_MAP
 from src.agents.ReActHandler import ReactAgentCallbackHandler, ToolResultCallbackHandler
 from langchain import hub
-#from langchain.agents import AgentExecutor, create_react_agent
+
+# from langchain.agents import AgentExecutor, create_react_agent
 
 from typing import Optional, List
 
@@ -52,7 +53,10 @@ class CommonReactAgent(BaseModel, metaclass=ABCMeta):
         #     handle_parsing_errors=True,
         # )
 
-        self._handler = [ToolResultCallbackHandler(self), ReactAgentCallbackHandler()] ## todo jxk
+        self._handler = [
+            ToolResultCallbackHandler(self),
+            ReactAgentCallbackHandler(),
+        ]  ## todo jxk
 
     async def ainvoke(self, *args, **kwargs):
         from copy import deepcopy

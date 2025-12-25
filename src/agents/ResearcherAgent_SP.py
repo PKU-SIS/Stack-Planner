@@ -106,7 +106,7 @@ class ResearcherAgentSP(CommonReactAgent):
                     + "You MUST use the **local_search_tool** to retrieve the information from the resource files.",
                 )
             )
-        
+
         # agent_input["messages"].append(
         #     HumanMessage(
         #         content="IMPORTANT: **You have to use search tools** to complete task",

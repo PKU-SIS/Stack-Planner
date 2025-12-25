@@ -42,3 +42,13 @@ shells/*
 Stack Planner流式接口文档.md
 startup.sh
 test_hitl_*
+
+# Temporary fix scripts and backups
+fix_validation_error.sh
+apply_patch_and_restart.sh
+check_status.sh
+restart_service.sh
+FIX_SUMMARY.md
+FINAL_FIX_REPORT.md
+*.backup.*
+fix_execution.log

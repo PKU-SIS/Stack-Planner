@@ -73,12 +73,9 @@ data = {
 # 用于缓存 event 数据
 buffer = ""
 
+
 def pretty_print_sheet(questions):
-    type_labels = {
-        "Select": "[单选]",
-        "MultiSelect": "[多选]",
-        "TextArea": "[填空]"
-    }
+    type_labels = {"Select": "[单选]", "MultiSelect": "[多选]", "TextArea": "[填空]"}
 
     print("📝 写作助手答题卡\n")
 
@@ -97,9 +94,8 @@ def pretty_print_sheet(questions):
                 print(f"   {letter}. {option}")
         elif q_type == "TextArea":
             print("   （请在此处填写内容）")
-        
-        print()  # 空行分隔
 
+        print()  # 空行分隔
 
     # 开始收集用户回答
     print("请逐条回答问题：")
@@ -124,7 +120,8 @@ def pretty_print_sheet(questions):
         if q_type in ["Select", "MultiSelect"]:
             # 清洗输入：支持 A、B 或 A,B 或 AB 等格式
             import re
-            letters = re.split(r'[、，,\\s]+', user_input)  # 支持多种分隔符
+
+            letters = re.split(r"[、，,\\s]+", user_input)  # 支持多种分隔符
             letters = [letter.strip().upper() for letter in letters if letter.strip()]
 
             for letter in letters:
@@ -133,13 +130,17 @@ def pretty_print_sheet(questions):
                     if 0 <= idx < len(options):
                         parsed_answer.append(options[idx])
                     else:
-                        print(f"⚠️ 选项 {letter} 超出范围（题目：{question['question']}），已忽略。")
+                        print(
+                            f"⚠️ 选项 {letter} 超出范围（题目：{question['question']}），已忽略。"
+                        )
                 else:
                     print(f"⚠️ 无效选项格式：{letter}，已忽略。")
 
             # 单选只取第一个（可选策略）
             if q_type == "Select" and len(parsed_answer) > 1:
-                print(f"⚠️ 注意：'{question['question']}' 是单选题，仅保留第一个选项 '{parsed_answer[0]}'")
+                print(
+                    f"⚠️ 注意：'{question['question']}' 是单选题，仅保留第一个选项 '{parsed_answer[0]}'"
+                )
                 parsed_answer = [parsed_answer[0]]
             parsed_answer = "; ".join(parsed_answer)
         elif q_type == "TextArea":
@@ -156,7 +157,10 @@ def pretty_print_sheet(questions):
         answers_parsed.append(parsed_answer)
     return answers_parsed
 
+
 NEED_RETRY = False
+
+
 def process_event(event_type, event_data):
     """处理一个完整的 event"""
     print(event_type, event_data)
@@ -180,10 +184,9 @@ def process_event(event_type, event_data):
 
         feedback = {
             "thread_id": thread_id,
-            "content": "[FILLED_QUESTION]" + "\n".join(answer_parsed)
+            "content": "[FILLED_QUESTION]" + "\n".join(answer_parsed),
         }
         return feedback
-
 
 
 with httpx.Client(timeout=None) as client:
