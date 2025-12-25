@@ -204,7 +204,7 @@ def search_docs_tool(
     else:
         session_id = None
 
-    docs = search_docs(question, 20, config)
+    docs = search_docs(question, 15, config)
     # return {"query": question, "docs": docs}
 
     if session_id is None:
