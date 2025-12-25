@@ -152,7 +152,7 @@ class SubAgentManager:
 
         # 实例化研究Agent
         research_agent = ResearcherAgentSP(
-            config=config, agent_type="researcher_xxqg", default_tools=tools
+            config=config, agent_type="researcher_xxqg_demo", default_tools=tools
         )
 
         # 执行研究任务并处理异常
@@ -170,6 +170,9 @@ class SubAgentManager:
                 )
 
         except Exception as e:
+            import traceback
+
+            logger.error(traceback.format_exc())
             logger.error(f"研究Agent执行失败: {str(e)}")
             return Command(
                 update={
@@ -484,12 +487,12 @@ class SubAgentManager:
             )
 
             # 添加用户约束、大纲和数据收集
-            data_collections = state.get("data_collections", [])
-            data_collections_str = "\n\n".join(data_collections)
+            # data_collections = state.get("data_collections", [])
+            # data_collections_str = "\n\n".join(data_collections)
             constraint = self.ROLE_CONSTRAINTS.get(style_role, "")
             messages.append(
                 HumanMessage(
-                    content=f"{constraint}##User Query\n\n{user_query}\n\n##用户约束\n\n{user_dst}\n\n##报告大纲\n\n{report_outline}\n\nBelow are data collected in previous tasks:\n\n{data_collections_str}"
+                    content=f"{constraint}##User Query\n\n{user_query}\n\n##用户约束\n\n{user_dst}\n\n##报告大纲\n\n{report_outline}"
                 )
             )
 
@@ -498,7 +501,7 @@ class SubAgentManager:
             for observation in observations:
                 messages.append(
                     HumanMessage(
-                        content=f"Below are some observations for the research task:\n\n{observation}",
+                        content=f"Below are useful data collected by search agent: \n\n{observation}",
                         name="observation",
                     )
                 )
@@ -836,14 +839,11 @@ class SubAgentManager:
                 )
             elif feedback and str(feedback).upper().startswith("[SKIP]"):
                 logger.info("DST question is skipped by user.")
-                messages.append(
-                    AIMessage(content=f"##LLM DST Question\n\n{dst_question}\n\n")
-                )
-                messages.append(
+                messages = apply_prompt_template("perception", state) + [
                     HumanMessage(
-                        content=f"用户跳过了回答，你可以根据自己的理解进行总结\n\n"
+                        f"##User Query\n\n{user_query}\n\n##希望用户回答的问题\n\n{dst_question}\n\n##用户跳过了回答，你可以按照自己的理解总结\n\n"
                     )
-                )
+                ]
                 response = perception_llm.invoke(messages)
                 summary = response.content
                 return Command(
@@ -881,6 +881,8 @@ class SubAgentManager:
                 response = outline_llm.invoke(messages)
                 outline_response = response.content
                 outline_response = repair_json_output(outline_response)
+                if "[STYLE_ROLE]" in outline_response:
+                    outline_response = outline_response.split("[STYLE_ROLE]")[0]
                 logger.info(f"大纲生成完成: {outline_response}")
                 return Command(
                     update={

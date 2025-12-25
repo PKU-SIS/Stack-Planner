@@ -349,7 +349,7 @@ async def _astream_workflow_generator_sp(
     mcp_settings: dict,
     enable_background_investigation,
     graph_format: str = "sp",
-    knowledge_base_name="学习强国-习总书记-无Raptor",
+    knowledge_base_name="学习强国",
 ):
     # 从 user_query 中提取 style_role 并清理
     raw_user_query = messages[-1]["content"] if messages else ""
@@ -423,7 +423,10 @@ async def _astream_workflow_generator_sp(
             }
             yield _make_event("node_status", current_node_state)
 
-        logger.debug(f"Event data: {event_data}")
+        if isinstance(event_data, dict):
+            logger.debug(f"Event data: {event_data}")
+        else:
+            logger.debug(f"Event data type: {type(event_data)}")
         if isinstance(event_data, dict):
             if "__ref_map__" in event_data:
                 ref_map = event_data["__ref_map__"][0].value
@@ -539,6 +542,7 @@ def _make_event(event_type: str, data: dict[str, any]):
 @app.get("/api/references/{thread_id}")
 async def get_references(thread_id: str):
     """Get the references for a given thread ID."""
+    logger.info(f"Received request for references with thread_id: {thread_id}")
     try:
         references = global_reference_map.get_session_ref_map(thread_id)
         return {"thread_id": thread_id, "references": references}

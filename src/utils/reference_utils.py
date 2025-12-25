@@ -2,6 +2,7 @@ import threading
 import json
 import hashlib
 from pathlib import Path
+from src.utils.logger import logger
 
 
 def get_project_root() -> Path:
@@ -189,8 +190,16 @@ class ReferenceMap:
         if file_path.exists():
             with open(file_path, "r", encoding="utf-8") as f:
                 reference_map = json.load(f)
+            logger.info(
+                f"Loaded reference map for session {session_id} from {file_path}"
+            )
+            logger.info(f"Reference map content: {reference_map}")
             return reference_map
         session_map = self.get_session_map(session_id)
+        logger.info(
+            f"No existing reference map for session {session_id}, using in-memory map."
+        )
+        logger.info(f"Reference map content: {session_map.reference_map}")
         return session_map.reference_map
 
 

@@ -62,7 +62,7 @@ class ChatRequest(BaseModel):
         "sp", description="The format of the graph to be used in the chat"
     )
     knowledge_base_name: Optional[str] = Field(
-        "学习强国-习总书记-无Raptor", description="Name of the knowledge base"
+        "学习强国", description="Name of the knowledge base"
     )
 
 

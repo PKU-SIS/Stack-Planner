@@ -2,6 +2,7 @@ from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.outputs import LLMResult
 from src.utils.logger import logger
+from langchain.schema import AgentAction, AgentFinish
 from typing import Any, Dict
 import json
 
@@ -25,13 +26,15 @@ class ReactAgentCallbackHandler(BaseCallbackHandler):
         logger.debug(f"✅ [Tool End] Tool returned output:")
         logger.debug(output)
 
-    def on_chain_start(self, serialized, inputs, **kwargs):
-        logger.debug("⛓️ [Chain Start] Inputs:")
-        logger.debug(inputs)
+    def on_agent_action(self, action: AgentAction, **kwargs: Any) -> Any:
+        logger.debug("🤖 [Agent Action] Agent is taking an action:")
+        logger.debug(f"Action: {action}")
+        # logger.debug(f"[Agent Action] Tool: {action.tool}, Input: {action.tool_input}")
 
-    def on_chain_end(self, outputs, **kwargs):
-        logger.debug("🔚 [Chain End] Outputs:")
-        logger.debug(outputs)
+    def on_agent_finish(self, finish: AgentFinish, **kwargs: Any) -> Any:
+        logger.debug("🏁 [Agent Finish] Agent has finished its execution:")
+        logger.debug(f"Final Action: {finish}")
+        # logger.debug(f"[Agent Finish] Output: {finish.return_values}")
 
 
 class ToolResultCallbackHandler(BaseCallbackHandler):

@@ -205,7 +205,7 @@ def _build_graph_sp_xxqg():
     #     get_next_feedback
     # )
 
-    builder.add_edge("central_agent", "zip_data")
+    # builder.add_edge("central_agent", "zip_data")
 
     # 后处理部分
     builder.add_edge("zip_data", END)

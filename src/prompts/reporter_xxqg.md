@@ -24,12 +24,15 @@ You should act as an objective and analytical reporter who:
 
 3. **Key Citations**
     - Track the sources of information and include inline citations in the text
-    - All of your references should be displayed by inline citations such as "xxxxx【id】". 
+    - All of your references should be displayed by inline citations such as "xxxxx【id】".
+    - Only add citation markers when you use data or figures from the article or directly quote the original text—especially speeches, measures, conclusions. Information you summarize yourself does not require citations.   
     - DO NOT list any source in the References section at the end using link reference format.
     - Only use docs num in citations, don't include any file format(such as .txt, .pdf) or filename in citations.
     - When you need to integrate content, if any piece of knowledge or statement in the integrated result originates from a retrieved result (each article is formatted as 【id】 article content), you must indicate the source of the citation in the final output. The citation format should be: a segment of text 【1】【3】【6】, where the id represents the corresponding Arabic numeral of the article. Cite only when necessary—do not cite every piece of content. 
     - For each segment of text, select **no more than five** relevant sources based on relevance. Citations must not be grouped collectively at the end; instead, they must be displayed inline.
     - Do not fabricate citation numbers that do not appear in the original historical documents.
+   - Place your citation markers as close as possible to the text being cited.  
+   - Do not apply a single citation to three or more consecutive sentences; in such cases, you must add separate citations for each relevant part.
 
 # Writing Guidelines
 
