@@ -2,6 +2,7 @@ pandas==2.2.3
 numpy==2.2.3
 pyyaml==6.0.2
 click==8.1.7
+langchain-deepseek==0.1.4
 starlette==0.46.1
 uvicorn==0.34.0
 filelock==3.18.0
@@ -22,7 +23,7 @@ structlog==25.3.0
 prompt-toolkit==3.0.50
 wcwidth==0.2.13
 six==1.17.0
-langsmith==0.3.13
+langsmith
 litellm==1.63.11
 huggingface_hub==0.29.3
 tiktoken==0.9.0
