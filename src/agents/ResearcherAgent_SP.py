@@ -106,14 +106,7 @@ class ResearcherAgentSP(CommonReactAgent):
                     + "You MUST use the **local_search_tool** to retrieve the information from the resource files.",
                 )
             )
-
-        agent_input["messages"].append(
-            HumanMessage(
-                content="IMPORTANT: DO NOT include inline citations in the text. Instead, track all sources and include a References section at the end using link reference format. Include an empty line between each citation for better readability. Use this format for each reference:\n- [Source Title](URL)\n\n- [Another Source](URL)"
-                "When including images, ONLY use the actual image URLs from the source content. DO NOT create fictional image URLs or placeholders like 'example.com'.",
-                name="system",
-            )
-        )
+        
         # agent_input["messages"].append(
         #     HumanMessage(
         #         content="IMPORTANT: **You have to use search tools** to complete task",
@@ -147,6 +140,7 @@ class ResearcherAgentSP(CommonReactAgent):
             recursion_limit = default_recursion_limit
 
         logger.info(f"Agent input: {agent_input}")
+        logger.debug(f"recursion_limit: {recursion_limit}")
         result = await self.ainvoke(
             input=agent_input, config={"recursion_limit": recursion_limit}
         )

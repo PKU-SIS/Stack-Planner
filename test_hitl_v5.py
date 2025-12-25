@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 # os.environ["HTTPS_PROXY"] = "http://localhost:8888"
 
 
-url = "http://localhost:8555/api/chat/sp_stream"
+url = "http://localhost:8556/api/chat/sp_stream"
 
 # 初始请求内容，带有 [STYLE_ROLE] 标记指定初始风格
 content = """你是一位资深政策讲话撰稿专家。请根据以下要求撰写一篇领导干部发言稿：  
@@ -395,7 +395,7 @@ def main() -> None:
         "resources": [],
         "thread_id": "__default__",
         "max_plan_iterations": 1,
-        "max_step_num": 3,
+        "max_step_num": 30,
         "max_search_results": 3,
         "auto_accepted_plan": True,
         # 任意非空占位，后端会用 auto_accepted_plan 控制中断逻辑
@@ -413,6 +413,8 @@ def main() -> None:
 
     while attempt <= max_retries:
         next_data, status = run_once(data)
+
+  
         if status != 200:
             # 请求失败，直接退出
             print(f"\n❌ 请求失败，状态码: {status}")
@@ -430,9 +432,22 @@ def main() -> None:
         attempt += 1
         data = next_data
         print("\n\n---\n\n正在根据你的反馈继续生成内容...\n\n---\n\n")
+        print(f"id: {data['thread_id']}")
+        response = httpx.get(f"http://localhost:8556/api/references/{data['thread_id']}")
+        if response.status_code == 200:
+            ref_data = response.json()
+            references = ref_data.get("references", [])
+            if references:
+                print("\n\n---\n\n参考资料：\n")
+                for ref in references:
+                    print(f"- {ref}")
+                print("\n\n---\n\n")  
+
+    if attempt > max_retries:
+        print(f"\n⚠️ 达到最大重试次数 ({max_retries})，流程结束。")
 
     print(f"id: {data['thread_id']}")
-    response = httpx.get(f"http://localhost:8555/api/references/{data['thread_id']}")
+    response = httpx.get(f"http://localhost:8556/api/references/{data['thread_id']}")
     if response.status_code == 200:
         ref_data = response.json()
         references = ref_data.get("references", [])
@@ -440,10 +455,7 @@ def main() -> None:
             print("\n\n---\n\n参考资料：\n")
             for ref in references:
                 print(f"- {ref}")
-            print("\n\n---\n\n")    
-
-    if attempt > max_retries:
-        print(f"\n⚠️ 达到最大重试次数 ({max_retries})，流程结束。")
+            print("\n\n---\n\n")  
 
 
 if __name__ == "__main__":

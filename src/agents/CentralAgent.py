@@ -613,3 +613,6 @@ class CentralAgent:
 
         logger.info(report_msg)
         logger.info(global_statistics.get_statistics())
+        return Command(
+            goto="zip_data",  # 结束执行
+        )

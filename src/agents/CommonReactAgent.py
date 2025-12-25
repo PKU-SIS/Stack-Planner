@@ -12,6 +12,8 @@ from src.prompts import apply_prompt_template
 from src.llms.llm import get_llm_by_type
 from src.config.agents import AGENT_LLM_MAP
 from src.agents.ReActHandler import ReactAgentCallbackHandler, ToolResultCallbackHandler
+from langchain import hub
+#from langchain.agents import AgentExecutor, create_react_agent
 
 from typing import Optional, List
 
@@ -30,7 +32,8 @@ class CommonReactAgent(BaseModel, metaclass=ABCMeta):
     tool_results: List[str] = Field(default=[])
 
     # Execution control
-    max_steps: int = Field(default=10, description="Maximum steps before termination")
+    # Execution control
+    max_steps: int = Field(default=30, description="Maximum steps before termination")
     current_step: int = Field(default=0, description="Current step in execution")
 
     def model_post_init(self, __context) -> None:
@@ -40,7 +43,16 @@ class CommonReactAgent(BaseModel, metaclass=ABCMeta):
             tools=self.tools,
             prompt=lambda state: apply_prompt_template(self.system_prompt, state),
         )
-        self._handler = [ToolResultCallbackHandler(self), ReactAgentCallbackHandler(self)] ## todo jxk
+
+        # self._agent = AgentExecutor(
+        #     agent=self._agent_runnable,
+        #     tools=self.tools,
+        #     verbose=True,
+        #     max_iterations=self.max_steps,
+        #     handle_parsing_errors=True,
+        # )
+
+        self._handler = [ToolResultCallbackHandler(self), ReactAgentCallbackHandler()] ## todo jxk
 
     async def ainvoke(self, *args, **kwargs):
         from copy import deepcopy

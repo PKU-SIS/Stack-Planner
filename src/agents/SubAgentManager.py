@@ -152,7 +152,7 @@ class SubAgentManager:
 
         # 实例化研究Agent
         research_agent = ResearcherAgentSP(
-            config=config, agent_type="researcher_xxqg", default_tools=tools
+            config=config, agent_type="researcher_xxqg_demo", default_tools=tools
         )
 
         # 执行研究任务并处理异常
@@ -170,6 +170,8 @@ class SubAgentManager:
                 )
 
         except Exception as e:
+            import traceback
+            logger.error(traceback.format_exc())
             logger.error(f"研究Agent执行失败: {str(e)}")
             return Command(
                 update={

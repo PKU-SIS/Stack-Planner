@@ -416,8 +416,11 @@ async def _astream_workflow_generator_sp(
                 "status": "processing",  # 节点状态
             }
             yield _make_event("node_status", current_node_state)
-
-        logger.debug(f"Event data: {event_data}")
+        
+        if isinstance(event_data, dict):
+            logger.debug(f"Event data: {event_data}")
+        else:
+            logger.debug(f"Event data type: {type(event_data)}")
         if isinstance(event_data, dict):
             if "__ref_map__" in event_data:
                 ref_map = event_data["__ref_map__"][0].value

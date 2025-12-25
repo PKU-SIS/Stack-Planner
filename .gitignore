@@ -40,3 +40,5 @@ shells/*
 .cursor/
 .windsurf/
 Stack Planner流式接口文档.md
+startup.sh
+test_hitl_*
