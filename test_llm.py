@@ -1,18 +1,15 @@
 
 from openai import OpenAI
 client = OpenAI(
-  api_key="1", 
-  base_url="http://10.1.1.212:8000/v1")
-
-response = client.chat.completions.create(
-  model="Qwen3-32B",
-  messages=[{"role": "user", "content": "Why is the sky blue?"}],
-  stream=True,
+    base_url="http://123.57.228.132:8285",
+    api_key="sk-d47ad54165ee456093bc9ffd599e354e",
 )
 
-# 流式输出响应
-for chunk in response:
-    if chunk.choices[0].delta.content is not None:
-        print(chunk.choices[0].delta.content, end='', flush=True)
+response = client.chat.completions.create(
+    model="Qwen2.5-32B-Instruct",
+    messages=[{"role": "user", "content": "Test"}],
+    max_tokens=10,
+    temperature=0.0,
+)
 
-print('\n'*2)  # 输出结束后换行
+print(f"📝 Response: {response.choices[0].message.content}")

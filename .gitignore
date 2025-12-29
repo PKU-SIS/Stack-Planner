@@ -52,3 +52,5 @@ FIX_SUMMARY.md
 FINAL_FIX_REPORT.md
 *.backup.*
 fix_execution.log
+
+test_llm.py
