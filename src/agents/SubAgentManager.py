@@ -23,7 +23,7 @@ from src.llms.llm import get_llm_by_type
 from src.prompts.template import apply_prompt_template
 from src.memory import MemoryStack, MemoryStackEntry
 from src.agents.CentralAgent import CentralAgent
-from src.tools.get_docs_info import search_docs
+from src.tools.get_docs_info import search_docs_with_ref
 
 from ..graph.types import State
 from ..config import SELECTED_SEARCH_ENGINE, SearchEngine
@@ -870,7 +870,7 @@ class SubAgentManager:
         outline_llm = get_llm_by_type(AGENT_LLM_MAP.get("outline", "default"))
         wait_stage = state.get("wait_stage", "")
         if wait_stage != "outline":
-            bg_investigation = search_docs(user_query, top_k=5, config=config)
+            bg_investigation = search_docs_with_ref(user_query, top_k=5, config=config).get("docs",[])
             user_dst = state.get("user_dst", "")
             try:
                 messages = [
