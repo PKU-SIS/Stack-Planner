@@ -403,6 +403,8 @@ def run_factstruct_stage2(
 
     def get_progress_context(stack, will_complete_chapters: list, next_chapter: str):
         context_lines = []
+        
+        context_lines.append("当前文章写作进度：")
 
         for i, level_nodes in enumerate(stack):
             indent = "  " * i
@@ -418,9 +420,9 @@ def run_factstruct_stage2(
             context_lines.append(f"\n完成当前章节后，以下父章节也将完成：{chapters_str}")
 
         if next_chapter:
-            context_lines.append(f"接下来将开始：{next_chapter}")
+            context_lines.append(f"当前章节完成后的下一个章节为：{next_chapter}")
         else:
-            context_lines.append("至此整篇文章将全部完成")
+            context_lines.append("当前章节完成后整篇文章将全部完成")
 
         return "\n".join(context_lines)
 
