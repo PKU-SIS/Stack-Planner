@@ -492,7 +492,7 @@ class SubAgentManager:
             constraint = self.ROLE_CONSTRAINTS.get(style_role, "")
             messages.append(
                 HumanMessage(
-                    content=f"{constraint}##User Query\n\n{user_query}\n\n##用户约束\n\n{user_dst}\n\n##报告大纲\n\n{report_outline}"
+                    content=f"{constraint}##User Query\n\n{user_query}\n\n##任务描述\n\n{task_description}\n\n##用户约束\n\n{user_dst}\n\n##报告大纲\n\n{report_outline}"
                 )
             )
 
@@ -768,14 +768,53 @@ class SubAgentManager:
                 + final_report
                 + "[/REPORT]"
             )
-            logger.info(f"用户反馈的报告风格: {feedback}. goto reporter node again.")
-            return Command(
-                update={
-                    "hitl_feedback": feedback,
-                    "current_node": "human_feedback",
-                },
-                goto="reporter",
-            )
+            logger.info(f"用户反馈: {feedback}")
+
+            # 分类处理：内容修改走 central_agent，风格切换直接返回 reporter
+            if feedback and str(feedback).upper().startswith("[CONTENT_MODIFY]"):
+                # 复杂修改：入栈并跳转到 central_agent 决策
+                modify_request = str(feedback)[len("[CONTENT_MODIFY]") :].strip()
+
+                # 从 state 中恢复 memory_stack（因为 central_agent 每次请求都会重新创建）
+                state_memory_stack = state.get("memory_stack")
+                if state_memory_stack:
+                    self.central_agent.memory_stack.load_from_dict(state_memory_stack)
+
+                memory_entry = MemoryStackEntry(
+                    timestamp=datetime.now().isoformat(),
+                    action="human_feedback",
+                    content=f"用户对报告的修改意见: {modify_request}",
+                    result={
+                        "feedback_type": "content_modify",
+                        "request": modify_request,
+                    },
+                )
+                self.central_agent.memory_stack.push(memory_entry)
+                logger.info(f"内容修改请求入栈，跳转到 central_agent: {modify_request}")
+                return Command(
+                    update={
+                        "hitl_feedback": feedback,
+                        "current_node": "human_feedback",
+                        "memory_stack": self.central_agent.memory_stack.to_dict(),
+                        "wait_stage": "",  # 重置 wait_stage，以便 reporter 重新生成报告
+                        "messages": [
+                            HumanMessage(
+                                content=f"用户对报告的修改意见: {modify_request}",
+                                name="human_feedback",
+                            )
+                        ],
+                    },
+                    goto="central_agent",
+                )
+            else:
+                # 简单修改（风格切换等）：直接返回 reporter 处理
+                return Command(
+                    update={
+                        "hitl_feedback": feedback,
+                        "current_node": "human_feedback",
+                    },
+                    goto="reporter",
+                )
 
     @timed_step("execute_perception")
     async def execute_perception(self, state: State, config: RunnableConfig) -> Command:

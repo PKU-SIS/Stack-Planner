@@ -80,6 +80,31 @@ class MemoryStack:
         """将记忆栈转换为字典列表，便于序列化存储"""
         return [entry.to_dict() for entry in self.stack]
 
+    def load_from_dict(self, data) -> None:
+        """从字典列表或 JSON 字符串恢复记忆栈"""
+        self.stack = []
+        if not data:
+            return
+        # 如果是字符串，先解析为列表
+        if isinstance(data, str):
+            try:
+                data = json.loads(data)
+            except json.JSONDecodeError:
+                logger.warning(f"无法解析 memory_stack 字符串: {data[:100]}...")
+                return
+        if not isinstance(data, list):
+            logger.warning(f"memory_stack 数据格式不正确: {type(data)}")
+            return
+        for entry_dict in data:
+            entry = MemoryStackEntry(
+                timestamp=entry_dict.get("timestamp", ""),
+                action=entry_dict.get("action", ""),
+                agent_type=entry_dict.get("agent_type"),
+                content=entry_dict.get("content", ""),
+                result=entry_dict.get("result"),
+            )
+            self.stack.append(entry)
+
     def size(self) -> int:
         """获取当前记忆栈大小"""
         return len(self.stack)

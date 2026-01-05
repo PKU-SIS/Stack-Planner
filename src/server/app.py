@@ -381,7 +381,8 @@ async def _astream_workflow_generator_sp(
         else:
             resume_msg = f"[{interrupt_feedback}]"
         # add the last message to the resume message (使用清理后的内容)
-        if clean_messages:
+        # 但对于 [CONTENT_MODIFY] 类型的反馈，不需要拼接原始消息
+        if clean_messages and not interrupt_feedback.startswith("[CONTENT_MODIFY]"):
             resume_msg += f" {clean_messages[-1]['content']}"
         input_ = Command(resume=resume_msg)
 
