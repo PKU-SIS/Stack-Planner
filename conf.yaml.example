@@ -1,0 +1,20 @@
+# [!NOTE]
+# Read the `docs/configuration_guide.md` carefully, and update the configurations to match your specific settings and requirements.
+# - Replace `api_key` with your own credentials
+# - Replace `base_url` and `model` name if you want to use a custom model
+
+# BASIC_MODEL:
+#   base_url: https://api.openai.com/v1
+#   model: "gpt-4.1-mini"
+#   api_key: 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
+
+# BASIC_MODEL:
+#   base_url: http://8289.model.mingxingtech.com:10032/v1
+#   model: "qwen2.5:72b"
+#   api_key: 8cefb70606f3472d8731bd65661ce409
+
+
+BASIC_MODEL:
+  base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+  model: "qwen2.5-32b-instruct"
+  api_key: sk-789e79d884c1471ba92f610c50038d83
