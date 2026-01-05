@@ -9,10 +9,6 @@ from sympy import im
 from src.utils.logger import logger
 import os
 
-# Apply langchain patches for API compatibility
-from src.utils.langchain_patch import apply_all_patches
-
-apply_all_patches()
 from typing import Annotated, List, cast
 from uuid import uuid4
 
@@ -47,7 +43,6 @@ from src.server.rag_request import (
 )
 from src.tools import VolcengineTTS
 from src.utils.reference_utils import global_reference_map
-
 
 app = FastAPI(
     title="DeerFlow API",
@@ -496,9 +491,11 @@ async def _astream_workflow_generator_sp(
         message_chunk, message_metadata = cast(
             tuple[BaseMessage, dict[str, any]], event_data
         )
+
         event_stream_message: dict[str, any] = {
             "thread_id": thread_id,
             "agent": agent[0].split(":")[0],
+            "action_name": getattr(message_chunk, "name", None),
             "id": message_chunk.id,
             "role": "assistant",
             "content": message_chunk.content,
@@ -530,6 +527,16 @@ async def _astream_workflow_generator_sp(
                 # AI Message - Raw message tokens
                 yield _make_event("message_chunk", event_stream_message)
         else:
+            # 把 outline 给跳过了，紧急处理，后续需要修改
+            logger.info(f"action的数据结构打印{event_stream_message}")
+            if (
+                event_stream_message["agent"] == "outline"
+                or event_stream_message["agent"] == "researcher"
+            ):
+                logger.info(
+                    f"前端内容筛选，不要 outline 或 researcher{event_stream_message}"
+                )
+                continue
             yield _make_event("agent_action", event_stream_message)
 
 
