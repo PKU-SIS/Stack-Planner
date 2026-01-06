@@ -381,7 +381,8 @@ async def _astream_workflow_generator_sp(
         else:
             resume_msg = f"[{interrupt_feedback}]"
         # add the last message to the resume message (使用清理后的内容)
-        if clean_messages:
+        # 但对于 [CONTENT_MODIFY] 类型的反馈，不需要拼接原始消息
+        if clean_messages and not interrupt_feedback.startswith("[CONTENT_MODIFY]"):
             resume_msg += f" {clean_messages[-1]['content']}"
         input_ = Command(resume=resume_msg)
 
@@ -491,7 +492,7 @@ async def _astream_workflow_generator_sp(
         message_chunk, message_metadata = cast(
             tuple[BaseMessage, dict[str, any]], event_data
         )
-        
+
         event_stream_message: dict[str, any] = {
             "thread_id": thread_id,
             "agent": agent[0].split(":")[0],
@@ -527,10 +528,15 @@ async def _astream_workflow_generator_sp(
                 # AI Message - Raw message tokens
                 yield _make_event("message_chunk", event_stream_message)
         else:
-            #把 outline 给跳过了，紧急处理，后续需要修改
+            # 把 outline 给跳过了，紧急处理，后续需要修改
             logger.info(f"action的数据结构打印{event_stream_message}")
-            if event_stream_message["agent"]=="outline" or event_stream_message["agent"]=="researcher":
-                logger.info(f"前端内容筛选，不要 outline 或 researcher{event_stream_message}")
+            if (
+                event_stream_message["agent"] == "outline"
+                or event_stream_message["agent"] == "researcher"
+            ):
+                logger.info(
+                    f"前端内容筛选，不要 outline 或 researcher{event_stream_message}"
+                )
                 continue
             yield _make_event("agent_action", event_stream_message)
 

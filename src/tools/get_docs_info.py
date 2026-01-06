@@ -161,7 +161,7 @@ def search_docs(question, top_k=5, config: RunnableConfig = None):
         # logger.info(f"response: {response}")
         if response.status_code == 200:
             results = response.json()
-            #logger.info(f"results: {results}")
+            # logger.info(f"results: {results}")
 
             # results 去重
             chunks = results.get("data", {}).get("chunks", [])
@@ -230,7 +230,9 @@ def search_docs_tool(
 
 
 def search_docs_with_ref(
-    question: Annotated[str, "检索的问题，使用语义相似度匹配"], top_k, config: RunnableConfig
+    question: Annotated[str, "检索的问题，使用语义相似度匹配"],
+    top_k,
+    config: RunnableConfig,
 ) -> dict:
     """
     使用这个工具查询本地存储的领域知识库，检索方式为语义相似度匹配，返回与question相关的文档内容。

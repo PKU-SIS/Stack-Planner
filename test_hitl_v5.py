@@ -13,27 +13,34 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 
 url = "http://localhost:8555/api/chat/sp_stream"
+base_url = "http://localhost:8555"  # 基础 URL，用于其他 API 调用
 
 # 初始请求内容，带有 [STYLE_ROLE] 标记指定初始风格
-content = """你是一位资深政策讲话撰稿专家。请根据以下要求撰写一篇领导干部发言稿：  
+content = """你是一位资深政策讲话撰稿专家。请根据以下要求撰写一篇领导干部发言稿：
 
-【主题】  
-以文化建设"八项工程"为统领，打造新时代高水平文化强省，争当学习践行习近平文化思想排头兵  
+【主题】
+以文化建设"八项工程"为统领，打造新时代高水平文化强省，争当学习践行习近平文化思想排头兵
 
-【核心见解】  
-- 文化是推进中国式现代化的精神引擎和战略支撑，必须以文化自信引领文化自强，在"八项工程"系统化推进中实现文化赋能经济社会发展的全局性价值。  
-- "八项工程"既是习近平文化思想的重要实践源头，也是"八八战略"思想体系的文化篇，体现了文化建设的系统性、工程化和规律化推进逻辑。  
-- 建设文化强省要在传承中创新、在守正中发展，通过"文化+科技""文化+旅游""文化+民生"等路径推动文化高质量发展与人的全面发展相统一。  
+【核心见解】
+- 文化是推进中国式现代化的精神引擎和战略支撑，必须以文化自信引领文化自强，在"八项工程"系统化推进中实现文化赋能经济社会发展的全局性价值。
+- "八项工程"既是习近平文化思想的重要实践源头，也是"八八战略"思想体系的文化篇，体现了文化建设的系统性、工程化和规律化推进逻辑。
+- 建设文化强省要在传承中创新、在守正中发展，通过"文化+科技""文化+旅游""文化+民生"等路径推动文化高质量发展与人的全面发展相统一。
 
-【风格要求】  
-- 政治庄重与思想深邃并重，贯穿坚定的政治立场与理论自觉。  
-- 条理清晰、逻辑递进，常以"三个必须""三个方面"等结构展开论述。  
-- 语言具有政策化修辞和战略规划色彩，强调方向、路径与行动并举。  
-- 情感基调稳健昂扬，兼具历史纵深感与实践感召力。  
+【风格要求】
+- 政治庄重与思想深邃并重，贯穿坚定的政治立场与理论自觉。
+- 条理清晰、逻辑递进，常以"三个必须""三个方面"等结构展开论述。
+- 语言具有政策化修辞和战略规划色彩，强调方向、路径与行动并举。
+- 情感基调稳健昂扬，兼具历史纵深感与实践感召力。
 - 论述体现"系统思维—工程化推进—实践成效"的层层递进式表达。[STYLE_ROLE]""".strip() #鲁迅
 
 # 可选的风格列表
 AVAILABLE_STYLES = ["鲁迅", "赵树理", "侠客岛"]
+
+# 测试模式: "style_switch" | "content_modify" | "interactive"
+# - style_switch: 测试风格切换（直接返回 reporter）
+# - content_modify: 测试内容修改（走 central_agent 决策）
+# - interactive: 交互式测试
+TEST_MODE = "content_modify"
 
 
 def parse_json_maybe(value: Union[str, dict, list]) -> Union[dict, list, str]:
@@ -167,13 +174,14 @@ def present_outline_and_get_feedback(outline_value: Union[str, dict, list]) -> s
         return "[CONFIRMED_OUTLINE]" + outline_str
 
 
-def present_report_and_get_style_feedback(report_content: str) -> str:
+def present_report_and_get_feedback(report_content: str) -> str:
     """
-    展示生成的报告，并询问用户是否要切换风格。
+    展示生成的报告，并询问用户操作。
 
     返回反馈字符串：
-    - "[CHANGED_STYLE]xxx" 表示切换到新风格
-    - "[SKIP]" 表示结束，不再切换
+    - "[CHANGED_STYLE]xxx" 表示切换到新风格（简单修改，直接返回 reporter）
+    - "[CONTENT_MODIFY]xxx" 表示内容修改（复杂修改，走 central_agent 决策）
+    - "[SKIP]" 表示结束
     """
     print("\n\n" + "=" * 60)
     print("📄 报告已生成")
@@ -187,21 +195,32 @@ def present_report_and_get_style_feedback(report_content: str) -> str:
     print()
 
     if not sys.stdin.isatty():
-        # 非交互式环境：测试风格切换功能，切换一次后结束
-        # 可以修改这里的逻辑来测试不同场景
-        print("非交互式环境，测试风格切换：切换到 '赵树理' 风格...")
-        return "[CHANGED_STYLE]赵树理"
+        # 非交互式环境：根据 TEST_MODE 决定测试场景
+        if TEST_MODE == "style_switch":
+            print("非交互式环境，测试风格切换：切换到 '赵树理' 风格...")
+            return "[CHANGED_STYLE]赵树理"
+        elif TEST_MODE == "content_modify":
+            print("非交互式环境，测试内容修改：请求增加数据支撑...")
+            return "[CONTENT_MODIFY]请在第二段增加更多具体数据和案例支撑"
+        else:
+            return "[SKIP]"
 
     print("请选择操作：")
     print("  - 输入数字 (1/2/3) 切换到对应风格")
     print("  - 输入风格名称 (如 '鲁迅') 切换风格")
-    print("  - 输入 'SKIP' 或 'END' 结束，不再切换")
+    print("  - 输入 'MODIFY' 进行内容修改（走 central_agent 决策）")
+    print("  - 输入 'SKIP' 或 'END' 结束")
     print()
 
     choice = input("输入选择：").strip()
 
     if choice.upper() in ["SKIP", "END", ""]:
         return "[SKIP]"
+
+    if choice.upper() == "MODIFY":
+        print("请输入修改意见：")
+        modify_request = input().strip()
+        return f"[CONTENT_MODIFY]{modify_request}"
 
     # 尝试解析数字
     if choice.isdigit():
@@ -217,13 +236,14 @@ def present_report_and_get_style_feedback(report_content: str) -> str:
         if style in choice:
             return f"[CHANGED_STYLE]{style}"
 
-    print(f"⚠️ 未识别的风格 '{choice}'，默认结束")
+    print(f"⚠️ 未识别的输入 '{choice}'，默认结束")
     return "[SKIP]"
 
 
 _perception_node_count = 0
 _suppress_after_second_perception = False
 _style_switch_count = 0  # 记录风格切换次数
+_content_modify_count = 0  # 记录内容修改次数
 
 
 def _is_perception_node(current_node: Any) -> bool:
@@ -246,7 +266,8 @@ def process_event(
 
     若为中断事件，返回 `{thread_id, content}` 作为下一次请求的 interrupt_feedback；否则返回 None。
     """
-    global _perception_node_count, _suppress_after_second_perception, _style_switch_count
+    global _perception_node_count, _suppress_after_second_perception
+    global _style_switch_count, _content_modify_count
 
     # 当第二次进入 perception 节点后，直到下一次 interrupt 之前，抑制输出
     if _suppress_after_second_perception and event_type != "interrupt":
@@ -303,7 +324,7 @@ def process_event(
             feedback_content = "[SKIP]"
             return {"thread_id": thread_id, "content": feedback_content}
 
-        # 第三阶段：报告生成完成，可以切换风格
+        # 第三阶段：报告生成完成，可以切换风格或修改内容
         # 检查 content 中是否包含 [REPORT]...[/REPORT] 标记
         if "[REPORT]" in content and "[/REPORT]" in content:
             # 提取报告内容
@@ -311,14 +332,18 @@ def process_event(
             end_idx = content.find("[/REPORT]")
             report_content = content[start_idx:end_idx].strip()
 
-            # 非交互式环境下，限制风格切换次数以避免无限循环
+            # 非交互式环境下，限制操作次数以避免无限循环
             if not sys.stdin.isatty():
-                _style_switch_count += 1
-                if _style_switch_count > 1:
-                    print("\n非交互式环境，已切换过一次风格，自动结束。\n")
+                total_count = _style_switch_count + _content_modify_count
+                if total_count > 0:
+                    print("\n非交互式环境，已操作过一次，自动结束。\n")
                     return {"thread_id": thread_id, "content": "[SKIP]"}
+                if TEST_MODE == "style_switch":
+                    _style_switch_count += 1
+                elif TEST_MODE == "content_modify":
+                    _content_modify_count += 1
 
-            feedback_content = present_report_and_get_style_feedback(report_content)
+            feedback_content = present_report_and_get_feedback(report_content)
             print("feedback_content: ", feedback_content)
             return {"thread_id": thread_id, "content": feedback_content}
 
@@ -338,53 +363,66 @@ def run_once(request_data: Dict[str, Any]) -> Tuple[Optional[Dict[str, Any]], in
     next_request: Optional[Dict[str, Any]] = None
     status_code: int = 0
 
-    with httpx.Client(timeout=None) as client:
-        with client.stream("POST", url, json=request_data) as response:
-            status_code = response.status_code
-            if response.status_code == 200:
-                for chunk in response.iter_text():
-                    buffer += chunk
-                    while "\n" in buffer:
-                        line, buffer = buffer.split("\n", 1)
-                        line = line.strip()
-                        if line.startswith("event:"):
-                            event_type = line.split(":", 1)[1].strip()
-                        elif line.startswith("data:"):
-                            data_str = line.split(":", 1)[1].strip()
-                            try:
-                                event_data = json.loads(data_str)
-                                res = process_event(event_type, event_data)
-                                if res is not None:
-                                    # 为下一次请求准备反馈
-                                    new_payload = dict(request_data)
-                                    new_payload["interrupt_feedback"] = res["content"]
-                                    new_payload["thread_id"] = res["thread_id"]
-                                    new_payload["auto_accepted_plan"] = False
-                                    next_request = new_payload
-                            except json.JSONDecodeError:
-                                # 忽略无效 JSON 行
-                                pass
-            else:
-                print(f"Error: {response.status_code}")
-                try:
-                    response.read()
-                    print(response.text)
-                except Exception as e:
-                    print(f"Error reading response: {e}")
+    try:
+        with httpx.Client(timeout=None) as client:
+            with client.stream("POST", url, json=request_data) as response:
+                status_code = response.status_code
+                if response.status_code == 200:
+                    for chunk in response.iter_text():
+                        buffer += chunk
+                        while "\n" in buffer:
+                            line, buffer = buffer.split("\n", 1)
+                            line = line.strip()
+                            if line.startswith("event:"):
+                                event_type = line.split(":", 1)[1].strip()
+                            elif line.startswith("data:"):
+                                data_str = line.split(":", 1)[1].strip()
+                                try:
+                                    event_data = json.loads(data_str)
+                                    res = process_event(event_type, event_data)
+                                    if res is not None:
+                                        # 为下一次请求准备反馈
+                                        new_payload = dict(request_data)
+                                        new_payload["interrupt_feedback"] = res["content"]
+                                        new_payload["thread_id"] = res["thread_id"]
+                                        new_payload["auto_accepted_plan"] = False
+                                        next_request = new_payload
+                                except json.JSONDecodeError:
+                                    # 忽略无效 JSON 行
+                                    pass
+                else:
+                    print(f"Error: {response.status_code}")
+                    try:
+                        response.read()
+                        print(response.text)
+                    except Exception as e:
+                        print(f"Error reading response: {e}")
+    except (httpx.RemoteProtocolError, httpx.ConnectError) as e:
+        print(f"\n⚠️ 连接错误: {e}")
+        print("服务器可能已断开连接或崩溃，请检查后端服务状态。")
+        return None, 500
 
     return next_request, status_code
 
 
 def main() -> None:
     """
-    基于新流程的多中断联调测试（支持风格切换）：
-    1) 首次启动，后端返回问卷中断 → 发送 `[FILLED_QUESTION]...` 续传；
-    2) 生成大纲并返回中断 → 发送 `[CONFIRMED_OUTLINE]...` 续传；
-    3) 报告生成完成，返回中断 → 可选择：
-       - 发送 `[CHANGED_STYLE]xxx` 切换风格，重新生成报告
-       - 发送 `[SKIP]` 结束流程
-    4) 循环步骤 3，直到用户选择结束或达到最大重试次数。
+    测试脚本 v5：支持风格切换和内容修改两种模式
+
+    流程：
+    1) 首次启动，后端返回问卷中断 -> 发送 [FILLED_QUESTION]... 续传
+    2) 生成大纲并返回中断 -> 发送 [CONFIRMED_OUTLINE]... 续传
+    3) 报告生成完成，返回中断 -> 可选择：
+       - [CHANGED_STYLE]xxx: 切换风格，直接返回 reporter 重新生成
+       - [CONTENT_MODIFY]xxx: 内容修改，走 central_agent 决策后委派相应 agent
+       - [SKIP]: 结束流程
+
+    通过修改 TEST_MODE 变量切换测试场景：
+    - "style_switch": 测试风格切换（直接返回 reporter）
+    - "content_modify": 测试内容修改（走 central_agent 决策）
+    - "interactive": 交互式测试
     """
+    print(f"\n🧪 测试模式: {TEST_MODE}\n")
     data: Dict[str, Any] = {
         "messages": [
             {
@@ -433,7 +471,7 @@ def main() -> None:
         data = next_data
         print("\n\n---\n\n正在根据你的反馈继续生成内容...\n\n---\n\n")
         print(f"id: {data['thread_id']}")
-        response = httpx.get(f"http://localhost:8555/api/references/{data['thread_id']}")
+        response = httpx.get(f"{base_url}/api/references/{data['thread_id']}")
         if response.status_code == 200:
             ref_data = response.json()
             references = ref_data.get("references", [])
@@ -447,7 +485,7 @@ def main() -> None:
         print(f"\n⚠️ 达到最大重试次数 ({max_retries})，流程结束。")
 
     print(f"id: {data['thread_id']}")
-    response = httpx.get(f"http://localhost:8555/api/references/{data['thread_id']}")
+    response = httpx.get(f"{base_url}/api/references/{data['thread_id']}")
     if response.status_code == 200:
         ref_data = response.json()
         references = ref_data.get("references", [])

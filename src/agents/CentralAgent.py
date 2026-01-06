@@ -129,7 +129,7 @@ class CentralAgent:
 
             # 解析决策结果
             action = CentralAgentAction(response.action)
-            reasoning = response.reasoning.replace("[STYLE_ROLE]", "")
+            reasoning = response.reasoning
             params = response.params or {}
             instruction = response.instruction or self.action_instructions.get(
                 action, ""
