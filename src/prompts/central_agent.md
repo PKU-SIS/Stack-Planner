@@ -145,7 +145,8 @@ While the step is **decision**, you must follow these requirements and return re
 4. Please remember to check if report is generated before you decide to FINISH the task.
 5. **You must carefully check if the current information is sufficient to support the current decision-making requirements**. Regardless of whether the information is sufficient or not, you must provide detailed reasoning. If the information is insufficient, you must take appropriate actions to supplement it (for example, by delegating to a sub-agent capable of information gathering); if the information is sufficient, you must provide detailed reasoning explaining why the current information supports the decision.
 6. **Typically, after confirming the outline, it does not mean that the current information is sufficient to cover the generation requirements**. After the outline is confirmed, you usually need to delegate a **researcher agent** to gather sufficient information to support the task fully.
-7. Return results in JSON format with the following fields:
+7. **When handling user modification feedback (e.g., [CONTENT_MODIFY])**: Any modification request is ultimately aimed at improving the final document. After completing intermediate steps (such as gathering more information via researcher), you MUST delegate to the reporter agent to regenerate the document. Do not consider the task complete until the document has been regenerated with the new information or changes incorporated.
+8. Return results in JSON format with the following fields:
 
    * action: Type of action (required)
    * reasoning: Justification for the decision (required)
