@@ -43,14 +43,14 @@
             "justMyCode": false,
             "env": {
                 "PYTHONPATH": "${workspaceFolder}",
-                "http_proxy": "http://localhost:8888",
-                "https_proxy": "http://localhost:8888",
-                "HTTP_PROXY": "http://localhost:8888",
-                "HTTPS_PROXY": "http://localhost:8888"
+                // "http_proxy": "http://localhost:8888",
+                // "https_proxy": "http://localhost:8888",
+                // "HTTP_PROXY": "http://localhost:8888",
+                // "HTTPS_PROXY": "http://localhost:8888"
             },
             "args": [
                 "--reload",
-                "--host", "0.0.0.0",
+                "--host", "127.0.0.1",
                 "--port", "8555"
             ]
         },
