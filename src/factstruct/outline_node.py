@@ -28,6 +28,7 @@ class OutlineNode:
     children: List["OutlineNode"] = field(default_factory=list)
     pull_count: int = 0
     reward_history: List[float] = field(default_factory=list)
+    word_limit: int = 0  # 该节点的字数配额
 
     def __post_init__(self):
         """初始化后处理：确保父节点关系正确"""
@@ -88,21 +89,25 @@ class OutlineNode:
             return 0.0
         return sum(self.reward_history) / len(self.reward_history)
 
-    def to_text_tree(self, indent: int = 0) -> str:
+    def to_text_tree(self, indent: int = 0, include_word_limit: bool = False) -> str:
         """
         将节点树转换为文本格式（用于 LLM 提示）
 
         参数:
             indent: 缩进级别
+            include_word_limit: 是否包含字数配额信息
 
         返回:
             文本格式的大纲树
         """
         prefix = "  " * indent
-        result = f"{prefix}- {self.title}\n"
+        if include_word_limit and self.word_limit > 0:
+            result = f"{prefix}- {self.title} [{self.word_limit}字]\n"
+        else:
+            result = f"{prefix}- {self.title}\n"
 
         for child in self.children:
-            result += child.to_text_tree(indent + 1)
+            result += child.to_text_tree(indent + 1, include_word_limit)
 
         return result
 
