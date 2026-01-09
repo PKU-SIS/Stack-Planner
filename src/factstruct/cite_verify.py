@@ -145,7 +145,7 @@ def repair_unknown_citations(
     content: str,
     relevant_docs: list,
     semantic_cls,
-    entail_threshold: float = 0.35
+    entail_threshold: float = 1
 ):
     """
     修复 content 中的【？】：
@@ -188,7 +188,12 @@ def repair_unknown_citations(
             # entail_score = result["scores"][1]
             scores = semantic_cls.predict([(doc.text, hypothesis)])[0]
             entail_score = float(scores[1])  # index 1 = entailment
-
+            # print()
+            # print("doc.text",doc.text)
+            # print("hypothesis",hypothesis)
+            # print("scores",scores)
+            # print("entail_score",entail_score)
+            # print()
             if entail_score > entail_threshold:
                 newly_supported.append(cid)
 
@@ -278,12 +283,16 @@ def main():
         relevant_docs=relevant_docs,
         semantic_cls=semantic_cls
     )
+
+    print()
+    print()
     print(supported)
     new_content = mark_content_with_support(
         content=content,
         nli_results=supported
     )
-
+    print()
+    print()
     print(new_content)
 
     repair_content=repair_unknown_citations(
@@ -291,7 +300,9 @@ def main():
         relevant_docs=relevant_docs,
         semantic_cls=semantic_cls
     )
-    
+
+    print()
+    print() 
     print(repair_content)
 
 

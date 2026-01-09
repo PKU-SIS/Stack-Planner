@@ -63,7 +63,8 @@ class ResearcherAgentSP(CommonReactAgent):
         """Helper function to execute a step using the specified agent."""
         observations = state.get("observations", [])
         data_collections = state.get("data_collections", [])
-
+        logger.info(f"websearch 执行检索")
+        logger.info(f"state:{state}")
         # 从 params 中获取任务描述
         params = state.get("delegation_context", {})
         logger.debug(f"Delegate context: {params}")
