@@ -495,6 +495,7 @@ def run_factstruct_stage2(
                     )
                 else:
                     logger.info(f"content :{content}")
+                    logger.info(f"relevant_docs:{relevant_docs}")
                     #这个是判断引用和句子的关系
                     supported = filter_content_by_relevant_docs(
                         content=content,

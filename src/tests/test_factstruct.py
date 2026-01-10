@@ -431,10 +431,11 @@ if __name__ == "__main__":
             print(f"[跳过] prompt 已存在：{q['prompt'][:30]}...")
             continue
 
-        count=count+1
         if count==args.infer_num:
             break
 
+        count=count+1
+        
         content = q["prompt"]
         data = {
             "messages": [

@@ -1,48 +1,83 @@
 import re
 from collections import defaultdict
-# from modelscope.pipelines import pipeline
-# from modelscope.utils.constant import Tasks
 from .document import FactStructDocument
 from datetime import datetime
 from sentence_transformers import CrossEncoder
+from typing import Union, List, Dict, Any
 
 
 
 
-#蕴涵模型判断引用文章和生成文章的关系
 def filter_content_by_relevant_docs(
     content: str,
-    relevant_docs: list,
+    relevant_docs: Union[List[Any], Dict[str, Dict]],
     semantic_cls,
 ):
     """
     判断 content 中每个带引用的句子
     是否被其对应的 relevant_docs 支持
+
+    支持两种 relevant_docs 结构：
+    1. List[FactStructDocument]
+    2. Dict[str, {content, title, url, ...}]
     """
 
-    # 1. 构建 cite_id -> FactStructDocument 映射
-    citeid2doc = {
-        doc.cite_id: doc
-        for doc in relevant_docs
-    }
+    # -----------------------------
+    # 1. 统一构建 cite_id -> doc 映射
+    # -----------------------------
+    # 函数最开头
+    content = re.split(r"\n\s*##\s*参考文献", content)[0]
 
-    # 2. 初始化 NLI pipeline（只初始化一次）
+    citeid2doc = {}
+
+    # 情况 A：dict 结构（你现在用的）
+    if isinstance(relevant_docs, dict):
+        for cite_id_str, doc in relevant_docs.items():
+            try:
+                cite_id = int(cite_id_str)
+            except ValueError:
+                continue
+
+            citeid2doc[cite_id] = {
+                "cite_id": cite_id,
+                "id": cite_id_str,
+                "text": doc.get("content", "")
+            }
+
+    # 情况 B：原来的 FactStructDocument list
+    elif isinstance(relevant_docs, list):
+        for doc in relevant_docs:
+            # 兼容安全检查
+            if not hasattr(doc, "cite_id"):
+                continue
+
+            citeid2doc[doc.cite_id] = {
+                "cite_id": doc.cite_id,
+                "id": getattr(doc, "id", None),
+                "text": getattr(doc, "text", "")
+            }
+
+    else:
+        raise TypeError("relevant_docs 必须是 list 或 dict")
+
+    # -----------------------------
+    # 2. 句子切分
+    # -----------------------------
     supported_statements = []
 
-    # 3. 句子切分
     sentences = re.split(r'(?<=[。！?])', content)
     sentences = [s.strip() for s in sentences if s.strip()]
 
-
+    # -----------------------------
+    # 3. 逐句做 NLI 判断
+    # -----------------------------
     for sentence in sentences:
-        # 4. 提取引用编号，如 【39】
         refs = re.findall(r"[【\[](\d+)[】\]]", sentence)
         if not refs:
             continue
 
         refs = list(set(int(r) for r in refs))
 
-        # 5. 去掉引用符号，作为 hypothesis
         hypothesis = re.sub(r"[【\[]\d+[】\]]", "", sentence).strip()
 
         for cite_id in refs:
@@ -50,34 +85,28 @@ def filter_content_by_relevant_docs(
                 continue
 
             doc = citeid2doc[cite_id]
-            premise = doc.text
+            premise = doc["text"]
 
-            # 6. NLI 推理
-            # result = semantic_cls(input=(premise, hypothesis))
-            # scores = result["scores"]
-            # labels = result["labels"]
+            if not premise:
+                continue
 
-            # max_idx = scores.index(max(scores))
-            # label = labels[max_idx]
-            # score = scores[max_idx]
+            # NLI 推理
             scores = semantic_cls.predict([(premise, hypothesis)])[0]
-
             label_mapping = ['contradiction', 'entailment', 'neutral']
             max_idx = scores.argmax()
-            label = label_mapping[max_idx]
-            score = float(scores[max_idx])
 
-
-            # 7. 保存结果（字段对齐）
             supported_statements.append({
                 "statement": sentence,
-                "doc_id": doc.cite_id,   # 对齐 [39]
-                "doc_uid": doc.id,
-                "nli_label": label,
-                "nli_score": score
+                "doc_id": doc["cite_id"],
+                "doc_uid": doc["id"],
+                "nli_label": label_mapping[max_idx],
+                "nli_score": float(scores[max_idx])
             })
 
     return supported_statements
+
+
+
 
 
 #根据蕴涵模型结果，对生成文章进行处理
@@ -88,6 +117,9 @@ def mark_content_with_support(
     """
     根据 NLI 结果，按 citation 级别标注不被支持的引用为【?】
     """
+    parts = re.split(r"\n\s*##\s*参考文献", content, maxsplit=1)
+    content = parts[0]
+    ref_content = "\n## 参考文献" + parts[1] if len(parts) == 2 else ""
 
     # -------- Step 1: 构建 sentence -> cite_id -> is_supported --------
     sentence2cite_support = defaultdict(dict)
@@ -117,6 +149,8 @@ def mark_content_with_support(
         # 如果这个句子没有任何 NLI 结果 → 全标 ?
         if sent not in sentence2cite_support:
             marked = re.sub(r"[【\[]\d+[】\]]", "【?】", sent)
+            # 合并连续或多个【?】为一个
+            marked = re.sub(r"(【\?】)+", "【?】", marked)
             new_sentences.append(marked)
             continue
 
@@ -138,12 +172,15 @@ def mark_content_with_support(
 
         new_sentences.append(marked)
 
-    return "".join(new_sentences)
+    # return "".join(new_sentences)
+    return "".join(new_sentences) + ref_content
+
+
 
 
 def repair_unknown_citations(
     content: str,
-    relevant_docs: list,
+    relevant_docs: Union[List[Any], Dict[str, Dict]],
     semantic_cls,
     entail_threshold: float = 1
 ):
@@ -151,25 +188,70 @@ def repair_unknown_citations(
     修复 content 中的【？】：
     - 只补充新的 citation，不重复已有的
     - 若无任何蕴涵 → 删除【？】
-    """
 
+    支持 relevant_docs：
+    1. List[FactStructDocument]
+    2. Dict[str, {content, ...}]
+    """
+    parts = re.split(r"\n\s*##\s*参考文献", content, maxsplit=1)
+    content = parts[0]
+    ref_content = "\n## 参考文献" + parts[1] if len(parts) == 2 else ""
+
+    # --------------------------------
+    # 0️⃣ 统一 relevant_docs 结构
+    # --------------------------------
+    citeid2doc = {}
+
+    # dict 结构（最新 data_collections）
+    if isinstance(relevant_docs, dict):
+        for cid_str, doc in relevant_docs.items():
+            try:
+                cid = int(cid_str)
+            except ValueError:
+                continue
+
+            citeid2doc[cid] = {
+                "cite_id": cid,
+                "text": doc.get("content", "")
+            }
+
+    # list 结构（FactStructDocument）
+    elif isinstance(relevant_docs, list):
+        for doc in relevant_docs:
+            if not hasattr(doc, "cite_id"):
+                continue
+
+            citeid2doc[int(doc.cite_id)] = {
+                "cite_id": int(doc.cite_id),
+                "text": getattr(doc, "text", "")
+            }
+
+    else:
+        raise TypeError("relevant_docs 必须是 list 或 dict")
+
+    # --------------------------------
+    # 1️⃣ 句子切分
+    # --------------------------------
     sentences = re.split(r'(?<=[。！？])', content)
     sentences = [s for s in sentences if s.strip()]
 
     new_sentences = []
 
+    # --------------------------------
+    # 2️⃣ 逐句修复【？】
+    # --------------------------------
     for sentence in sentences:
         # 没有【？】直接保留
         if not re.search(r"[【\[]\s*[？?]\s*[】\]]", sentence):
             new_sentences.append(sentence)
             continue
 
-        # 1️⃣ 提取句子中【已经存在的 citation】
+        # 已存在的 citation
         existing_cite_ids = set(
-            re.findall(r"[【\[](\d+)[】\]]", sentence)
+            int(x) for x in re.findall(r"[【\[](\d+)[】\]]", sentence)
         )
 
-        # 2️⃣ 构造 hypothesis（去掉【？】）
+        # hypothesis：去掉【？】
         hypothesis = re.sub(
             r"[【\[]\s*[？?]\s*[】\]]",
             "",
@@ -178,29 +260,29 @@ def repair_unknown_citations(
 
         newly_supported = []
 
-        # 3️⃣ repair：只补充不存在的 citation
-        for doc in relevant_docs:
-            cid = str(doc.cite_id)
+        # --------------------------------
+        # 3️⃣ 遍历所有 doc，做 NLI
+        # --------------------------------
+        for cid, doc in citeid2doc.items():
             if cid in existing_cite_ids:
-                continue  # ⭐ 核心：避免重复
+                continue  # ⭐ 避免重复引用
 
-            # result = semantic_cls(input=(doc.text, hypothesis))
-            # entail_score = result["scores"][1]
-            scores = semantic_cls.predict([(doc.text, hypothesis)])[0]
+            premise = doc["text"]
+            if not premise:
+                continue
+
+            scores = semantic_cls.predict([(premise, hypothesis)])[0]
             entail_score = float(scores[1])  # index 1 = entailment
-            # print()
-            # print("doc.text",doc.text)
-            # print("hypothesis",hypothesis)
-            # print("scores",scores)
-            # print("entail_score",entail_score)
-            # print()
+
             if entail_score > entail_threshold:
                 newly_supported.append(cid)
 
+        # --------------------------------
+        # 4️⃣ 回填或删除【？】
+        # --------------------------------
         if newly_supported:
-            #只把“新补充的 citation”放到【？】位置
             cite_str = "".join(
-                f"【{cid}】" for cid in sorted(set(newly_supported), key=int)
+                f"【{cid}】" for cid in sorted(set(newly_supported))
             )
             repaired = re.sub(
                 r"[【\[]\s*[？?]\s*[】\]]",
@@ -209,14 +291,16 @@ def repair_unknown_citations(
             )
             new_sentences.append(repaired)
         else:
-            # 没有任何新蕴涵 → 删除【？】
             cleaned = re.sub(
                 r"[【\[]\s*[？?]\s*[】\]]",
                 "",
                 sentence
             )
             new_sentences.append(cleaned)
-    return "".join(new_sentences)
+
+    # return "".join(new_sentences)
+    return "".join(new_sentences) + ref_content
+
 
 
 
