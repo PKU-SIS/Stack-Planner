@@ -282,6 +282,8 @@ def memory_to_dict(memory: Memory) -> dict:
     }
 
 
+
+
 def outline_node_to_dict(node: OutlineNode) -> dict:
     """
     将 OutlineNode 完整转换为字典（保留所有字段，包括 MAB 状态）
@@ -543,3 +545,149 @@ def run_factstruct_stage2(
     )
 
     return final_report
+
+
+
+def visualize_outline_with_citations(
+    outline_root: OutlineNode,
+    memory: Memory,
+    output_path: Optional[str] = None,
+    print_text: bool = True,
+) -> str:
+    """
+    可视化大纲树及其引文映射关系。
+
+    参数:
+        outline_root: 大纲根节点
+        memory: Memory 实例，包含节点到文档的映射
+        output_path: 图片输出路径（可选，需要安装 graphviz）
+        print_text: 是否打印文本格式
+
+    返回:
+        文本格式的大纲树（带引文映射）
+    """
+    lines = []
+    lines.append("=" * 80)
+    lines.append("大纲树与引文映射关系")
+    lines.append("=" * 80)
+
+    def format_node(node: OutlineNode, indent: int = 0) -> None:
+        """递归格式化节点"""
+        prefix = "  " * indent
+
+        # 获取该节点的引文
+        doc_ids = memory.node_to_docs.get(node.id, set())
+        docs = [
+            memory.documents.get(doc_id)
+            for doc_id in doc_ids
+            if doc_id in memory.documents
+        ]
+
+        # 节点标题
+        citation_count = len(docs)
+        if citation_count > 0:
+            lines.append(
+                f"{prefix}├─ {node.title} [ID: {node.id}] 📚 {citation_count} 篇引文"
+            )
+        else:
+            lines.append(f"{prefix}├─ {node.title} [ID: {node.id}] ⚠️ 无引文")
+
+        # 显示引文详情（截断显示）
+        for i, doc in enumerate(docs[:3]):  # 最多显示3篇
+            if doc:
+                doc_title = (doc.title or doc.text[:50] + "...") if doc.text else "未知"
+                lines.append(f"{prefix}│    └─ 📄 [{i+1}] {doc_title[:60]}")
+
+        if len(docs) > 3:
+            lines.append(f"{prefix}│    └─ ... 还有 {len(docs) - 3} 篇引文")
+
+        # 递归处理子节点
+        for child in node.children:
+            format_node(child, indent + 1)
+
+    format_node(outline_root)
+
+    # 统计信息
+    all_nodes = outline_root.get_all_nodes()
+    nodes_with_citations = sum(
+        1
+        for n in all_nodes
+        if n.id in memory.node_to_docs and memory.node_to_docs[n.id]
+    )
+
+    lines.append("")
+    lines.append("=" * 80)
+    lines.append("统计信息")
+    lines.append("=" * 80)
+    lines.append(f"总节点数: {len(all_nodes)}")
+    lines.append(f"有引文的节点数: {nodes_with_citations}")
+    lines.append(f"无引文的节点数: {len(all_nodes) - nodes_with_citations}")
+    lines.append(f"引文覆盖率: {nodes_with_citations / len(all_nodes) * 100:.1f}%")
+    lines.append(f"总文档数: {len(memory.documents)}")
+    lines.append("=" * 80)
+
+    text_output = "\n".join(lines)
+
+    if print_text:
+        logger.info(f"\n{text_output}")
+
+    # 尝试生成 graphviz 图片
+    if output_path:
+        try:
+            _generate_graphviz_image(outline_root, memory, output_path)
+            logger.info(f"大纲可视化图片已保存到: {output_path}")
+        except Exception as e:
+            logger.warning(f"无法生成 graphviz 图片: {e}")
+
+    return text_output
+
+
+def _generate_graphviz_image(
+    outline_root: OutlineNode,
+    memory: Memory,
+    output_path: str,
+) -> None:
+    """
+    使用 graphviz 生成大纲树可视化图片。
+
+    参数:
+        outline_root: 大纲根节点
+        memory: Memory 实例
+        output_path: 输出路径（不含扩展名）
+    """
+    try:
+        from graphviz import Digraph
+    except ImportError:
+        raise ImportError("需要安装 graphviz: pip install graphviz")
+
+    dot = Digraph(comment="Outline Tree with Citations")
+    dot.attr(rankdir="TB", splines="ortho")
+    dot.attr("node", shape="box", style="rounded,filled", fontname="SimHei")
+
+    def add_node(node: OutlineNode) -> None:
+        """递归添加节点"""
+        doc_ids = memory.node_to_docs.get(node.id, set())
+        doc_count = len(doc_ids)
+
+        # 根据引文数量设置颜色
+        if doc_count == 0:
+            color = "#ffcccc"  # 红色 - 无引文
+        elif doc_count <= 2:
+            color = "#ffffcc"  # 黄色 - 少量引文
+        else:
+            color = "#ccffcc"  # 绿色 - 有引文
+
+        # 截断标题
+        title = node.title[:30] + "..." if len(node.title) > 30 else node.title
+        label = f"{title}\\n📚 {doc_count} docs"
+
+        dot.node(node.id, label, fillcolor=color)
+
+        for child in node.children:
+            add_node(child)
+            dot.edge(node.id, child.id)
+
+    add_node(outline_root)
+
+    # 保存图片
+    dot.render(output_path, format="png", cleanup=True)

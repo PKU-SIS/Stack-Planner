@@ -1,4 +1,6 @@
-
+*接口文档.md
+.windsurf/
+references_logs/
 ./*.txt
 CHANGELOG.md
 # Python-generated files

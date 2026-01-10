@@ -34,6 +34,7 @@ from src.factstruct import (
     mark_content_with_support,
     repair_unknown_citations
 )
+from src.factstruct.outline_node import OutlineNode
 
 from ..graph.types import State
 from ..config import SELECTED_SEARCH_ENGINE, SearchEngine
@@ -1018,12 +1019,38 @@ class SubAgentManager:
                 outline_response = outline_node_to_markdown(
                     outline_root, max_depth=None, include_root=True
                 )
+                
+
+                # 如果用户指定了字数限制，执行字数规划
+                total_word_limit = state.get("total_word_limit", 0)
+                if total_word_limit > 0:
+                    logger.info(f"检测到字数限制 {total_word_limit}，开始字数规划...")
+                    outline_root = self.execute_word_planning(
+                        outline_root, total_word_limit
+                    )
+                    # 更新大纲文本，包含字数信息
+                    outline_response = outline_root.to_text_tree(
+                        include_word_limit=True
+                    )
+
+                # 如果用户指定了字数限制，执行字数规划
+                total_word_limit = state.get("total_word_limit", 0)
+                if total_word_limit > 0:
+                    logger.info(f"检测到字数限制 {total_word_limit}，开始字数规划...")
+                    outline_root = self.execute_word_planning(
+                        outline_root, total_word_limit
+                    )
+                    # 更新大纲文本，包含字数信息
+                    outline_response = outline_root.to_text_tree(
+                        include_word_limit=True
+                    )
 
                 # 保存到 state（供 FactStruct Stage 2 使用）
                 from src.factstruct import outline_node_to_dict, memory_to_dict
 
                 factstruct_outline_dict = outline_node_to_dict(outline_root)
                 factstruct_memory_dict = memory_to_dict(memory)
+
 
                 logger.info(
                     f"FactStruct Stage 1 大纲生成完成: "
@@ -1119,3 +1146,99 @@ class SubAgentManager:
             #     )
             # else:
             #     raise TypeError(f"Interrupt value of {feedback} is not supported.")
+
+    @timed_step("execute_word_planning")
+    def execute_word_planning(
+        self, outline_root: OutlineNode, total_word_limit: int
+    ) -> OutlineNode:
+        """
+        执行字数规划，为大纲中的每个叶子节点分配字数配额
+
+        Args:
+            outline_root: 大纲根节点
+            total_word_limit: 用户指定的总字数限制
+
+        Returns:
+            更新了字数配额的大纲根节点
+        """
+        import json
+
+        logger.info(f"开始字数规划，总字数限制: {total_word_limit}")
+
+        # 构建大纲结构信息供LLM分析
+        def build_outline_info(node: OutlineNode, depth: int = 0) -> list:
+            nodes_info = []
+            nodes_info.append(
+                {
+                    "id": node.id,
+                    "title": node.title,
+                    "depth": depth,
+                    "is_leaf": node.is_leaf(),
+                }
+            )
+            for child in node.children:
+                nodes_info.extend(build_outline_info(child, depth + 1))
+            return nodes_info
+
+        outline_info = build_outline_info(outline_root)
+        leaf_nodes = [n for n in outline_info if n["is_leaf"]]
+
+        # 构建LLM请求
+        outline_text = outline_root.to_text_tree()
+        prompt_content = f"""请为以下报告大纲分配字数。
+
+## 大纲结构
+{outline_text}
+
+## 叶子节点列表
+{json.dumps(leaf_nodes, ensure_ascii=False, indent=2)}
+
+## 总字数限制
+{total_word_limit} 字
+
+请根据每个叶子节点的重要性和内容复杂度，智能分配字数配额。"""
+
+        try:
+            messages = apply_prompt_template("word_planner", {"messages": []}) + [
+                HumanMessage(content=prompt_content)
+            ]
+            llm = get_llm_by_type(AGENT_LLM_MAP.get("outline", "default"))
+            response = llm.invoke(messages)
+            result = response.content
+
+            # 解析JSON结果
+            result = result.replace("```json", "").replace("```", "").strip()
+            allocations = json.loads(result)
+
+            # 将字数配额写入节点
+            for alloc in allocations.get("allocations", []):
+                node_id = alloc.get("node_id")
+                word_limit = alloc.get("word_limit", 0)
+                node = outline_root.find_node_by_id(node_id)
+                if node:
+                    node.word_limit = word_limit
+                    logger.debug(
+                        f"节点 {node_id} ({node.title}) 分配字数: {word_limit}"
+                    )
+
+            # 自底向上计算非叶子节点的字数
+            def update_parent_word_limits(node: OutlineNode) -> int:
+                if node.is_leaf():
+                    return node.word_limit
+                total = sum(update_parent_word_limits(child) for child in node.children)
+                node.word_limit = total
+                return total
+
+            update_parent_word_limits(outline_root)
+            logger.info(f"字数规划完成，根节点总字数: {outline_root.word_limit}")
+
+        except Exception as e:
+            logger.error(f"字数规划失败: {str(e)}")
+            # Fallback: 平均分配
+            leaf_nodes_obj = outline_root.get_leaf_nodes()
+            avg_words = total_word_limit // len(leaf_nodes_obj) if leaf_nodes_obj else 0
+            for node in leaf_nodes_obj:
+                node.word_limit = avg_words
+            logger.warning(f"使用平均分配策略，每个叶子节点: {avg_words} 字")
+
+        return outline_root

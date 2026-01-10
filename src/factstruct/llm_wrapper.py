@@ -184,7 +184,12 @@ class FactStructLLMWrapper:
         self,
         current_outline: OutlineNode,
         node_doc_pairs: List[Tuple[OutlineNode, List[FactStructDocument]]],
-    ) -> Tuple[OutlineNode, List[Tuple[OutlineNode, List[OutlineNode]]]]:
+        memory: "Memory" = None,
+    ) -> Tuple[
+        OutlineNode,
+        List[Tuple[OutlineNode, List[OutlineNode]]],
+        Dict[str, List[FactStructDocument]],
+    ]:
         """
         批量修纲（单次 LLM 调用）
 
@@ -193,14 +198,17 @@ class FactStructLLMWrapper:
         参数:
             current_outline: 当前大纲根节点
             node_doc_pairs: (节点, 新文档列表) 的元组列表
+            memory: Memory 实例，用于获取节点的累积文档映射
 
         返回:
-            (修订后的大纲根节点, expanded_nodes_list)
+            (修订后的大纲根节点, expanded_nodes_list, new_node_doc_mapping)
             expanded_nodes_list: [(父节点, [新子节点1, 新子节点2, ...]), ...] 的列表，
                                 记录哪些节点被扩展了以及它们的新子节点
+            new_node_doc_mapping: {新子节点ID: [匹配的文档列表]} 的字典，
+                                记录每个新子节点与文档的匹配关系
         """
         if not node_doc_pairs:
-            return current_outline, []
+            return current_outline, [], {}
 
         # 构建批量修纲的 prompt
         outline_text = current_outline.to_text_tree()
@@ -221,7 +229,7 @@ class FactStructLLMWrapper:
   - 节点: '{node.title}'
   - 上下文: {context_str}
   - 新信息: {docs_text}
-  - 要求: 在该节点下增加 2-4 个并列的子章节（不是只增加一个），使其更好地覆盖新信息的不同方面。"""
+  - 要求: 在该节点下增加 2-4 个并列的子章节。**每个子章节的标题必须直接来源于或对应上述"新信息"中的某个具体内容点**，确保子章节与文档有明确的对应关系。"""
             )
 
         prompt = f"""你是一个研究助手。我们刚刚检索了 {len(node_doc_pairs)} 个节点，获得了新信息。你的任务是根据这些新信息，对大纲进行 {len(node_doc_pairs)} 次 *独立的局部优化*。
@@ -237,7 +245,8 @@ class FactStructLLMWrapper:
 3. 子节点之间应该是并列关系，覆盖该主题的不同方面，而不是层层嵌套
 4. 修改时只影响目标节点及其子节点，不要影响其他不相关的节点
 5. 修改后的大纲应该保持层次结构清晰、宽度均衡
-6. 输出格式必须是 JSON，结构如下：
+6. **关键**：每个新生成的子节点标题必须能够在对应的"新信息"文档中找到明确的内容支撑，不要生成与文档内容无关的空泛标题。子节点标题应该具体、有信息量，能够直接对应到某个文档的核心内容
+7. 输出格式必须是 JSON，结构如下：
 {{
     "title": "根节点标题",
     "children": [
@@ -292,11 +301,11 @@ class FactStructLLMWrapper:
                     "Batch refine validation failed: returned outline may not contain expected changes. "
                     "Returning original outline."
                 )
-                return current_outline, []
+                return current_outline, [], {}
 
-            # 重要：识别哪些节点被扩展了，并构建 expanded_nodes_list
-            expanded_nodes_list = self._identify_expanded_nodes(
-                current_outline, new_root, node_doc_pairs
+            # 重要：识别哪些节点被扩展了，并构建 expanded_nodes_list 和新子节点的文档映射
+            expanded_nodes_list, new_node_doc_mapping = self._identify_expanded_nodes(
+                current_outline, new_root, node_doc_pairs, memory
             )
 
             # 先继承所有现有节点的状态（通过路径匹配）
@@ -304,9 +313,10 @@ class FactStructLLMWrapper:
 
             logger.info(
                 f"Refined outline with {len(new_root.get_all_nodes())} nodes, "
-                f"{len(expanded_nodes_list)} nodes expanded"
+                f"{len(expanded_nodes_list)} nodes expanded, "
+                f"{len(new_node_doc_mapping)} new nodes mapped to documents"
             )
-            return new_root, expanded_nodes_list
+            return new_root, expanded_nodes_list, new_node_doc_mapping
 
         except Exception as e:
             import traceback
@@ -314,7 +324,7 @@ class FactStructLLMWrapper:
             logger.error(f"Failed to batch refine outline: {e}")
             logger.error(f"Detailed error:\n{traceback.format_exc()}")
             # 返回原大纲（不修改）
-            return current_outline, []
+            return current_outline, [], {}
 
     def _format_documents(
         self,
@@ -419,18 +429,25 @@ class FactStructLLMWrapper:
         old_outline: OutlineNode,
         new_outline: OutlineNode,
         node_doc_pairs: List[Tuple[OutlineNode, List[FactStructDocument]]],
-    ) -> List[Tuple[OutlineNode, List[OutlineNode]]]:
+        memory: "Memory" = None,
+    ) -> Tuple[
+        List[Tuple[OutlineNode, List[OutlineNode]]], Dict[str, List[FactStructDocument]]
+    ]:
         """
-        识别哪些节点被扩展了（从叶子节点变成了有子节点的内部节点）
+        识别哪些节点被扩展了（从叶子节点变成了有子节点的内部节点），
+        并为每个新子节点匹配相关文档。
 
         参数:
             old_outline: 旧大纲根节点
             new_outline: 新大纲根节点
             node_doc_pairs: 目标节点-文档对列表（这些节点是我们希望被扩展的）
+            memory: Memory 实例，用于获取节点的累积文档
 
         返回:
+            (expanded_nodes_list, new_node_doc_mapping)
             expanded_nodes_list: [(父节点, [新子节点1, 新子节点2, ...]), ...] 的列表
                                 使用列表而不是字典，因为 OutlineNode 不可哈希
+            new_node_doc_mapping: {新子节点ID: [匹配的文档列表]} 的字典
         """
 
         def get_node_path(node: OutlineNode) -> str:
@@ -449,10 +466,65 @@ class FactStructLLMWrapper:
                     return node
             return None
 
+        def match_child_to_docs(
+            child_node: OutlineNode, docs: List[FactStructDocument]
+        ) -> List[FactStructDocument]:
+            """
+            为新子节点匹配最相关的文档。
+            使用简单的文本匹配策略：检查子节点标题中的关键词是否出现在文档中。
+            """
+            if not docs:
+                return []
+
+            child_title_lower = child_node.title.lower()
+            # 提取子节点标题中的关键词（去掉常见停用词）
+            stopwords = {
+                "的",
+                "和",
+                "与",
+                "在",
+                "是",
+                "了",
+                "有",
+                "为",
+                "the",
+                "a",
+                "an",
+                "and",
+                "or",
+                "of",
+                "in",
+                "to",
+                "for",
+            }
+            keywords = [
+                w
+                for w in child_title_lower.split()
+                if w not in stopwords and len(w) > 1
+            ]
+
+            matched_docs = []
+            for doc in docs:
+                doc_text_lower = (doc.text + " " + (doc.title or "")).lower()
+                # 计算匹配的关键词数量
+                match_count = sum(1 for kw in keywords if kw in doc_text_lower)
+                if match_count > 0:
+                    matched_docs.append((match_count, doc))
+
+            # 按匹配度排序，返回匹配的文档
+            matched_docs.sort(key=lambda x: x[0], reverse=True)
+
+            if matched_docs:
+                return [doc for _, doc in matched_docs]
+            else:
+                # 如果没有明确匹配，返回所有文档（继承父节点的全部文档）
+                return docs
+
         expanded_nodes_list = []
+        new_node_doc_mapping: Dict[str, List[FactStructDocument]] = {}
 
         # 对于每个目标节点，检查它是否被扩展了
-        for target_node, _ in node_doc_pairs:
+        for target_node, new_docs in node_doc_pairs:
             # 获取目标节点在旧大纲中的路径
             old_path = get_node_path(target_node)
 
@@ -482,12 +554,33 @@ class FactStructLLMWrapper:
             if new_matched_node.children:
                 # 节点被扩展了！记录新子节点
                 expanded_nodes_list.append((target_node, new_matched_node.children))
+
+                # 获取该节点的累积文档（包括之前迭代积累的 + 本轮新增的）
+                # 优先使用 memory 中的累积文档，如果 memory 不可用则使用本轮新文档
+                all_docs = new_docs  # 默认使用本轮新文档
+                if memory is not None:
+                    accumulated_docs = memory.get_docs_by_node(target_node.id)
+                    if accumulated_docs:
+                        all_docs = accumulated_docs
+                        logger.debug(
+                            f"Using {len(all_docs)} accumulated docs for node '{target_node.title}'"
+                        )
+
+                # 为每个新子节点匹配文档
+                for child_node in new_matched_node.children:
+                    matched_docs = match_child_to_docs(child_node, all_docs)
+                    new_node_doc_mapping[child_node.id] = matched_docs
+                    logger.debug(
+                        f"Child node '{child_node.title}' matched {len(matched_docs)} documents"
+                    )
+
                 logger.info(
                     f"Node '{target_node.title}' expanded: "
-                    f"{len(new_matched_node.children)} new children"
+                    f"{len(new_matched_node.children)} new children, "
+                    f"all mapped to documents (from {len(all_docs)} available docs)"
                 )
 
-        return expanded_nodes_list
+        return expanded_nodes_list, new_node_doc_mapping
 
     def _find_similar_node_by_title(
         self,

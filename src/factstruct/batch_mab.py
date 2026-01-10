@@ -231,10 +231,11 @@ class BatchMAB:
             # (LLM Call #Round*2 + 1)
             if node_doc_pairs_for_refine:
                 logger.info("Batch refining outline...")
-                outline_root, expanded_nodes_list = (
+                outline_root, expanded_nodes_list, new_node_doc_mapping = (
                     self.llm_wrapper.batch_refine_outline(
                         outline_root,
                         node_doc_pairs_for_refine,
+                        memory=self.memory,  # 传递 memory 以获取累积文档
                     )
                 )
 
@@ -258,6 +259,20 @@ class BatchMAB:
                         f"{len(new_children)} children"
                     )
                 # --- 状态继承结束 ---
+
+                # --- 新增：为新子节点存储引文映射 ---
+                # new_node_doc_mapping 格式: {node_id: [doc1, doc2, ...]}
+                for node_id, docs in new_node_doc_mapping.items():
+                    self.memory.map_node_to_docs(node_id, docs)
+                    logger.debug(
+                        f"New child node '{node_id}' mapped to {len(docs)} documents"
+                    )
+
+                if new_node_doc_mapping:
+                    logger.info(
+                        f"Citation mapping stored for {len(new_node_doc_mapping)} new child nodes"
+                    )
+                # --- 引文映射存储结束 ---
 
                 logger.info(
                     f"Outline refined: {len(outline_root.get_all_nodes())} total nodes, "
@@ -293,6 +308,19 @@ class BatchMAB:
             f"Batch-MAB completed: {t} iterations, "
             f"{len(outline_root.get_all_nodes())} nodes in final outline"
         )
+
+        # 可视化大纲树与引文映射关系
+        try:
+            from .integration import visualize_outline_with_citations
+
+            visualize_outline_with_citations(
+                outline_root,
+                self.memory,
+                output_path="outline_with_citations",  # 生成 outline_with_citations.png
+                print_text=True,
+            )
+        except Exception as e:
+            logger.warning(f"无法可视化大纲树: {e}")
 
         return outline_root, self.memory
 
