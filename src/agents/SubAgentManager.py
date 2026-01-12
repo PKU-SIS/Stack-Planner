@@ -1022,7 +1022,7 @@ class SubAgentManager:
                 
 
                 # 如果用户指定了字数限制，执行字数规划
-                total_word_limit = state.get("total_word_limit", 0)
+                total_word_limit = state.get("total_word_limit", 5000)
                 if total_word_limit > 0:
                     logger.info(f"检测到字数限制 {total_word_limit}，开始字数规划...")
                     outline_root = self.execute_word_planning(
@@ -1034,16 +1034,16 @@ class SubAgentManager:
                     )
 
                 # 如果用户指定了字数限制，执行字数规划
-                total_word_limit = state.get("total_word_limit", 0)
-                if total_word_limit > 0:
-                    logger.info(f"检测到字数限制 {total_word_limit}，开始字数规划...")
-                    outline_root = self.execute_word_planning(
-                        outline_root, total_word_limit
-                    )
-                    # 更新大纲文本，包含字数信息
-                    outline_response = outline_root.to_text_tree(
-                        include_word_limit=True
-                    )
+                # total_word_limit = state.get("total_word_limit", 0)
+                # if total_word_limit > 0:
+                #     logger.info(f"检测到字数限制 {total_word_limit}，开始字数规划...")
+                #     outline_root = self.execute_word_planning(
+                #         outline_root, total_word_limit
+                #     )
+                #     # 更新大纲文本，包含字数信息
+                #     outline_response = outline_root.to_text_tree(
+                #         include_word_limit=True
+                #     )
 
                 # 保存到 state（供 FactStruct Stage 2 使用）
                 from src.factstruct import outline_node_to_dict, memory_to_dict
