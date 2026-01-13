@@ -218,7 +218,7 @@ def _build_graph_FactStruct():
         builder.add_node(sub_agent["name"], sub_agent["node"])
     # builder.add_node("researcher", sp_xxqg_researcher_node)
     # builder.add_node("coder", sp_coder_node)
-    # builder.add_node("reporter", sp_xxqg_reporter_node)
+    # builder.add_node("reporter", sp_xxqg_reporter_node) sub_agents_factstruct
 
     # 下面这些暂时没有算sub agent
     builder.add_node("zip_data", zip_data)
@@ -229,10 +229,13 @@ def _build_graph_FactStruct():
     # builder.add_edge(START, "perception")
     # builder.add_edge("perception", "outline")
 
-    # 核心流程
+    # # 核心流程,原本流程
+    # builder.add_edge("outline_factstruct", "central_agent")
+    # builder.add_edge("central_agent", "zip_data")
+
+    # 暂时不带 Central Agent 的流程
     builder.add_edge("outline_factstruct", "central_agent")
     builder.add_edge("central_agent", "zip_data")
-
     # 后处理部分
     builder.add_edge("zip_data", END)
 

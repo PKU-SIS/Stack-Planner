@@ -1187,16 +1187,18 @@ class SubAgentManager:
         outline_text = outline_root.to_text_tree()
         prompt_content = f"""请为以下报告大纲分配字数。
 
-## 大纲结构
-{outline_text}
+        ## 大纲结构
+        {outline_text}
 
-## 叶子节点列表
-{json.dumps(leaf_nodes, ensure_ascii=False, indent=2)}
+        ## 叶子节点列表
+        {json.dumps(leaf_nodes, ensure_ascii=False, indent=2)}
 
-## 总字数限制
-{total_word_limit} 字
+        ## 总字数限制
+        {total_word_limit} 字
 
-请根据每个叶子节点的重要性和内容复杂度，智能分配字数配额。"""
+        请根据每个叶子节点的重要性和内容复杂度，智能分配字数配额。
+        你必须只输出一个合法的 JSON 对象。禁止输出任何解释、说明、注释、标题或额外文本。如果输出包含非 JSON 内容，将被视为错误。
+        """
 
         try:
             messages = apply_prompt_template("word_planner", {"messages": []}) + [
@@ -1207,8 +1209,14 @@ class SubAgentManager:
             result = response.content
 
             # 解析JSON结果
-            result = result.replace("```json", "").replace("```", "").strip()
-            allocations = json.loads(result)
+            logger.info(f"result:{result}")
+            # result = result.replace("```json", "").replace("```", "").strip()
+
+            match = re.search(r"\{[\s\S]*\}", result)
+            if not match:
+                raise ValueError("No JSON object found in LLM output")
+
+            allocations = json.loads(match.group(0))
 
             # 将字数配额写入节点
             for alloc in allocations.get("allocations", []):
@@ -1241,4 +1249,6 @@ class SubAgentManager:
                 node.word_limit = avg_words
             logger.warning(f"使用平均分配策略，每个叶子节点: {avg_words} 字")
 
+        logger.info(f"outline_root:{outline_root}")
+        exit()
         return outline_root

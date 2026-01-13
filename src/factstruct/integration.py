@@ -299,6 +299,7 @@ def outline_node_to_dict(node: OutlineNode) -> dict:
         "title": node.title,
         "pull_count": node.pull_count,
         "reward_history": node.reward_history,
+        "word_limit": node.word_limit,
         "children": [outline_node_to_dict(child) for child in node.children],
     }
 
@@ -321,6 +322,7 @@ def dict_to_outline_node(data: dict, parent: Optional[OutlineNode] = None) -> Ou
         children=[],
         pull_count=data.get("pull_count", 0),
         reward_history=data.get("reward_history", []),
+        word_limit=data.get("word_limit", 0),
     )
 
     for child_data in data.get("children", []):
@@ -439,6 +441,14 @@ def run_factstruct_stage2(
         if node.is_leaf():
             relevant_docs = memory.get_docs_by_node(node.id)
 
+            # 处理字数限制
+            word_limit = None#是零就不处理
+            logger.info(f"node{node}")
+            logger.info(f"node.word_limit = {node.word_limit}, type = {type(node.word_limit)}")
+
+            if isinstance(node.word_limit, int) and node.word_limit > 0: #是正整数就处理
+                word_limit = node.word_limit
+
             if not relevant_docs:
                 logger.warning(
                     f"节点 '{node.title}' (ID: {node.id}) 未找到关联文档"
@@ -470,6 +480,7 @@ def run_factstruct_stage2(
                 "completed_content": completed_content,
                 "reference_materials": relevant_docs_text,
                 "locale": locale,
+                "word_limit": word_limit,   #词数限制
             }
 
             try:
@@ -483,8 +494,10 @@ def run_factstruct_stage2(
                         "completed_content": completed_content,
                         "reference_materials": relevant_docs_text,
                         "locale": locale,
+                        "word_limit": word_limit,   #词数限制
                     }
                 )
+                logger.info(f"messages:{messages}")
                 response = llm.invoke(messages)
                 content = response.content.strip()
                 report_parts.append(f"{content}\n")

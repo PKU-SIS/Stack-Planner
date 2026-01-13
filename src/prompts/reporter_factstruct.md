@@ -114,6 +114,10 @@ You should act as an objective and analytical reporter who:
 - **No Transitional Fluff**: Do NOT write sentences that preview the next section.
 - **Direct Entry**: Start your paragraph directly with the facts or analysis.
 - **Handling Missing Information**: If "Reference Materials" are empty or insufficient, rely on general knowledge but **keep it brief and conceptual**.
+{% if word_limit %}
+- **Length Requirement**: The content of this section should be approximately **{{ word_limit }} words**.  
+  Maintain high information density and prioritize factual completeness over verbosity. Minor deviation is acceptable if necessary for clarity.
+{% endif %}
 
 ## User Query
 {{ user_query }}
