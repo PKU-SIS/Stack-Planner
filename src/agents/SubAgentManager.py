@@ -1009,9 +1009,9 @@ class SubAgentManager:
                 outline_root, memory = run_factstruct_stage1(
                     query=full_query,
                     max_iterations=state.get(
-                        "factstruct_max_iterations", 20
+                        "factstruct_max_iterations",  4
                     ),  # 默认 10 次迭代
-                    batch_size=state.get("factstruct_batch_size", 5),  # 默认批量大小 3
+                    batch_size=state.get("factstruct_batch_size", 2),  # 默认批量大小 3
                     config=config,
                 )
 
@@ -1033,17 +1033,6 @@ class SubAgentManager:
                         include_word_limit=True
                     )
 
-                # 如果用户指定了字数限制，执行字数规划
-                # total_word_limit = state.get("total_word_limit", 0)
-                # if total_word_limit > 0:
-                #     logger.info(f"检测到字数限制 {total_word_limit}，开始字数规划...")
-                #     outline_root = self.execute_word_planning(
-                #         outline_root, total_word_limit
-                #     )
-                #     # 更新大纲文本，包含字数信息
-                #     outline_response = outline_root.to_text_tree(
-                #         include_word_limit=True
-                #     )
 
                 # 保存到 state（供 FactStruct Stage 2 使用）
                 from src.factstruct import outline_node_to_dict, memory_to_dict
@@ -1104,48 +1093,7 @@ class SubAgentManager:
                 },
                 goto="central_agent",
             )
-            #不要确认了
-            # feedback = interrupt(
-            #     "Please Confirm or Edit the Outline.[OUTLINE]"
-            #     + outline_response
-            #     + "[/OUTLINE]"
-            # )
 
-            # # if the feedback is not accepted, return the planner node
-            # if feedback and str(feedback).upper().startswith("[CONFIRMED_OUTLINE]"):
-            #     outline_confirmed = feedback[len("[CONFIRMED_OUTLINE]") :].strip()
-            #     logger.info(f"大纲确认: {outline_confirmed}")
-
-            #     return Command(
-            #         update={
-            #             "messages": [
-            #                 HumanMessage(
-            #                     content=f"大纲确认: {outline_confirmed}", name="outline"
-            #                 )
-            #             ],
-            #             "report_outline": outline_confirmed,
-            #             "current_node": "outline",
-            #         },
-            #         goto="central_agent",
-            #     )
-            # elif feedback and str(feedback).upper().startswith("[SKIP]"):
-            #     outline_confirmed = feedback[len("[SKIP]") :].strip()
-            #     logger.info(f"大纲确认: {outline_confirmed}")
-
-            #     return Command(
-            #         update={
-            #             "messages": [
-            #                 HumanMessage(
-            #                     content=f"大纲确认: {outline_confirmed}", name="outline"
-            #                 )
-            #             ],
-            #             "report_outline": outline_confirmed,
-            #             "current_node": "outline",
-            #         },
-            #         goto="central_agent",
-            #     )
-            # else:
-            #     raise TypeError(f"Interrupt value of {feedback} is not supported.")
 
     @timed_step("execute_word_planning")
     def execute_word_planning(
@@ -1250,5 +1198,5 @@ class SubAgentManager:
             logger.warning(f"使用平均分配策略，每个叶子节点: {avg_words} 字")
 
         logger.info(f"outline_root:{outline_root}")
-        exit()
+        # exit()
         return outline_root

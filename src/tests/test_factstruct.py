@@ -126,6 +126,7 @@ def extract_reports(log_text):
             buffer.append(line)
 
     return reports
+
 #提取最后答案的
 #这个似乎不太行
 def extract_reporter_output(text):
