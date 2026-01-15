@@ -490,9 +490,22 @@ class SubAgentManager:
             # data_collections = state.get("data_collections", [])
             # data_collections_str = "\n\n".join(data_collections)
             constraint = self.ROLE_CONSTRAINTS.get(style_role, "")
+
+            # 检查是否存在原始报告（风格切换场景）
+            original_report = state.get("original_report", "")
+            reference_hint = ""
+            if original_report:
+                # 提取原始报告中的引用编号
+                import re
+
+                citations = re.findall(r"【(\d+)】", original_report)
+                if citations:
+                    unique_citations = sorted(set(citations), key=lambda x: int(x))
+                    reference_hint = f"\n\n##引用保持要求\n\n原始报告使用了以下引用编号：{'、'.join(['【' + c + '】' for c in unique_citations])}。请在新风格的报告中尽量保持使用相同的引用来源，确保引用的完整性和一致性。"
+
             messages.append(
                 HumanMessage(
-                    content=f"{constraint}##User Query\n\n{user_query}\n\n##任务描述\n\n{task_description}\n\n##用户约束\n\n{user_dst}\n\n##报告大纲\n\n{report_outline}"
+                    content=f"{constraint}##User Query\n\n{user_query}\n\n##任务描述\n\n{task_description}\n\n##用户约束\n\n{user_dst}\n\n##报告大纲\n\n{report_outline}{reference_hint}"
                 )
             )
 
@@ -561,6 +574,7 @@ class SubAgentManager:
             return Command(
                 update={
                     "final_report": final_report,
+                    "original_report": final_report,  # 保存首次生成的报告作为参考
                     "current_style": current_style,
                     "wait_stage": "reporter",
                     "current_node": "reporter",
