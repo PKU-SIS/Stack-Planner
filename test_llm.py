@@ -31,4 +31,9 @@ response = client.chat.completions.create(
     extra_body={"enable_thinking": False}
 )
 
-print(f"📝 Response: {response.choices[0].message.content}")
+# 流式输出响应
+for chunk in response:
+    if chunk.choices[0].delta.content is not None:
+        print(chunk.choices[0].delta.content, end='', flush=True)
+
+print('\n'*2)  # 输出结束后换行
