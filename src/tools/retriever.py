@@ -14,8 +14,6 @@ from src.config.tools import SELECTED_RAG_PROVIDER
 from src.rag import Document, Retriever, Resource, build_retriever
 
 
-
-
 class RetrieverInput(BaseModel):
     keywords: str = Field(description="search keywords to look up")
 

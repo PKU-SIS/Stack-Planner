@@ -11,8 +11,6 @@ from src.prose.graph.state import ProseState
 from src.prompts.template import get_prompt_template
 
 
-
-
 def prose_improve_node(state: ProseState):
     logger.info("Generating prose improve content...")
     model = get_llm_by_type(AGENT_LLM_MAP["prose_writer"])

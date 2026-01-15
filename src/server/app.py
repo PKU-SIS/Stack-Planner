@@ -3,6 +3,9 @@
 
 import base64
 import json
+from math import log
+
+from sympy import im
 from src.utils.logger import logger
 import os
 from typing import Annotated, List, cast
@@ -16,7 +19,7 @@ from langgraph.types import Command
 
 from src.config.tools import SELECTED_RAG_PROVIDER
 from src.graph.builder import build_graph_with_memory
-from src.graph.builder import graph as xxqg_graph
+from src.graph.builder import get_graph_by_format
 from src.podcast.graph.builder import build_graph as build_podcast_graph
 from src.ppt.graph.builder import build_graph as build_ppt_graph
 from src.prose.graph.builder import build_graph as build_prose_graph
@@ -38,7 +41,7 @@ from src.server.rag_request import (
     RAGResourcesResponse,
 )
 from src.tools import VolcengineTTS
-
+from src.utils.reference_utils import global_reference_map
 
 
 app = FastAPI(
@@ -55,7 +58,9 @@ app.add_middleware(
     allow_methods=["*"],  # Allows all methods
     allow_headers=["*"],  # Allows all headers
 )
+from langgraph.store.memory import InMemoryStore
 
+in_memory_store = InMemoryStore()
 graph = build_graph_with_memory()
 
 
@@ -176,6 +181,7 @@ async def _astream_workflow_generator(
                 # AI Message - Raw message tokens
                 yield _make_event("message_chunk", event_stream_message)
 
+
 @app.post("/api/chat/xxqg_stream")
 async def chat_stream(request: ChatRequest):
     thread_id = request.thread_id
@@ -219,7 +225,7 @@ async def _astream_workflow_generator_xxqg(
         "auto_accepted_plan": auto_accepted_plan,
         "enable_background_investigation": enable_background_investigation,
         "user_query": messages[-1]["content"] if messages else "",
-        "data_collections":[]
+        "data_collections": [],
     }
     if not auto_accepted_plan and interrupt_feedback:
         resume_msg = f"[{interrupt_feedback}]"
@@ -227,7 +233,7 @@ async def _astream_workflow_generator_xxqg(
         if messages:
             resume_msg += f" {messages[-1]['content']}"
         input_ = Command(resume=resume_msg)
-    async for agent, _, event_data in xxqg_graph.astream(
+    async for agent, _, event_data in get_graph_by_format("xxqg").astream(
         input_,
         config={
             "thread_id": thread_id,
@@ -295,11 +301,205 @@ async def _astream_workflow_generator_xxqg(
                 yield _make_event("message_chunk", event_stream_message)
 
 
+@app.post("/api/chat/sp_stream")
+async def chat_stream(request: ChatRequest):
+    thread_id = request.thread_id
+    if thread_id == "__default__":
+        thread_id = str(uuid4())
+    logger.info(f"request param details: {request}")
+    return StreamingResponse(
+        _astream_workflow_generator_sp(
+            request.model_dump()["messages"],
+            thread_id,
+            request.resources,
+            request.max_plan_iterations,
+            request.max_step_num,
+            request.max_search_results,
+            request.auto_accepted_plan,
+            request.interrupt_feedback,
+            request.mcp_settings,
+            request.enable_background_investigation,
+            request.graph_format,
+        ),
+        media_type="text/event-stream",
+    )
+
+
+async def _astream_workflow_generator_sp(
+    messages: List[ChatMessage],
+    thread_id: str,
+    resources: List[Resource],
+    max_plan_iterations: int,
+    max_step_num: int,
+    max_search_results: int,
+    auto_accepted_plan: bool,
+    interrupt_feedback: str,
+    mcp_settings: dict,
+    enable_background_investigation,
+    graph_format: str = "sp",
+):
+    input_ = {
+        "messages": messages,
+        "plan_iterations": 0,
+        "final_report": "",
+        "current_plan": None,
+        "observations": [],
+        "auto_accepted_plan": auto_accepted_plan,
+        "enable_background_investigation": enable_background_investigation,
+        "user_query": messages[-1]["content"] if messages else "",
+        "data_collections": [],
+    }
+    if not auto_accepted_plan and interrupt_feedback:
+        if interrupt_feedback.startswith("["):
+            resume_msg = interrupt_feedback
+        else:
+            resume_msg = f"[{interrupt_feedback}]"
+        # add the last message to the resume message
+        if messages:
+            resume_msg += f" {messages[-1]['content']}"
+        input_ = Command(resume=resume_msg)
+
+    from src.graph.sp_nodes import init_agents
+
+    init_agents(graph_format)
+    if graph_format == "sp_xxqg":
+        graph = get_graph_by_format(graph_format, with_memory=True)
+    else:
+        graph = get_graph_by_format(graph_format, with_memory=False)
+
+    last_known_agent = None
+    async for agent, _, event_data in graph.astream(
+        input_,
+        config={
+            "thread_id": thread_id,
+            "resources": resources,
+            "max_plan_iterations": max_plan_iterations,
+            "max_step_num": max_step_num,
+            "max_search_results": max_search_results,
+            "mcp_settings": mcp_settings,
+        },
+        stream_mode=["messages", "updates"],
+        subgraphs=True,
+    ):
+        # 返回当前节点状态
+        if agent and agent != last_known_agent:
+            last_known_agent = agent
+            current_node_state = {
+                "thread_id": thread_id,
+                "current_node": agent,  # 当前节点名称
+                "status": "processing",  # 节点状态
+            }
+            yield _make_event("node_status", current_node_state)
+
+        logger.debug(f"Event data: {event_data}")
+        if isinstance(event_data, dict):
+            if "__ref_map__" in event_data:
+                ref_map = event_data["__ref_map__"][0].value
+                yield _make_event(
+                    "ref_map",
+                    {
+                        "thread_id": thread_id,
+                        "ref_map": ref_map,
+                    },
+                )
+            if "__interrupt__" in event_data:
+                data_value = event_data["__interrupt__"][0].value
+                if "[DST]" in data_value:
+                    dst_question = data_value.split("[DST]")[-1].split("[/DST]")[0]
+                    yield _make_event(
+                        "interrupt",
+                        {
+                            "thread_id": thread_id,
+                            "id": event_data["__interrupt__"][0].ns[0],
+                            "role": "assistant",
+                            "content": "Please Fill the Question",
+                            "finish_reason": "interrupt",
+                            "question": dst_question,
+                        },
+                    )
+                elif "[OUTLINE]" in data_value:
+                    outline = data_value.split("[OUTLINE]")[-1].split("[/OUTLINE]")[0]
+                    yield _make_event(
+                        "interrupt",
+                        {
+                            "thread_id": thread_id,
+                            "id": event_data["__interrupt__"][0].ns[0],
+                            "role": "assistant",
+                            "content": "Please Confirm or Edit the Outline",
+                            "finish_reason": "interrupt",
+                            "outline": outline,
+                        },
+                    )
+            elif "tools" in event_data:
+                toolMessage = event_data["tools"]["messages"][0]
+                yield _make_event(
+                    "tool_call_result",
+                    {
+                        "thread_id": thread_id,
+                        "role": "assistant",
+                        "agent": agent[0].split(":")[0],
+                        "content": toolMessage.content,
+                        "id": toolMessage.id,
+                        "tool_name": toolMessage.name,
+                        "tool_call_id": toolMessage.tool_call_id,
+                    },
+                )
+            continue
+        message_chunk, message_metadata = cast(
+            tuple[BaseMessage, dict[str, any]], event_data
+        )
+        event_stream_message: dict[str, any] = {
+            "thread_id": thread_id,
+            "agent": agent[0].split(":")[0],
+            "id": message_chunk.id,
+            "role": "assistant",
+            "content": message_chunk.content,
+        }
+        if message_chunk.response_metadata.get("finish_reason"):
+            event_stream_message["finish_reason"] = message_chunk.response_metadata.get(
+                "finish_reason"
+            )
+        if isinstance(message_chunk, ToolMessage):
+            # Tool Message - Return the result of the tool call
+            event_stream_message["tool_call_id"] = message_chunk.tool_call_id
+            yield _make_event("tool_call_result", event_stream_message)
+        elif isinstance(message_chunk, AIMessageChunk):
+            # AI Message - Raw message tokens
+            if message_chunk.tool_calls:
+                # AI Message - Tool Call
+                event_stream_message["tool_calls"] = message_chunk.tool_calls
+                event_stream_message["tool_call_chunks"] = (
+                    message_chunk.tool_call_chunks
+                )
+                yield _make_event("tool_calls", event_stream_message)
+            elif message_chunk.tool_call_chunks:
+                # AI Message - Tool Call Chunks
+                event_stream_message["tool_call_chunks"] = (
+                    message_chunk.tool_call_chunks
+                )
+                yield _make_event("tool_call_chunks", event_stream_message)
+            else:
+                # AI Message - Raw message tokens
+                yield _make_event("message_chunk", event_stream_message)
+        else:
+            yield _make_event("agent_action", event_stream_message)
+
 
 def _make_event(event_type: str, data: dict[str, any]):
     if data.get("content") == "":
         data.pop("content")
     return f"event: {event_type}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+@app.get("/api/references/{thread_id}")
+async def get_references(thread_id: str):
+    """Get the references for a given thread ID."""
+    try:
+        references = global_reference_map.get_session_ref_map(thread_id)
+        return {"thread_id": thread_id, "references": references}
+    except Exception as e:
+        logger.exception(f"Error in get_references endpoint: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/api/tts")

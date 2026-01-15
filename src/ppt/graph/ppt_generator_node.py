@@ -9,8 +9,6 @@ import uuid
 from src.ppt.graph.state import PPTState
 
 
-
-
 def ppt_generator_node(state: PPTState):
     logger.info("Generating ppt file...")
     # use marp cli to generate ppt file

@@ -12,15 +12,25 @@ class State(MessagesState):
     """State for the agent system, extends MessagesState with next field."""
 
     # Runtime Variables
-    locale: str = "en-US"
+    locale: str = "zh-CN"
     observations: list[str] = []
-    data_collections:list[Any] = []
+    data_collections: list[Any] = []
     resources: list[Resource] = []
     plan_iterations: int = 0
     current_plan: Plan | str = None
     user_query: str = ""
     final_report: str = ""
+    replan_result: str = ""
     auto_accepted_plan: bool = False
     enable_background_investigation: bool = True
     background_investigation_results: str = None
+    user_dst: str = None
+    wait_stage: str = ""
+    dst_question: str = None
+    hitl_feedback: str = ""
+    report_outline: str = None
 
+    delegation_context: dict = None
+    current_node: str = None
+    memory_stack: str = None
+    ref_map: dict = None

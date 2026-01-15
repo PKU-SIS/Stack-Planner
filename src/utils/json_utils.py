@@ -6,8 +6,6 @@ import json
 import json_repair
 
 
-
-
 def repair_json_output(content: str) -> str:
     """
     Repair and normalize JSON output.

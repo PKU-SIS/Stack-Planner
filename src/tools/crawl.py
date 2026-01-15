@@ -10,8 +10,6 @@ from .decorators import log_io
 from src.crawler import Crawler
 
 
-
-
 @tool
 @log_io
 def crawl_tool(
@@ -21,7 +19,16 @@ def crawl_tool(
     try:
         crawler = Crawler()
         article = crawler.crawl(url)
-        return {"url": url, "crawled_content": article.to_markdown()[:1000]}
+        content = article.to_markdown()
+        # 限制输出内容长度，避免淹没控制台
+        truncated_content = (
+            content[:2000] + "...[内容已截断]" if len(content) > 2000 else content
+        )
+        return {
+            "url": url,
+            "crawled_content": truncated_content,
+            "full_content_length": len(content),
+        }
     except BaseException as e:
         error_msg = f"Failed to crawl. Error: {repr(e)}"
         logger.error(error_msg)

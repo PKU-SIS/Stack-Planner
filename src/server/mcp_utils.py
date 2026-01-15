@@ -11,8 +11,6 @@ from mcp.client.stdio import stdio_client
 from mcp.client.sse import sse_client
 
 
-
-
 async def _get_tools_from_client_session(
     client_context_manager: Any, timeout_seconds: int = 10
 ) -> List:

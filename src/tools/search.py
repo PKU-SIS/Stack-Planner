@@ -17,7 +17,6 @@ from src.tools.tavily_search.tavily_search_results_with_images import (
 from src.tools.decorators import create_logged_tool
 
 
-
 # Create logged versions of the search tools
 LoggedTavilySearch = create_logged_tool(TavilySearchResultsWithImages)
 LoggedDuckDuckGoSearch = create_logged_tool(DuckDuckGoSearchResults)
@@ -31,7 +30,7 @@ def get_web_search_tool(max_search_results: int):
         return LoggedTavilySearch(
             name="web_search",
             max_results=max_search_results,
-            include_raw_content=True,
+            include_raw_content=False,
             include_images=True,
             include_image_descriptions=True,
         )

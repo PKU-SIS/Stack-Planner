@@ -13,8 +13,6 @@ from ..types import Script
 from .state import PodcastState
 
 
-
-
 def script_writer_node(state: PodcastState):
     logger.info("Generating script for podcast...")
     model = get_llm_by_type(

@@ -14,6 +14,7 @@ from langchain_mcp_adapters.client import MultiServerMCPClient
 
 from src.agents.CommonReactAgent import CommonReactAgent
 from src.agents.CoderAgent import CoderAgent
+from src.agents.ResearcherAgent_SP import ResearcherAgentSP
 from src.agents.ResearcherAgent import ResearcherAgent
 from src.tools.search import LoggedTavilySearch
 from src.tools import (
@@ -21,7 +22,7 @@ from src.tools import (
     get_web_search_tool,
     get_retriever_tool,
     python_repl_tool,
-    search_docs_tool
+    search_docs_tool,
 )
 
 from src.config.agents import AGENT_LLM_MAP
@@ -30,12 +31,12 @@ from src.llms.llm import get_llm_by_type
 from src.prompts.planner_model import Plan, StepType
 from src.prompts.template import apply_prompt_template
 from src.utils.json_utils import repair_json_output
+from src.utils.reference_utils import global_reference_map
 
 from .types import State
 from ..config import SELECTED_SEARCH_ENGINE, SearchEngine
-import datetime
-
-
+from datetime import datetime
+from src.utils.statistics import global_statistics
 
 
 @tool
@@ -56,27 +57,27 @@ def background_investigation_node(
     configurable = Configuration.from_runnable_config(config)
     query = state["messages"][-1].content
 
-    # if SELECTED_SEARCH_ENGINE == SearchEngine.TAVILY.value:
-    #     searched_content = LoggedTavilySearch(
-    #         max_results=configurable.max_search_results
-    #     ).invoke(query)
-    #     background_investigation_results = None
-    #     if isinstance(searched_content, list):
-    #         background_investigation_results = [
-    #             {"title": elem["title"], "content": elem["content"]}
-    #             for elem in searched_content
-    #         ]
-    #     else:
-    #         logger.error(
-    #             f"Tavily search returned malformed response: {searched_content}"
-    #         )
-    # else:
-    #     background_investigation_results = get_web_search_tool(
-    #         configurable.max_search_results
-    #     ).invoke(query)
+    if SELECTED_SEARCH_ENGINE == SearchEngine.TAVILY.value:
+        searched_content = LoggedTavilySearch(
+            max_results=configurable.max_search_results
+        ).invoke(query)
+        background_investigation_results = None
+        if isinstance(searched_content, list):
+            background_investigation_results = [
+                {"title": elem["title"], "content": elem["content"]}
+                for elem in searched_content
+            ]
+        else:
+            logger.error(
+                f"Tavily search returned malformed response: {searched_content}"
+            )
+    else:
+        background_investigation_results = get_web_search_tool(
+            configurable.max_search_results
+        ).invoke(query)
 
-    background_investigation_results = search_docs_tool.invoke(query)
-    #background_investigation_results = []
+    # background_investigation_results = search_docs_tool.invoke(query)
+    # background_investigation_results = []
     return Command(
         update={
             "background_investigation_results": json.dumps(
@@ -146,6 +147,7 @@ def planner_node(
     if curr_plan.get("has_enough_context"):
         logger.info("Planner response has enough context.")
         new_plan = Plan.model_validate(curr_plan)
+        logger.info(f"Planner: {full_response}")
         return Command(
             update={
                 "messages": [AIMessage(content=full_response, name="planner")],
@@ -153,6 +155,7 @@ def planner_node(
             },
             goto="reporter",
         )
+    logger.info(f"Planner: {full_response}")
     return Command(
         update={
             "messages": [AIMessage(content=full_response, name="planner")],
@@ -160,6 +163,7 @@ def planner_node(
         },
         goto="human_feedback",
     )
+
 
 def sp_planner_node(
     state: State, config: RunnableConfig
@@ -221,6 +225,7 @@ def sp_planner_node(
     if curr_plan.get("has_enough_context"):
         logger.info("Planner response has enough context.")
         new_plan = Plan.model_validate(curr_plan)
+        logger.info(f"Planner: {full_response}")
         return Command(
             update={
                 "messages": [AIMessage(content=full_response, name="planner")],
@@ -236,6 +241,7 @@ def sp_planner_node(
         },
         goto="research_team",
     )
+
 
 def human_feedback_node(
     state,
@@ -413,6 +419,14 @@ def reporter_node(state: State):
                 name="observation",
             )
         )
+    data_collections = state.get("data_collections", [])
+    for data_collection in data_collections:
+        invoke_messages.append(
+            HumanMessage(
+                content=f"Below are data collected in previous tasks:\n\n{data_collection}",
+                name="observation",
+            )
+        )
     logger.debug(f"Current invoke messages: {invoke_messages}")
     response = get_llm_by_type(AGENT_LLM_MAP["reporter"]).invoke(invoke_messages)
     response_content = response.content
@@ -420,20 +434,55 @@ def reporter_node(state: State):
 
     return {"final_report": response_content}
 
+
 def reporter_xxqg_node(state: State):
     """Reporter node that write a final report."""
     logger.info("Reporter write final report")
-    current_plan = state.get("current_plan")    
+    current_plan = state.get("current_plan")
     user_query = state.get("user_query")
+
+    # 读取所有二级文体类别
+    with open("src/prompts/xxqg_rule_demo_lib.json", "r") as f:
+        rule_demo_lib = json.load(f)
+    # 通过字符串匹配的方式简单检索文体类别
+    rule, demos = None, None
+    for type1, type2_dict in rule_demo_lib.items():
+        for type2, type2_info_dict in type2_dict.items():
+            type3_dict = type2_info_dict.get("tags", {})
+            rule = type2_info_dict.get("ori_text", None)
+            for type3, type3_info_dict in type3_dict.items():
+                if type3 in user_query:
+                    demos = type3_info_dict["few_shot"]
+                    break
+            if demos:
+                break
+        if demos:
+            break
+    demos_str = "\n\n".join(
+        [f"### Demonstration {i+1}\n\n{d}" for i, d in enumerate(demos)]
+    )
     input_ = {
         "messages": [
             HumanMessage(
-                f"# Research Requirements\n\n##User Query\n\n{user_query}\n\n## Task\n\n{current_plan.title}\n\n## Description\n\n{current_plan.thought}"
+                f"# Research Requirements\n\n##User Query\n\n{demos_str}\n\n请严格仿照以上示例。{user_query}\n\n## Task\n\n{current_plan.title}\n\n## Description\n\n{current_plan.thought}"
             )
         ],
         "locale": state.get("locale", "en-US"),
     }
-    invoke_messages = apply_prompt_template("reporter_xxqg", input_)
+    # else:
+    # input_ = {
+    #     "messages": [
+    #         HumanMessage(
+    #             f"# Research Requirements\n\n## User Query\n\n{user_query}\n\n## Task\n\n{current_plan.title}\n\n## Description\n\n{current_plan.thought}"
+    #         )
+    #     ],
+    #     "locale": state.get("locale", "en-US"),
+    # }
+    input_["demonstrations"] = demos
+    input_["rule"] = rule
+
+    # 应用对应文体的prompt模板
+    invoke_messages = apply_prompt_template(f"reporter_xxqg_rule_demo", input_)
     observations = state.get("observations", [])
 
     # Add a reminder about the new report format, citation style, and table usage
@@ -656,11 +705,15 @@ async def _setup_and_execute_agent_step(
                         f"Powered by '{enabled_tools[tool.name]}'.\n{tool.description}"
                     )
                     loaded_tools.append(tool)
-            agent = CommonReactAgent(agent_name=agent_type, tools=loaded_tools, system_prompt = agent_type)
+            agent = CommonReactAgent(
+                agent_name=agent_type, tools=loaded_tools, system_prompt=agent_type
+            )
             return await _execute_agent_step(state, agent, agent_type)
     else:
         # Use default tools if no MCP servers are configured
-        agent = CommonReactAgent(agent_name=agent_type, tools=default_tools, system_prompt = agent_type)
+        agent = CommonReactAgent(
+            agent_name=agent_type, tools=default_tools, system_prompt=agent_type
+        )
         return await _execute_agent_step(state, agent, agent_type)
 
 
@@ -676,10 +729,33 @@ async def researcher_node(
     if retriever_tool:
         tools.insert(0, retriever_tool)
 
-    tools = [search_docs_tool]
+    # tools = [search_docs_tool]
     logger.info(f"Researcher tools: {tools}")
-    research_agent = ResearcherAgent(config = config, agent_type = "researcher", default_tools = tools)
+    research_agent = ResearcherAgent(
+        config=config, agent_type="researcher", default_tools=tools
+    )
     return await research_agent.execute_agent_step(state)
+
+
+async def researcher_sp_node(
+    state: State, config: RunnableConfig
+) -> Command[Literal["research_team"]]:
+    """Researcher node that do research"""
+    logger.info("Researcher node is researching.")
+
+    configurable = Configuration.from_runnable_config(config)
+    tools = [get_web_search_tool(configurable.max_search_results), crawl_tool]
+    retriever_tool = get_retriever_tool(state.get("resources", []))
+    if retriever_tool:
+        tools.insert(0, retriever_tool)
+
+    # tools = [search_docs_tool]
+    logger.info(f"Researcher tools: {tools}")
+    research_agent = ResearcherAgentSP(
+        config=config, agent_type="researcher", default_tools=tools
+    )
+    return await research_agent.execute_agent_step(state)
+
 
 async def researcher_xxqg_node(
     state: State, config: RunnableConfig
@@ -689,7 +765,9 @@ async def researcher_xxqg_node(
 
     tools = [search_docs_tool]
     logger.info(f"Researcher tools: {tools}")
-    research_agent = ResearcherAgent(config = config, agent_type = "researcher_xxqg", default_tools = tools)
+    research_agent = ResearcherAgent(
+        config=config, agent_type="researcher_xxqg", default_tools=tools
+    )
     return await research_agent.execute_agent_step(state)
 
 
@@ -698,7 +776,9 @@ async def coder_node(
 ) -> Command[Literal["research_team"]]:
     """Coder node that do code analysis."""
     logger.info("Coder node is coding.")
-    code_agent = CoderAgent(config = config, agent_type = "coder", default_tools = [python_repl_tool])
+    code_agent = CoderAgent(
+        config=config, agent_type="coder", default_tools=[python_repl_tool]
+    )
     return await code_agent.execute_agent_step(state)
 
 
@@ -749,7 +829,7 @@ def speech_node(state: State):
     return {"final_report": response_content}
 
 
-def zip_data(state:State):
+def zip_data(state: State,config: RunnableConfig):
     final_report = state.get("final_report")
     user_query = state.get("user_query")
     plan = state.get("current_plan")
@@ -761,12 +841,20 @@ def zip_data(state:State):
         "user_query": user_query,
         "plan": plan.model_dump() if hasattr(plan, "model_dump") else str(plan),
         "final_report": final_report,
+        "statistics": global_statistics.get_statistics(),
     }
 
     # Generate filename with current timestamp
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"./reports/report_{timestamp}.json"
 
     # Save data as JSON
     with open(filename, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
+    session_id = config["configurable"]["thread_id"]
+    global_reference_map.save_session(session_id)
+    return Command(
+        update={
+            "ref_map": global_reference_map.get_session_ref_map(session_id)
+        }
+    )

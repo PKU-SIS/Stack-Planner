@@ -4,7 +4,7 @@ from langgraph.types import Command
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langchain_core.messages import HumanMessage
 from src.utils.logger import logger
-import os   
+import os
 
 
 class ResearcherAgent(CommonReactAgent):
@@ -12,7 +12,6 @@ class ResearcherAgent(CommonReactAgent):
 
     agent_name: str = "researcher"
     description: str = "Researcher agent for gathering information and resources."
-    
 
     def __init__(self, *args, **kwargs):
         agent_type = kwargs.pop("agent_type", "default_agent")
@@ -25,7 +24,9 @@ class ResearcherAgent(CommonReactAgent):
 
         # Extract MCP server configuration for this agent type
         if configurable.mcp_settings:
-            for server_name, server_config in configurable.mcp_settings["servers"].items():
+            for server_name, server_config in configurable.mcp_settings[
+                "servers"
+            ].items():
                 if (
                     server_config["enabled_tools"]
                     and agent_type in server_config["add_to_agents"]
@@ -48,11 +49,10 @@ class ResearcherAgent(CommonReactAgent):
             #                 f"Powered by '{enabled_tools[tool.name]}'.\n{tool.description}"
             #             )
             #             loaded_tools.append(tool)
-                self._initialize_common_agent(agent_type, default_tools)
+            self._initialize_common_agent(agent_type, default_tools)
         else:
             # Use default tools if no MCP servers are configured
             self._initialize_common_agent(agent_type, default_tools)
-
 
     def _initialize_common_agent(self, agent_type, tools):
         """Helper method to initialize the CommonReactAgent."""
@@ -86,7 +86,9 @@ class ResearcherAgent(CommonReactAgent):
             completed_steps_info = "# Existing Research Findings\n\n"
             for i, step in enumerate(completed_steps):
                 completed_steps_info += f"## Existing Finding {i + 1}: {step.title}\n\n"
-                completed_steps_info += f"<finding>\n{step.execution_res}\n</finding>\n\n"
+                completed_steps_info += (
+                    f"<finding>\n{step.execution_res}\n</finding>\n\n"
+                )
 
         # Prepare the input for the agent with completed steps info
         agent_input = {
@@ -126,7 +128,9 @@ class ResearcherAgent(CommonReactAgent):
         # Invoke the agent
         default_recursion_limit = 25
         try:
-            env_value_str = os.getenv("AGENT_RECURSION_LIMIT", str(default_recursion_limit))
+            env_value_str = os.getenv(
+                "AGENT_RECURSION_LIMIT", str(default_recursion_limit)
+            )
             parsed_limit = int(env_value_str)
 
             if parsed_limit > 0:
@@ -153,11 +157,15 @@ class ResearcherAgent(CommonReactAgent):
 
         # Process the result
         response_content = result["messages"][-1].content
-        logger.debug(f"{self.agent_name.capitalize()} full response: {response_content}")
+        logger.debug(
+            f"{self.agent_name.capitalize()} full response: {response_content}"
+        )
 
         # Update the step with the execution result
         current_step.execution_res = response_content
-        logger.info(f"Step '{current_step.title}' execution completed by {self.agent_name}")
+        logger.info(
+            f"Step '{current_step.title}' execution completed by {self.agent_name}"
+        )
         logger.debug(f"Step tool results: {self.tool_results}")
         return Command(
             update={
@@ -168,7 +176,7 @@ class ResearcherAgent(CommonReactAgent):
                     )
                 ],
                 "observations": observations + [response_content],
-                "data_collections":data_collections + self.tool_results
+                "data_collections": data_collections + self.tool_results,
             },
             goto="research_team",
         )

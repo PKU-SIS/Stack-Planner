@@ -9,8 +9,6 @@ from src.podcast.graph.state import PodcastState
 from src.tools.tts import VolcengineTTS
 
 
-
-
 def tts_node(state: PodcastState):
     logger.info("Generating audio chunks for podcast...")
     tts_client = _create_tts_client()

@@ -11,8 +11,6 @@ from src.prompts.template import get_prompt_template
 from src.prose.graph.state import ProseState
 
 
-
-
 def prose_zap_node(state: ProseState):
     logger.info("Generating prose zap content...")
     model = get_llm_by_type(AGENT_LLM_MAP["prose_writer"])

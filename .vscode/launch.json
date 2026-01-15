@@ -42,8 +42,17 @@
             "console": "integratedTerminal",
             "justMyCode": false,
             "env": {
-                "PYTHONPATH": "${workspaceFolder}"
-            }
+                "PYTHONPATH": "${workspaceFolder}",
+                "http_proxy": "http://localhost:8888",
+                "https_proxy": "http://localhost:8888",
+                "HTTP_PROXY": "http://localhost:8888",
+                "HTTPS_PROXY": "http://localhost:8888"
+            },
+            "args": [
+                "--reload",
+                "--host", "0.0.0.0",
+                "--port", "8555"
+            ]
         },
         {
             "name": "Python: graph.py",

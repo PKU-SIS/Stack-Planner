@@ -1,9 +1,7 @@
-
-
 from datetime import datetime
 import time
 import asyncio
-from pydantic import BaseModel,Field, model_validator
+from pydantic import BaseModel, Field, model_validator
 from langchain_core.messages import AnyMessage
 from langchain.tools import BaseTool
 from langgraph.types import Command
@@ -13,31 +11,27 @@ from langgraph.prebuilt import create_react_agent
 from src.prompts import apply_prompt_template
 from src.llms.llm import get_llm_by_type
 from src.config.agents import AGENT_LLM_MAP
-from src.agents.ReActHandler import ReactAgentCallbackHandler,ToolResultCallbackHandler
+from src.agents.ReActHandler import ReactAgentCallbackHandler, ToolResultCallbackHandler
 
-from typing import (
-    Optional,
-    List
-)
+from typing import Optional, List
 
 
 class CommonReactAgent(BaseModel, metaclass=ABCMeta):
 
     agent_name: str = Field(..., description="Unique name of the agent")
     description: Optional[str] = Field(None, description="Optional agent description")
-    system_prompt: Optional[str] = Field(
-        None, description="System instruction prompt"
+    system_prompt: Optional[str] = Field(None, description="System instruction prompt")
+    llm_config_name: str = Field(
+        default="gpt-4o-mini", description="model wrapper name"
     )
-    model_config_name: str = Field(default="gpt-4o-mini", description="model wrapper name")
     tools: List[BaseTool] = Field(default=[])
 
     tool_names: List[str] = Field(default=[])
-    tool_results:List[str] = Field(default=[])
+    tool_results: List[str] = Field(default=[])
 
     # Execution control
     max_steps: int = Field(default=10, description="Maximum steps before termination")
     current_step: int = Field(default=0, description="Current step in execution")
-
 
     def model_post_init(self, __context) -> None:
         self._agent = create_react_agent(
@@ -46,8 +40,8 @@ class CommonReactAgent(BaseModel, metaclass=ABCMeta):
             tools=self.tools,
             prompt=lambda state: apply_prompt_template(self.system_prompt, state),
         )
-        self._handler = [ToolResultCallbackHandler(self),ReactAgentCallbackHandler()]
-    
+        self._handler = ToolResultCallbackHandler(self)
+
     async def ainvoke(self, *args, **kwargs):
         from copy import deepcopy
 
@@ -58,7 +52,7 @@ class CommonReactAgent(BaseModel, metaclass=ABCMeta):
         if "callbacks" in config:
             config["callbacks"] = config["callbacks"] + [self._handler]
         else:
-            config["callbacks"] = self._handler
+            config["callbacks"] = [self._handler]
 
         # 替换 kwargs 中的 config
         kwargs["config"] = config

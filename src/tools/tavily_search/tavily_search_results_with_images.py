@@ -7,7 +7,7 @@ from langchain.callbacks.manager import (
 )
 from langchain_community.tools.tavily_search.tool import TavilySearchResults
 from pydantic import Field
-
+from src.utils.logger import logger
 from src.tools.tavily_search.tavily_search_api_wrapper import (
     EnhancedTavilySearchAPIWrapper,
 )
@@ -120,7 +120,8 @@ class TavilySearchResultsWithImages(TavilySearchResults):  # type: ignore[overri
         except Exception as e:
             return repr(e), {}
         cleaned_results = self.api_wrapper.clean_results_with_images(raw_results)
-        print("sync", json.dumps(cleaned_results, indent=2, ensure_ascii=False))
+        # 只记录搜索结果摘要，避免输出过多内容
+        logger.info(f"Tavily搜索完成: 找到{len(cleaned_results)}个结果")
         return cleaned_results, raw_results
 
     async def _arun(
@@ -144,5 +145,6 @@ class TavilySearchResultsWithImages(TavilySearchResults):  # type: ignore[overri
         except Exception as e:
             return repr(e), {}
         cleaned_results = self.api_wrapper.clean_results_with_images(raw_results)
-        print("async", json.dumps(cleaned_results, indent=2, ensure_ascii=False))
+        # 只记录搜索结果摘要，避免输出过多内容
+        logger.info(f"Tavily异步搜索完成: 找到{len(cleaned_results)}个结果")
         return cleaned_results, raw_results

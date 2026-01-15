@@ -5,6 +5,7 @@ from src.utils.logger import logger
 from typing import Any, Dict
 import json
 
+
 class ReactAgentCallbackHandler(BaseCallbackHandler):
     def on_llm_start(self, serialized, prompts, **kwargs):
         logger.debug("🧠 [LLM Start] Prompt sent to model:")
@@ -32,6 +33,7 @@ class ReactAgentCallbackHandler(BaseCallbackHandler):
         logger.debug("🔚 [Chain End] Outputs:")
         logger.debug(outputs)
 
+
 class ToolResultCallbackHandler(BaseCallbackHandler):
     def __init__(self, agent_instance):
         self.agent = agent_instance  # 保存对 agent 的引用
@@ -40,19 +42,18 @@ class ToolResultCallbackHandler(BaseCallbackHandler):
         # 保存当前 tool 名称和输入
         self.current_tool = {
             "tool_name": serialized.get("name", "unknown"),
-            "output": None
+            "output": None,
         }
 
     def on_tool_end(self, output: Any, **kwargs):
         if self.current_tool:
-            self.current_tool["output"] = str(output)  
+            self.current_tool["output"] = str(output)
             tool_record_str = json.dumps(self.current_tool, ensure_ascii=False)
             self.agent.tool_results.append(tool_record_str)
-            self.current_tool = None  
+            self.current_tool = None
         else:
             # 如果没有 on_tool_start，只记录 output
-            tool_record_str = json.dumps({
-                "tool_name": "unknown",
-                "output": str(output)
-            }, ensure_ascii=False)
+            tool_record_str = json.dumps(
+                {"tool_name": "unknown", "output": str(output)}, ensure_ascii=False
+            )
             self.agent.tool_results.append(tool_record_str)

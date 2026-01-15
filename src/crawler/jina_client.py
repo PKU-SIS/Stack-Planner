@@ -7,8 +7,6 @@ import os
 import requests
 
 
-
-
 class JinaClient:
     def crawl(self, url: str, return_format: str = "html") -> str:
         headers = {

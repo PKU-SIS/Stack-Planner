@@ -6,8 +6,6 @@ from src.utils.logger import logger
 from src.podcast.graph.state import PodcastState
 
 
-
-
 def audio_mixer_node(state: PodcastState):
     logger.info("Mixing audio chunks for podcast...")
     audio_chunks = state["audio_chunks"]

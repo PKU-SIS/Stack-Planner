@@ -14,8 +14,6 @@ from src.prompts.template import get_prompt_template
 from .state import PPTState
 
 
-
-
 def ppt_composer_node(state: PPTState):
     logger.info("Generating ppt content...")
     model = get_llm_by_type(AGENT_LLM_MAP["ppt_composer"])

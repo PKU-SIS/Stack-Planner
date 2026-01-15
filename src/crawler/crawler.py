@@ -6,6 +6,7 @@ import sys
 from .article import Article
 from .jina_client import JinaClient
 from .readability_extractor import ReadabilityExtractor
+from src.utils.logger import logger
 
 
 class Crawler:
@@ -35,4 +36,4 @@ if __name__ == "__main__":
         url = "https://fintel.io/zh-hant/s/br/nvdc34"
     crawler = Crawler()
     article = crawler.crawl(url)
-    print(article.to_markdown())
+    logger.info(f"article content in md {article.to_markdown()}")

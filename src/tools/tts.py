@@ -12,8 +12,6 @@ import requests
 from typing import Optional, Dict, Any
 
 
-
-
 class VolcengineTTS:
     """
     Client for volcengine Text-to-Speech API.

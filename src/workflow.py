@@ -2,17 +2,21 @@
 # SPDX-License-Identifier: MIT
 
 import asyncio
-from src.graph import graph
 import os
 from datetime import datetime
 from src.utils.logger import logger
+
 
 def enable_debug_logging():
     """Enable debug level logging."""
     logger.set_log_level(log_level="DEBUG")
 
+
 # Create the graph
-#graph = build_graph_sp()
+# graph = build_graph_sp()
+
+
+# NOTE JXK main code直接进入到这里
 
 
 async def run_agent_workflow_async(
@@ -21,6 +25,7 @@ async def run_agent_workflow_async(
     max_plan_iterations: int = 1,
     max_step_num: int = 3,
     enable_background_investigation: bool = True,
+    graph_format: str = "sp",
 ):
     """Run the agent workflow asynchronously with the given user input.
 
@@ -34,11 +39,25 @@ async def run_agent_workflow_async(
     Returns:
         The final state after the workflow completes
     """
+
     if not user_input:
         raise ValueError("Input could not be empty")
 
     if debug:
         enable_debug_logging()
+
+    from src.graph.sp_nodes import init_agents
+
+    init_agents(graph_format)
+
+    if graph_format == "sp":
+        from src.graph.builder import sp_graph as graph
+    elif graph_format == "xxqg":
+        from src.graph.builder import xxqg_graph as graph
+    elif graph_format == "sp_xxqg":
+        from src.graph.builder import sp_xxqg_graph as graph
+    elif graph_format == "base":
+        from src.graph.builder import base_graph as graph
 
     logger.info(f"Starting async workflow with user input: {user_input}")
     initial_state = {
@@ -46,7 +65,7 @@ async def run_agent_workflow_async(
         "messages": [{"role": "user", "content": user_input}],
         "auto_accepted_plan": True,
         "enable_background_investigation": enable_background_investigation,
-        "user_query":user_input
+        "user_query": user_input,
     }
     config = {
         "configurable": {
@@ -78,18 +97,18 @@ async def run_agent_workflow_async(
                 last_message_cnt = len(s["messages"])
                 message = s["messages"][-1]
                 if isinstance(message, tuple):
-                    print(message)
+                    logger.info(message)
                 else:
                     message.pretty_print()
             else:
                 # For any other output format
-                print(f"Output: {s}")
+                logger.info(f"Output: {s}")
         except Exception as e:
             logger.error(f"Error processing stream output: {e}")
-            print(f"Error processing output: {str(e)}")
+            logger.error(f"Error processing output: {str(e)}")
 
     logger.info("Async workflow completed successfully")
 
 
 if __name__ == "__main__":
-    print(graph.get_graph(xray=True).draw_mermaid())
+    logger.info(graph.get_graph(xray=True).draw_mermaid())

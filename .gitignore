@@ -1,3 +1,6 @@
+
+./*.txt
+CHANGELOG.md
 # Python-generated files
 __pycache__/
 *.py[oc]
@@ -8,13 +11,14 @@ wheels/
 .coverage
 agent_history.gif
 static/browser_history/*.gif
-
 node_modules/
 # Virtual environments
 .venv
 venv/
 logs/
+references_logs/
 reports/
+/node_modules
 
 # Environment variables
 .env
@@ -25,8 +29,16 @@ conf.yaml
 .idea/
 .langgraph_api/
 *.log
+tests/
 
 # coverage report
 coverage.xml
 coverage/
+cases/*
+test_*.py
+shells/*
+.cursor/
 
+.github/
+docs/
+examples/
