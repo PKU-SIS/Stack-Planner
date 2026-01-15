@@ -38,3 +38,7 @@ cases/*
 test_*.py
 shells/*
 .cursor/
+
+.github/
+docs/
+examples/
