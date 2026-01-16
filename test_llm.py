@@ -30,10 +30,26 @@ response = client.chat.completions.create(
     temperature=0.0,
     extra_body={"enable_thinking": False}
 )
+print(response.choices[0].message.content)
+
+print('\n'*2)  # 输出结束后换行
+
+
+
+client = OpenAI(
+    base_url="http://10.1.1.212:8000/v1",
+    api_key="sk-d47ad54165ee456093bc9ffd599e354e",
+)
+
+response = client.chat.completions.create(
+    model="Qwen3-32B",
+    messages=[{"role": "user", "content": "Test"}],
+    max_tokens=10,
+    temperature=0.0,
+    extra_body={"enable_thinking": False}
+)
 
 # 流式输出响应
-for chunk in response:
-    if chunk.choices[0].delta.content is not None:
-        print(chunk.choices[0].delta.content, end='', flush=True)
+print(response.choices[0].message.content)
 
 print('\n'*2)  # 输出结束后换行

@@ -530,12 +530,20 @@ async def _astream_workflow_generator_sp(
         else:
             # 把 outline 给跳过了，紧急处理，后续需要修改
             logger.info(f"action的数据结构打印{event_stream_message}")
-            if (
-                event_stream_message["agent"] == "outline"
-                or event_stream_message["agent"] == "researcher"
-            ):
+            # if (
+            #     event_stream_message["agent"] == "outline"
+            #     or event_stream_message["agent"] == "researcher"
+            # ):
+            #     logger.info(
+            #         f"前端内容筛选，不要 outline 或 researcher{event_stream_message}"
+            #     )
+            #     continue
+            if (event_stream_message.get("agent") in {"outline", "researcher"}
+                or (
+                    event_stream_message.get("agent") == "central_agent"
+                    and event_stream_message.get("action_name") == "central_think")):
                 logger.info(
-                    f"前端内容筛选，不要 outline 或 researcher{event_stream_message}"
+                    f"前端内容筛选，跳过 outline / researcher / central_think: {event_stream_message}"
                 )
                 continue
             yield _make_event("agent_action", event_stream_message)

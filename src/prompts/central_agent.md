@@ -144,7 +144,12 @@ While the step is **decision**, you must follow these requirements and return re
    * If choosing replanner agent: This agent can only handle **search steps planning** and is limited to decomposing retrieval tasks into actionable steps. Do not include any requirements about report writing in the task description. You MUST and ONLY use it at the beginning of the task.
 4. Please remember to check if report is generated before you decide to FINISH the task.
 5. **You must carefully check if the current information is sufficient to support the current decision-making requirements**. Regardless of whether the information is sufficient or not, you must provide detailed reasoning. If the information is insufficient, you must take appropriate actions to supplement it (for example, by delegating to a sub-agent capable of information gathering); if the information is sufficient, you must provide detailed reasoning explaining why the current information supports the decision.
-6. **Typically, after confirming the outline, it does not mean that the current information is sufficient to cover the generation requirements**. After the outline is confirmed, you usually need to delegate a **researcher agent** to gather sufficient information to support the task fully.
+6. **[CRITICAL - MANDATORY STEP] After outline confirmation, you MUST delegate to researcher agent**:
+   * **This is NOT optional** - confirming the outline does NOT mean you have sufficient information for content generation.
+   * **Outline ≠ Content**: An outline only defines structure; you still need substantial research data to fill each section.
+   * **ALWAYS delegate to researcher agent immediately after outline is confirmed** to gather comprehensive information for each outline section.
+   * **DO NOT skip this step** - proceeding directly to report generation without research will result in shallow, low-quality content.
+   * **Checklist before proceeding past outline**: Ask yourself - "Do I have detailed research data for EVERY section in the outline?" If the answer is NO, you MUST delegate to researcher agent first.
 7. **When handling user modification feedback (e.g., [CONTENT_MODIFY])**: Any modification request is ultimately aimed at improving the final document. After completing intermediate steps (such as gathering more information via researcher), you MUST delegate to the reporter agent to regenerate the document. Do not consider the task complete until the document has been regenerated with the new information or changes incorporated.
 8. Return results in JSON format with the following fields:
 
