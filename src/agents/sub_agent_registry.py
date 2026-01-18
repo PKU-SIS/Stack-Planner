@@ -52,6 +52,11 @@ sub_agents_sp_xxqg = [
         "node": sp_planner_node,
     },
     {
+        "name": SubAgentType.OUTLINE.value,
+        "description": "Generate a structured content outline after the overall plan is finalized. This agent designs and adjusts the hierarchical structure of the report, including section titles and logical organization. It does NOT generate full text content or conduct research, and should be used only after task planning is complete.",
+        "node": outline_node,
+    },
+    {
         "name": SubAgentType.RESEARCHER.value,
         "description": "Information collection and research",
         "node": researcher_web_node, #researcher_xxqg_node, # 
@@ -73,7 +78,6 @@ sub_agents_factstruct = [
     },
     {
         "name": SubAgentType.OUTLINE.value,
-        # 将问题拆解成方便处理的子任务，来更好的指导任务规划
         "description": "Generate or refine a structured content outline after the overall plan is finalized. This agent designs and adjusts the hierarchical structure of the report, including section titles, logical organization, and approximate word allocation. It does NOT generate full text content or conduct research, and should be used only after task planning is complete.",
         "node": outline_node_factstruct,
     },

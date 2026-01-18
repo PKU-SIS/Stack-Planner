@@ -165,7 +165,8 @@ def _build_graph_sp_xxqg():
     # 不要问卷了
     # builder.add_node("perception", perception_node)
     builder.add_node("central_agent", central_agent_node)
-    builder.add_node("outline", outline_node)
+    #注释outline
+    # builder.add_node("outline", outline_node)
 
     # 添加sub agent
     sub_agents = get_sub_agents_by_global_type("sp_xxqg")
@@ -181,11 +182,13 @@ def _build_graph_sp_xxqg():
 
     # 感知层，包括search before plan、human in the loop
 
-    builder.add_edge(START, "outline")
-    # builder.add_edge(START, "perception")
-    # builder.add_edge("perception", "outline")
-    # 核心流程
-    builder.add_edge("outline", "central_agent")
+    #原有流程
+    # builder.add_edge(START, "outline")
+    # builder.add_edge("outline", "central_agent")
+    # builder.add_edge("central_agent", "zip_data")
+    
+    #动态SOP流程
+    builder.add_edge(START,  "central_agent")
     builder.add_edge("central_agent", "zip_data")
 
     # 后处理部分
