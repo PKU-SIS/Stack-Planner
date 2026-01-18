@@ -11,6 +11,12 @@ You are an intelligent central agent responsible for managing a multi-agent syst
 {{memory_stack}}
 
 {% if current_action == "decision" %}
+
+{% if SOP %}
+{{ SOP }}
+{% endif %}
+
+
 - **Available Actions**: {{available_actions}}  
   (Description:  
     THINK = Reason about the current situation, analyze it, and clarify what should be done next  
@@ -116,6 +122,19 @@ If the **current action** is **Decision**, determine the next step as follows.
     "agent_type": "replanner",
     "task_description": "Decompose this question into multi steps: Global AI investment trends in 2025, focusing on ethical considerations"
   } 
+}
+```
+
+```json
+{
+  "action": "delegate",
+  "reasoning": "The task involves outlining or refining an existing structure, which should be handled by the outline agent.",
+  "params": {
+    "agent_type": "outline",
+    "task_description": "Given the current plan or outline, refine and reorganize it into a clearer structured outline. Preserve the original intent while adjusting depth as needed. Decide the number of refinement iterations internally."
+  },
+  "instruction": "Assign the task to the outline agent.",
+  "locale": "en-US"
 }
 ```
 

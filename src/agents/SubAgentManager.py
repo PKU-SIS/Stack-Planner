@@ -29,11 +29,14 @@ from src.tools.bocha_search.web_search_en import web_search
 from src.factstruct import (
     run_factstruct_stage1,
     outline_node_to_markdown,
+    outline_node_to_dict,
     memory_to_dict,
     filter_content_by_relevant_docs,
     mark_content_with_support,
     repair_unknown_citations
 )
+
+from src.factstruct import outline_node_to_dict, memory_to_dict
 from src.factstruct.outline_node import OutlineNode
 
 from ..graph.types import State
@@ -760,38 +763,6 @@ class SubAgentManager:
         )
 
 
-    @timed_step("execute_human_feedback")
-    async def execute_human_feedback(self, state: State, config: RunnableConfig) -> Command:
-        stage = state.get("wait_stage", "perception")
-        if stage == "perception":
-            dst_question = state.get("dst_question", "")
-            feedback = interrupt(
-                    "Please Fill the Question.[DST]" + dst_question + "[/DST]"
-                )
-            logger.info(f"用户反馈的DST问题: {feedback}. goto perception node again.")
-            return Command(
-                update={
-                    "hitl_feedback": feedback,
-                    "current_node": "human_feedback",
-                },
-                goto="perception",
-            )
-        elif stage == "outline":
-            outline = state.get("report_outline", "")
-            feedback = interrupt(
-                    "Please Confirm or Edit the Outline.[OUTLINE]"
-                    + outline
-                    + "[/OUTLINE]"
-                )
-            logger.info(f"用户反馈的大纲: {feedback}. goto outline node again.")
-            return Command(
-                update={
-                    "hitl_feedback": feedback,
-                    "current_node": "human_feedback",
-                },
-                goto="outline",
-            )
-
 
     @timed_step("execute_human_feedback")
     async def execute_human_feedback(self, state: State, config: RunnableConfig) -> Command:
@@ -978,121 +949,238 @@ class SubAgentManager:
                 goto="central_agent",
             )
 
+    #需要改成和 central agent 相同的执行函数，现在这个不行
+    # @timed_step("execute_outline_factstruct")
+    # async def execute_outline_factstruct(self, state: State, config: RunnableConfig) -> Command:
+    #     """
+    #     执行大纲生成（使用 FactStruct Stage 1 Batch-MAB 算法）
+
+    #     使用批量-信息觅食多臂老虎机算法动态生成和优化大纲结构。
+    #     """
+    #     user_query = state.get("user_query", "")
+    #     user_dst = state.get("user_dst", "")
+    #     factstruct_outline = state.get("factstruct_outline", None)#如果有的话，后续更改到时候再修
+    #     factstruct_memory = state.get("factstruct_memory",None)
+    #     exit()
+    #     if auto_accepted_plan:
+    #         # 使用 FactStruct Stage 1 生成大纲
+    #         try:
+    #             logger.info("开始使用 FactStruct Stage 1 生成大纲...")
+
+    #             # 构建完整查询（包含用户补充需求）
+    #             full_query = user_query
+    #             if user_dst:
+    #                 full_query = f"{user_query}\n\n用户补充需求：{user_dst}"
+
+    #             # 运行 Batch-MAB 算法
+    #             # 注意：这里使用较小的迭代次数和批量大小以加快响应速度
+    #             # 生产环境可以根据需要调整这些参数
+    #             outline_root, memory = run_factstruct_stage1(
+    #                 query=full_query,
+    #                 max_iterations=state.get(
+    #                     "factstruct_max_iterations",  4
+    #                 ),  # 默认 10 次迭代
+    #                 batch_size=state.get("factstruct_batch_size", 2),  # 默认批量大小 3
+    #                 factstruct_outline=factstruct_outline,
+    #                 factstruct_memory=factstruct_memory,
+    #                 config=config,
+    #             )
+
+    #             # 转换为 Markdown 格式（完整大纲，不限制深度）
+    #             outline_response = outline_node_to_markdown(
+    #                 outline_root, max_depth=None, include_root=True
+    #             )
+                
+
+    #             # 如果用户指定了字数限制，执行字数规划
+    #             total_word_limit = state.get("total_word_limit", 5000)
+    #             if total_word_limit > 0:
+    #                 logger.info(f"检测到字数限制 {total_word_limit}，开始字数规划...")
+    #                 outline_root = self.execute_word_planning(
+    #                     outline_root, total_word_limit
+    #                 )
+    #                 # 更新大纲文本，包含字数信息
+    #                 outline_response = outline_root.to_text_tree(
+    #                     include_word_limit=True
+    #                 )
+
+
+    #             # 保存到 state（供 FactStruct Stage 2 使用）
+    #            
+    #             factstruct_outline_dict = outline_node_to_dict(outline_root)
+    #             factstruct_memory_dict = memory_to_dict(memory)
+
+
+    #             logger.info(
+    #                 f"FactStruct Stage 1 大纲生成完成: "
+    #                 f"{len(outline_root.get_all_nodes())} 个节点, "
+    #                 f"{len(memory.documents)} 个文档"
+    #             )
+
+    #         except Exception as e:
+    #             import traceback
+
+    #             logger.error(f"FactStruct Stage 1 执行失败: {str(e)}")
+    #             logger.error(f"详细错误:\n{traceback.format_exc()}")
+
+    #             # Fallback: 使用传统方法生成大纲
+    #             logger.warning("回退到传统大纲生成方法...")
+    #             outline_llm = get_llm_by_type(AGENT_LLM_MAP.get("outline", "default"))
+    #             # bg_investigation = search_docs(user_query, top_k=5)
+    #             bg_investigation = web_search(user_query, top_k=5)
+    #             try:
+    #                 messages = [
+    #                     HumanMessage(
+    #                         f"##用户原始问题\n\n{user_query}\n\n##用户补充需求\n\n{user_dst}\n\n##可能用到的相关数据\n\n{bg_investigation}\n\n"
+    #                     )
+    #                 ] + apply_prompt_template("outline", state)
+    #                 response = outline_llm.invoke(messages)
+    #                 outline_response = response.content
+    #                 outline_response = repair_json_output(outline_response)
+    #                 logger.info(f"传统方法大纲生成完成: {outline_response}")
+    #             except Exception as fallback_error:
+    #                 logger.error(f"传统方法也失败: {str(fallback_error)}")
+    #                 # 返回最简单的默认大纲
+    #                 import json
+
+    #                 outline_response = json.dumps(
+    #                     {"title": user_query, "children": []}, ensure_ascii=False
+    #                 )
+
+
+    #         outline_confirmed = outline_response.strip()
+    #         logger.info(f"大纲自动确认: {outline_confirmed}")
+
+    #         return Command(
+    #             update={
+    #                 "messages": [
+    #                     HumanMessage(content=f"大纲确认: {outline_confirmed}", name="outline")
+    #                 ],
+    #                 "report_outline": outline_confirmed,
+    #                 "factstruct_outline": factstruct_outline_dict,
+    #                 "factstruct_memory": factstruct_memory_dict,
+    #                 "current_node": "outline",
+    #             },
+    #             goto="central_agent",
+    #         )
 
     @timed_step("execute_outline_factstruct")
     async def execute_outline_factstruct(self, state: State, config: RunnableConfig) -> Command:
         """
-        执行大纲生成（使用 FactStruct Stage 1 Batch-MAB 算法）
+        执行大纲子Agent（FactStruct Stage 1）
 
-        使用批量-信息觅食多臂老虎机算法动态生成和优化大纲结构。
+        基于用户问题和已确认的任务规划，生成或调整报告的大纲结构，
+        并为后续 FactStruct Stage 2 提供结构化 Outline 与 Memory。
         """
+        logger.info("大纲Agent开始执行（FactStruct Stage 1）...")
+
         user_query = state.get("user_query", "")
         user_dst = state.get("user_dst", "")
+        factstruct_outline_dict = state.get("factstruct_outline", None)#如果有的话，后续更改到时候再修
+        factstruct_memory_dict = state.get("factstruct_memory",None)
+        #提取的是 guideline
+        delegation_context = state.get("delegation_context", {})
+        task_description = delegation_context.get("task_description", "未知研究任务")
+        
+        #这个地方是不是说必须前置条件是 plan 啊，我感觉没必要，没有就没有吧.虽然不知道在干啥，但还是留着吧
         auto_accepted_plan = state.get("auto_accepted_plan", False)
+        outline_response = "大纲生成失败: 未知错误"
 
-        if auto_accepted_plan:
-            factstruct_outline_dict = None
-            factstruct_memory_dict = None
-
-            # 使用 FactStruct Stage 1 生成大纲
-            try:
-                logger.info("开始使用 FactStruct Stage 1 生成大纲...")
-
-                # 构建完整查询（包含用户补充需求）
-                full_query = user_query
-                if user_dst:
-                    full_query = f"{user_query}\n\n用户补充需求：{user_dst}"
-
-                # 运行 Batch-MAB 算法
-                # 注意：这里使用较小的迭代次数和批量大小以加快响应速度
-                # 生产环境可以根据需要调整这些参数
-                outline_root, memory = run_factstruct_stage1(
-                    query=full_query,
-                    max_iterations=state.get(
-                        "factstruct_max_iterations",  4
-                    ),  # 默认 10 次迭代
-                    batch_size=state.get("factstruct_batch_size", 2),  # 默认批量大小 3
-                    config=config,
-                )
-
-                # 转换为 Markdown 格式（完整大纲，不限制深度）
-                outline_response = outline_node_to_markdown(
-                    outline_root, max_depth=None, include_root=True
-                )
-                
-
-                # 如果用户指定了字数限制，执行字数规划
-                total_word_limit = state.get("total_word_limit", 5000)
-                if total_word_limit > 0:
-                    logger.info(f"检测到字数限制 {total_word_limit}，开始字数规划...")
-                    outline_root = self.execute_word_planning(
-                        outline_root, total_word_limit
-                    )
-                    # 更新大纲文本，包含字数信息
-                    outline_response = outline_root.to_text_tree(
-                        include_word_limit=True
-                    )
-
-
-                # 保存到 state（供 FactStruct Stage 2 使用）
-                from src.factstruct import outline_node_to_dict, memory_to_dict
-
-                factstruct_outline_dict = outline_node_to_dict(outline_root)
-                factstruct_memory_dict = memory_to_dict(memory)
-
-
-                logger.info(
-                    f"FactStruct Stage 1 大纲生成完成: "
-                    f"{len(outline_root.get_all_nodes())} 个节点, "
-                    f"{len(memory.documents)} 个文档"
-                )
-
-            except Exception as e:
-                import traceback
-
-                logger.error(f"FactStruct Stage 1 执行失败: {str(e)}")
-                logger.error(f"详细错误:\n{traceback.format_exc()}")
-
-                # Fallback: 使用传统方法生成大纲
-                logger.warning("回退到传统大纲生成方法...")
-                outline_llm = get_llm_by_type(AGENT_LLM_MAP.get("outline", "default"))
-                # bg_investigation = search_docs(user_query, top_k=5)
-                bg_investigation = web_search(user_query, top_k=5)
-                try:
-                    messages = [
-                        HumanMessage(
-                            f"##用户原始问题\n\n{user_query}\n\n##用户补充需求\n\n{user_dst}\n\n##可能用到的相关数据\n\n{bg_investigation}\n\n"
-                        )
-                    ] + apply_prompt_template("outline", state)
-                    response = outline_llm.invoke(messages)
-                    outline_response = response.content
-                    outline_response = repair_json_output(outline_response)
-                    logger.info(f"传统方法大纲生成完成: {outline_response}")
-                except Exception as fallback_error:
-                    logger.error(f"传统方法也失败: {str(fallback_error)}")
-                    # 返回最简单的默认大纲
-                    import json
-
-                    outline_response = json.dumps(
-                        {"title": user_query, "children": []}, ensure_ascii=False
-                    )
-
-
-            outline_confirmed = outline_response.strip()
-            logger.info(f"大纲自动确认: {outline_confirmed}")
-
+        if not auto_accepted_plan:
+            logger.warning("任务规划未确认，Outline Agent 不执行")
             return Command(
                 update={
                     "messages": [
-                        HumanMessage(content=f"大纲确认: {outline_confirmed}", name="outline")
+                        HumanMessage(
+                            content="任务规划尚未确认，跳过大纲生成",
+                            name="outline",
+                        )
                     ],
-                    "report_outline": outline_confirmed,
-                    "factstruct_outline": factstruct_outline_dict,
-                    "factstruct_memory": factstruct_memory_dict,
-                    "current_node": "outline",
+                    "current_node": "central_agent",
                 },
                 goto="central_agent",
             )
+
+        try:
+            replan_result= state.get("replan_result", None)
+            full_query = user_query
+            if user_dst:
+                full_query = f"{user_query}\n\n用户补充需求：{user_dst}"
+
+            outline_root, memory = run_factstruct_stage1(
+                query=full_query,
+                max_iterations=state.get("factstruct_max_iterations", 4),
+                batch_size=state.get("factstruct_batch_size", 2),
+                task_description=task_description,
+                replan_result=replan_result,
+                config=config,
+            )
+
+            # 字数规划（可选）
+            total_word_limit = state.get("total_word_limit", 0)
+            if total_word_limit > 0:
+                logger.info(f"检测到字数限制 {total_word_limit}，执行字数规划...")
+                outline_root = self.execute_word_planning(
+                    outline_root, total_word_limit
+                )
+                outline_response = outline_root.to_text_tree(
+                    include_word_limit=True
+                )
+            else:
+                outline_response = outline_node_to_markdown(
+                    outline_root, max_depth=None, include_root=True
+                )
+
+            factstruct_outline_dict = outline_node_to_dict(outline_root)
+            factstruct_memory_dict = memory_to_dict(memory)
+
+            logger.info(
+                f"FactStruct Stage 1 完成: "
+                f"{len(outline_root.get_all_nodes())} 个节点"
+            )
+
+        except Exception as e:
+            import traceback
+
+            logger.error(traceback.format_exc())
+            logger.error(f"FactStruct Stage 1 执行失败: {str(e)}")
+
+            outline_response = f"大纲生成失败（FactStruct Stage 1）: {str(e)}"
+
+        # === 写入 central agent memory stack ===
+        memory_entry = MemoryStackEntry(
+            timestamp=datetime.now().isoformat(),
+            action="delegate",
+            agent_type="outline",
+            content="大纲任务: 使用 FactStruct Stage 1 生成或调整报告大纲",
+            result={
+                "outline": outline_response,
+                "factstruct_outline": factstruct_outline_dict,
+            },
+        )
+        self.central_agent.memory_stack.push(memory_entry)
+
+        logger.info("大纲生成完成（FactStruct Stage 1），返回中枢Agent")
+
+        return Command(
+            update={
+                "messages": [
+                    HumanMessage(
+                        content="大纲生成完成（FactStruct Stage 1），返回中枢Agent",
+                        name="outline",
+                    )
+                ],
+                "report_outline": outline_response,
+                "factstruct_outline": factstruct_outline_dict,
+                "factstruct_memory": factstruct_memory_dict,
+                "current_node": "central_agent",
+                "memory_stack": self.central_agent.memory_stack.to_dict(),
+            },
+            goto="central_agent",
+        )
+
+
+
 
 
     @timed_step("execute_word_planning")

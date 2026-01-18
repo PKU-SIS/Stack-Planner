@@ -113,9 +113,112 @@ class CentralAgent:
         logger.info("中枢Agent正在进行决策...")
         start_time = datetime.now()
 
+        #增加 SOP 部分，用于加入 decision 模块
+        DECISION_SOP_FactStruct='''### Execution Workflow Guidelines
+        You are operating within a multi-agent system with a defined execution workflow.
+        Your responsibility is to advance the task toward completion by following the workflow below,
+        while inserting additional steps only when required by task complexity or missing information.
+
+        #### Mandatory High-Level Workflow
+
+        1. **Planning Phase (Mandatory, First Step)**
+        - You MUST begin by delegating to the replanner agent.
+        - In this phase, the replanner agent produces a **content plan**, not a system workflow.
+        - The content plan defines:
+            - How the target document should be decomposed into major sections or parts
+            - The logical ordering and scope of those sections
+        - This phase does NOT determine system execution logic or agent orchestration.
+        - This phase must be executed exactly once at the beginning of the task.
+
+        2. **Outline Construction Phase (Mandatory, After Planning)**
+        - After a content plan is available, you MUST delegate to the outline agent.
+        - The outline agent generates or refines a structured outline based on the content plan or existing context.
+        - This phase MUST be executed at least once.
+        - Internal outline strategies (such as iteration depth, expansion, or reduction) are handled entirely by the outline agent.
+
+        3. **Content Generation Phase (Mandatory, After Outline Confirmation)**
+        - Once an outline has been generated and confirmed, you MUST delegate to the reporter agent.
+        - The reporter agent generates the final content strictly following the confirmed outline.
+        - This phase is required for task completion.
+
+        #### Execution Constraints and Rules
+        - The execution order MUST follow: Content Planning → Outline Construction → Content Generation.
+        - You may revisit earlier phases only if later phases reveal issues in content structure or section planning.
+        - Do NOT skip the outline phase under any circumstances.
+        - Do NOT proceed to FINISH unless the reporter agent has produced the final content.
+        - If information is insufficient at any stage, insert appropriate additional steps before proceeding.
+        - **Default Assumption of Information Sufficiency**:
+        - You MUST assume that the provided documents and existing context are sufficient to support both outline construction and content generation.
+        - You MUST NOT invoke any Researcher or external information-gathering agent by default.
+        - **Strict Conditions for Research Invocation**:
+        - A Researcher agent may be invoked ONLY IF:
+            - During outline construction, a significant number of outline sections cannot be reasonably grounded in the provided documents, AND
+            - The missing information is structural or foundational (not stylistic, explanatory, or elaborative).
+
+        Your goal is to ensure strict adherence to the required workflow while maintaining logical completeness,
+        sufficient preparation, and coordinated multi-agent execution.'''
+        DECISION_SOP_SP='''### Execution Workflow Guidelines
+        You are operating within a multi-agent system with a defined execution workflow.
+        Your responsibility is to advance the task toward completion by following the workflow below,
+        while inserting additional steps only when required by task complexity or missing information.
+
+        #### Mandatory High-Level Workflow
+
+        1. **Planning Phase (Mandatory, First Step)**
+        - You MUST begin by delegating to the replanner agent.
+        - In this phase, the replanner agent produces a **content plan**, not a system workflow.
+        - The content plan defines:
+            - How the target document should be decomposed into major sections or parts
+            - The logical ordering and scope of those sections
+        - This phase does NOT determine system execution logic or agent orchestration.
+        - This phase must be executed exactly once at the beginning of the task.
+
+        2. **Outline Construction Phase (Mandatory, After Planning)**
+        - After a content plan is available, you MUST delegate to the outline agent.
+        - The outline agent generates or refines a structured outline based on the content plan or existing context.
+        - This phase MUST be executed at least once.
+        - Internal outline strategies (such as iteration depth, expansion, or reduction) are handled entirely by the outline agent.
+
+        3. **Reasoning & Research Phase (Mandatory, Between Outline and Content Generation)**
+        - After an outline has been generated, you MUST perform a centralized reasoning phase.
+        - In this phase, the central agent MUST:
+            - Invoke the Researcher agent at least once
+            - Use available tools, documents, or external sources to validate, enrich, or challenge the outline
+        - This phase is responsible for:
+            - Identifying missing, weak, or unsupported sections in the outline
+            - Resolving ambiguities or uncertainties before content generation
+        - This phase MUST be executed for every task, regardless of perceived information completeness.
+
+        4. **Content Generation Phase (Mandatory, After Outline Confirmation)**
+        - Once an outline has been generated and confirmed, you MUST delegate to the reporter agent.
+        - The reporter agent generates the final content strictly following the confirmed outline.
+        - This phase is required for task completion.
+
+        #### Execution Constraints and Rules
+        - The execution order MUST follow: Content Planning → Outline Construction → Reasoning & Research → Content Generation.
+        - You may revisit earlier phases only if later phases reveal issues in content structure or section planning.
+        - Do NOT skip the outline phase under any circumstances.
+        - Do NOT proceed to FINISH unless the reporter agent has produced the final content.
+        - If information is insufficient at any stage, insert appropriate additional steps before proceeding.
+        - **Mandatory Research Invocation**:
+        - The Researcher agent MUST be invoked in every task execution as part of the Reasoning & Research Phase.
+        - Skipping or simulating this phase without an actual Researcher invocation is not allowed.
+
+        Your goal is to ensure strict adherence to the required workflow while maintaining logical completeness,
+        sufficient preparation, and coordinated multi-agent execution.'''
+
+        graph_format=config["configurable"]["graph_format"]
+        if graph_format=="FactStruct":
+            state["sop"] = DECISION_SOP_FactStruct
+            logger.info(f"使用 FactStruct的 SOP")
+        else:
+            state["sop"] = DECISION_SOP_SP
+            logger.info(f"使用 SP 的 SOP")
+
         # 构建决策prompt
         messages = self._build_decision_prompt(state, config)
         # logger.debug(f"决策prompt: {messages}")
+
 
         # 获取LLM决策并处理异常
         try:
@@ -198,6 +301,7 @@ class CentralAgent:
             格式化的提示词消息列表
         """
         messages_history = state.get("messages", [])
+        SOP=state.get("sop",None)
         converted_messages = []
         for msg in messages_history:
             if isinstance(msg, (HumanMessage, AIMessage)):
@@ -225,6 +329,7 @@ class CentralAgent:
             **context,
             **config,
             "available_actions": ", ".join([a.value for a in action_options]),
+            "SOP":SOP,
         }
         return apply_prompt_template(
             "central_agent", state, extra_context=context_with_actions

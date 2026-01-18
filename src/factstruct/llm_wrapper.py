@@ -17,6 +17,9 @@ from src.utils.logger import logger
 from src.prompts import get_prompt_template
 from .outline_node import OutlineNode
 from .document import FactStructDocument
+# from jinja2 import Template
+
+
 
 
 class FactStructLLMWrapper:
@@ -39,6 +42,8 @@ class FactStructLLMWrapper:
         self,
         query: str,
         docs: List[FactStructDocument],
+        central_guidance=None,
+        replan_result=None,
     ) -> OutlineNode:
         """
         生成初始大纲
@@ -50,45 +55,67 @@ class FactStructLLMWrapper:
         返回:
             根 OutlineNode
         """
+    
+    
         # 格式化文档信息
         docs_text = self._format_documents(docs)
 
-        prompt = f"""你是一个研究助手。请根据用户查询和提供的初始文档，生成一个结构化的研究大纲。
+        parts = []
 
-## 用户查询
-{query}
+        parts.append("你是一个研究助手。请根据用户查询和提供的初始文档，生成一个结构化的研究大纲。\n")
 
-## 初始文档
-{docs_text}
+        parts.append("## 用户查询\n")
+        parts.append(query + "\n")
 
-## 要求
-1. 生成一个层次化的研究大纲（建议 2-3 层）
-2. 大纲应该覆盖查询的主要方面
-3. 每个节点应该有一个清晰的标题
-4. 输出格式必须是 JSON，结构如下：
-{{
-    "title": "根节点标题",
-    "children": [
-        {{
-            "title": "子节点1标题",
-            "children": []
-        }},
-        {{
-            "title": "子节点2标题",
+        if docs_text:
+            parts.append("## 初始文档\n")
+            parts.append(docs_text + "\n")
+
+        if central_guidance:
+            parts.append("## 初始指导\n")
+            parts.append(
+                "请在生成修改大纲时参考以下内容：\n"
+            )
+            parts.append(central_guidance + "\n")
+        if replan_result:
+            parts.append("## 初始计划\n")
+            parts.append(
+                "当前的计划，或大纲为\n"
+            )
+            parts.append( replan_result + "\n")
+        output_format="""
+        ## 要求
+        1. 生成一个层次化的研究大纲（建议 2-3 层）
+        2. 大纲应该覆盖查询的主要方面
+        3. 每个节点应该有一个清晰的标题
+        4. 输出格式必须是 JSON，结构如下：
+        {
+            "title": "根节点标题",
             "children": [
-                {{
-                    "title": "子节点2.1标题",
+                {
+                    "title": "子节点1标题",
                     "children": []
-                }}
+                },
+                {
+                    "title": "子节点2标题",
+                    "children": [
+                        {
+                            "title": "子节点2.1标题",
+                            "children": []
+                        }
+                    ]
+                }
             ]
-        }}
-    ]
-}}
+        }
 
-请只输出 JSON，不要包含其他解释性文字。"""
+        请只输出 JSON，不要包含其他解释性文字。"""
+        parts.append(output_format)
 
+        prompt = "\n".join(parts)
+        logger.info(f"prompt:{prompt}")
         try:
             messages = [HumanMessage(content=prompt)]
+            logger.info(f"initial outline prompt:{messages}")
             response = self.llm.invoke(messages)
             content = response.content.strip()
 

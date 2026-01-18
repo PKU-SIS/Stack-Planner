@@ -205,37 +205,31 @@ def _build_graph_FactStruct():
 
     builder = StateGraph(State)
 
-    # 添加center planner agent
-    # 不要问卷了
-    # builder.add_node("perception", perception_node)
-    
-    #暂时注释
-    # builder.add_node("central_agent", central_agent_node)
-    builder.add_node("outline_factstruct", outline_node_factstruct)
+
+    builder.add_node("central_agent", central_agent_node)
+    # builder.add_node("outline_factstruct", outline_node_factstruct)#变成子 agent
 
     # 添加sub agent，暂时注释
-    # sub_agents = get_sub_agents_by_global_type("FactStruct")
-    # for sub_agent in sub_agents:
-    #     builder.add_node(sub_agent["name"], sub_agent["node"])
+    sub_agents = get_sub_agents_by_global_type("FactStruct")
+    for sub_agent in sub_agents:
+        builder.add_node(sub_agent["name"], sub_agent["node"])
 
-    builder.add_node("reporter", reporter_factstruct_node) 
+    # builder.add_node("reporter", reporter_factstruct_node) 
 
     # 下面这些暂时没有算sub agent
     builder.add_node("zip_data", zip_data)
 
     # 感知层，包括search before plan、human in the loop
 
-    builder.add_edge(START, "outline_factstruct")
-    # builder.add_edge(START, "perception")
-    # builder.add_edge("perception", "outline")
-
-    # # 核心流程,原本流程
+    #原有 workflow
+    # builder.add_edge(START, "outline_factstruct")
     # builder.add_edge("outline_factstruct", "central_agent")
-    # builder.add_edge("central_agent", "zip_data")
+    # builder.add_edge("central_agent","zip_data")
 
-    # 暂时不带 Central Agent 的流程
-    builder.add_edge("outline_factstruct", "reporter")
-    builder.add_edge("reporter", "zip_data")
+
+    # 动态 SOP WorkFlow
+    builder.add_edge(START, "central_agent")
+    builder.add_edge("central_agent", "zip_data")
     # 后处理部分
     builder.add_edge("zip_data", END)
 

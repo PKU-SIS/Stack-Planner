@@ -26,6 +26,7 @@ from langchain_core.runnables import RunnableConfig
 
 import re
 from collections import defaultdict
+import json
 # from modelscope.pipelines import pipeline
 # from modelscope.utils.constant import Tasks
 from sentence_transformers import CrossEncoder
@@ -107,6 +108,10 @@ def run_factstruct_stage1(
     llm: Optional[BaseChatModel] = None,
     max_iterations: int = 20,
     batch_size: int = 5,
+    task_description=None,
+    replan_result=None,
+    factstruct_outline=None,
+    factstruct_memory=None,
     initial_docs: Optional[List[FactStructDocument]] = None,
     search_engine: Optional[Callable] = None,
     config: RunnableConfig=None,
@@ -148,9 +153,16 @@ def run_factstruct_stage1(
     )
 
     # 运行算法
+    central_guidance = json.dumps(task_description,ensure_ascii=False,indent=2,)
+    replan_result= json.dumps(replan_result,ensure_ascii=False,indent=2,)
+    logger.info(f"central_guidance{central_guidance}")
     outline_root, memory = batch_mab.run(
         initial_query=query,
         initial_docs=initial_docs,
+        central_guidance=central_guidance,
+        replan_result=replan_result,
+        factstruct_outline=factstruct_outline,
+        factstruct_memory=factstruct_memory,
         config=config,
     )
 

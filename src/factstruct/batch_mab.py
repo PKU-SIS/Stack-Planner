@@ -18,7 +18,7 @@ from .embedder import Embedder
 from .reward_calculator import RewardCalculator
 from .llm_wrapper import FactStructLLMWrapper
 from langchain_core.runnables import RunnableConfig
-
+from ..graph.types import State
 class BatchMAB:
     """
     批量-信息觅食多臂老虎机（Batch-IF-MAB）算法
@@ -87,6 +87,10 @@ class BatchMAB:
         self,
         initial_query: str,
         initial_docs: Optional[List[FactStructDocument]] = None,
+        central_guidance=None,
+        replan_result=None,
+        factstruct_outline=None,
+        factstruct_memory=None,
         config:RunnableConfig=None,
     ) -> Tuple[OutlineNode, Memory]:
         """
@@ -101,39 +105,43 @@ class BatchMAB:
         """
         logger.info(f"Starting Batch-MAB with query: {initial_query}")
 
-        # --- 初始化阶段 ---
-        # 1. 初始检索与大纲生成
-        if initial_docs is None:
-            logger.info("Performing initial search...")
-            initial_docs = self.search_engine(initial_query, k=5,config=config)
+        if factstruct_outline==None:
+            # --- 初始化阶段 ---
+            # 1. 初始检索与大纲生成
+            if initial_docs is None:
+                logger.info("Performing initial search...")
+                initial_docs = self.search_engine(initial_query, k=5,config=config)
 
-        # 嵌入初始文档
-        initial_docs_with_embed = self.embedder.embed_docs(initial_docs)
+            # 嵌入初始文档
+            initial_docs_with_embed = self.embedder.embed_docs(initial_docs)
 
-        # 存储到记忆库
-        self.memory.store_docs(initial_docs_with_embed)
+            # 存储到记忆库
+            self.memory.store_docs(initial_docs_with_embed)
 
-        # 生成初始大纲（LLM Call #1）
-        logger.info("Generating initial outline...")
-        outline_root = self.llm_wrapper.generate_initial_outline(
-            initial_query,
-            initial_docs_with_embed,
-        )
-
-        # 将初始文档映射到根节点
-        self.memory.map_node_to_docs(outline_root.id, initial_docs_with_embed)
-
-        # 打印初始大纲
-        try:
-            from .integration import outline_node_to_markdown
-
-            initial_outline_markdown = outline_node_to_markdown(
-                outline_root, max_depth=None, include_root=True
+            # 生成初始大纲（LLM Call #1）
+            logger.info("Generating initial outline...")
+            
+            outline_root = self.llm_wrapper.generate_initial_outline(
+                initial_query,
+                initial_docs_with_embed,
+                central_guidance,#感觉plan_text就是第一次的 feedback
+                replan_result=replan_result,
             )
-            logger.info(f"Initial outline:\n{initial_outline_markdown}")
-        except Exception as e:
-            logger.warning(f"Failed to format initial outline for logging: {e}")
-            logger.info(f"Initial outline:\n{outline_root.to_text_tree()}")
+
+            # 将初始文档映射到根节点
+            self.memory.map_node_to_docs(outline_root.id, initial_docs_with_embed)
+
+            # 打印初始大纲
+            try:
+                from .integration import outline_node_to_markdown
+
+                initial_outline_markdown = outline_node_to_markdown(
+                    outline_root, max_depth=None, include_root=True
+                )
+                logger.info(f"Initial outline:\n{initial_outline_markdown}")
+            except Exception as e:
+                logger.warning(f"Failed to format initial outline for logging: {e}")
+                logger.info(f"Initial outline:\n{outline_root.to_text_tree()}")
 
         # 总迭代次数计数器
         t = 0
