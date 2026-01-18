@@ -173,9 +173,7 @@ class SubAgentManager:
                 )
 
         except Exception as e:
-            import traceback
 
-            logger.error(traceback.format_exc())
             logger.error(f"研究Agent执行失败: {str(e)}")
             return Command(
                 update={
@@ -218,6 +216,94 @@ class SubAgentManager:
             },
             goto="central_agent",
         )
+
+    @timed_step("execute_web_researcher")
+    async def execute_web_researcher(
+        self, state: State, config: RunnableConfig
+    ) -> Command:
+        """
+        执行研究Agent，负责信息检索与分析
+
+        Args:
+            state: 当前系统状态
+            config: 运行配置
+
+        Returns:
+            执行结果Command对象
+        """
+        logger.info("Web Agent开始执行...")
+        delegation_context = state.get("delegation_context", {})
+        task_description = delegation_context.get("task_description", "未知研究任务")
+
+        # 配置研究工具链
+        # tools = [search_docs_tool]
+        tools = [get_web_search_tool(10)]
+        
+        # 实例化研究Agent
+        research_agent = ResearcherAgentSP(
+            config=config, agent_type="researcher_web", default_tools=tools
+        )
+
+        # 执行研究任务并处理异常
+        try:
+            result_command = await research_agent.execute_agent_step(state)
+
+            # 从结果中提取数据用于记忆栈
+            result_observations = []
+            result_data_collections = []
+
+            if result_command and result_command.update:
+                result_observations = result_command.update.get("observations", [])
+                result_data_collections = result_command.update.get(
+                    "data_collections", []
+                )
+
+        except Exception as e:
+            logger.error(f"研究Agent执行失败: {str(e)}")
+            return Command(
+                update={
+                    "messages": [
+                        HumanMessage(
+                            content=f"研究任务失败: {str(e)}", name="researcher"
+                        )
+                    ],
+                    "current_node": "central_agent",
+                    "memory_stack": self.central_agent.memory_stack.to_dict(),
+                },
+                goto="central_agent",
+            )
+
+        # 记录到中枢Agent记忆栈
+        memory_entry = MemoryStackEntry(
+            timestamp=datetime.now().isoformat(),
+            action="delegate",
+            agent_type="researcher",
+            content=f"研究任务: {task_description}",
+            result={
+                "observations": result_observations,
+                # "data_collections": result_data_collections,
+            },
+        )
+        self.central_agent.memory_stack.push(memory_entry)
+
+        logger.info("研究任务完成，返回中枢Agent")
+        logger.info("Web研究任务完成，返回中枢Agent")
+        logger.info(f"state:{state}")
+        return Command(
+            update={
+                "messages": [
+                    HumanMessage(
+                        content="研究任务完成，返回中枢Agent", name="researcher"
+                    )
+                ],
+                "current_node": "central_agent",
+                "memory_stack": self.central_agent.memory_stack.to_dict(),
+                "data_collections": result_data_collections,
+                "observations": result_observations,
+            },
+            goto="central_agent",
+        )
+
 
     @timed_step("execute_coder")
     async def execute_coder(self, state: State, config: RunnableConfig) -> Command:
@@ -1012,38 +1098,16 @@ class SubAgentManager:
                     
                 logger.info(f"大纲确认: {outline_confirmed}")
 
-                return Command(
-                    update={
-                        "messages": [
-                            HumanMessage(
-                                content=f"大纲确认: {outline_confirmed}", name="outline"
-                            )
-                        ],
-                        "report_outline": outline_confirmed,
-                        "current_node": "outline",
-                        "wait_stage": "",
-                    },
-                    goto="central_agent",
-                )
-            elif feedback and str(feedback).upper().startswith("[SKIP]"):
-                outline_confirmed = feedback[len("[SKIP]") :].strip()
-                logger.info(f"大纲确认: {outline_confirmed}")
-
-                return Command(
-                    update={
-                        "messages": [
-                            HumanMessage(
-                                content=f"大纲确认: {outline_confirmed}", name="outline"
-                            )
-                        ],
-                        "report_outline": outline_confirmed,
-                        "current_node": "outline",
-                        "wait_stage": "",
-                    },
-                    goto="central_agent",
-                )
-            else:
-                raise TypeError(f"Interrupt value of {feedback} is not supported.")
+            return Command(
+                update={
+                    "messages": [
+                        HumanMessage(content=f"大纲确认: {outline_confirmed}", name="outline")
+                    ],
+                    "report_outline": outline_confirmed,
+                    "current_node": "outline",
+                },
+                goto="central_agent",
+            )
 
 
     @timed_step("execute_outline_factstruct")
