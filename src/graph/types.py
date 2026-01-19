@@ -35,7 +35,8 @@ class State(MessagesState):
     # FactStruct Stage 1 相关字段
     factstruct_outline: Any = None  # OutlineNode 根节点
     factstruct_memory: Any = None  # Memory 实例（需要序列化时转换为 dict）
-    total_word_limit: int = 0  # 用户指定的总字数限制
+    total_word_limit: int = 5000  # 用户指定的总字数限制
     ref_map: dict = None
+    feedback: str =None
     #ZB V1.1相关字段
     sop: str =None

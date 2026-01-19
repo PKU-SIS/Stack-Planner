@@ -105,6 +105,7 @@ class BatchMAB:
         """
         logger.info(f"Starting Batch-MAB with query: {initial_query}")
 
+        #初始化
         if factstruct_outline==None:
             # --- 初始化阶段 ---
             # 1. 初始检索与大纲生成
@@ -127,10 +128,11 @@ class BatchMAB:
                 central_guidance,#感觉plan_text就是第一次的 feedback
                 replan_result=replan_result,
             )
-
+            logger.info(f"outline_root:{outline_root}")
+            logger.info(f"outline_root.id:{outline_root.id}")
             # 将初始文档映射到根节点
             self.memory.map_node_to_docs(outline_root.id, initial_docs_with_embed)
-
+            logger.info(f"self.memory:{self.memory}")
             # 打印初始大纲
             try:
                 from .integration import outline_node_to_markdown
@@ -159,7 +161,7 @@ class BatchMAB:
 
             # 1. 获取当前所有可行动的"手臂"（叶子节点）
             current_leaf_nodes = outline_root.get_leaf_nodes()
-
+            logger.info(f"current_leaf_nodes{current_leaf_nodes}")
             if not current_leaf_nodes:
                 logger.info("No leaf nodes available, terminating early.")
                 break
@@ -168,7 +170,7 @@ class BatchMAB:
 
             # 2. UCB 策略选择 Top-K 手臂
             selected_nodes = self._select_top_k_nodes(current_leaf_nodes, t)
-
+            logger.info(f"selected_nodes{selected_nodes}")
             if not selected_nodes:
                 logger.info("No nodes selected, terminating.")
                 break
@@ -229,6 +231,8 @@ class BatchMAB:
                 node.pull_count += 1
 
                 # 准备用于 LLM 修订的数据
+                logger.info(f"node{node}")
+                logger.info(f"new_docs{new_docs}")
                 node_doc_pairs_for_refine.append((node, new_docs))
 
                 # 5. 更新记忆库
@@ -237,6 +241,9 @@ class BatchMAB:
 
             # 6. (关键) LLM 批量更新大纲
             # (LLM Call #Round*2 + 1)
+            logger.info(f"node_doc_pairs_for_refine{node_doc_pairs_for_refine}")
+            logger.info(f"outline_root{outline_root}")
+            logger.info(f"self.memory{self.memory}")
             if node_doc_pairs_for_refine:
                 logger.info("Batch refining outline...")
                 outline_root, expanded_nodes_list, new_node_doc_mapping = (
@@ -246,7 +253,8 @@ class BatchMAB:
                         memory=self.memory,  # 传递 memory 以获取累积文档
                     )
                 )
-
+                logger.info(f"expanded_nodes_list{expanded_nodes_list}")
+                
                 # --- (已修正) 关键的状态继承步骤 ---
                 # 遍历那些刚刚被扩展的节点 (从叶子节点变成了内部节点)
                 # expanded_nodes_list 格式: [(parent_node, [new_child_node_1, ...]), ...]

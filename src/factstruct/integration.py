@@ -139,7 +139,6 @@ def run_factstruct_stage1(
     if search_engine is None:
         search_engine = create_search_engine_adapter()
 
-    # embedder = Embedder()
     embedder = Embedder(model_name="../../Model/MiniLM/all-MiniLM-L6-v2") 
     llm_wrapper = FactStructLLMWrapper(llm)
 
@@ -165,7 +164,9 @@ def run_factstruct_stage1(
         factstruct_memory=factstruct_memory,
         config=config,
     )
-
+    logger.info(f"outline_root:{outline_root}")
+    logger.info(f"memory:{memory}")
+    exit()
     return outline_root, memory
 
 

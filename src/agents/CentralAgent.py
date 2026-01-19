@@ -114,6 +114,7 @@ class CentralAgent:
         start_time = datetime.now()
 
         #增加 SOP 部分，用于加入 decision 模块
+        #SOP改成中文，SOP应该要的是抽象的。不能写是outline，replanner，具体谁来生成是让 CentralAgent 自己找
         DECISION_SOP_FactStruct='''### Execution Workflow Guidelines
         You are operating within a multi-agent system with a defined execution workflow.
         Your responsibility is to advance the task toward completion by following the workflow below,
