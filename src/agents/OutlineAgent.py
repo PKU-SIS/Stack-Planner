@@ -74,42 +74,7 @@ class OutlineAgent:
     采用基于记忆栈的决策机制，通过状态分析动态委派子Agent执行专项任务，
     并最终整合结果生成完成报告
     """
-
-    def __init__(self, graph_format: str = "sp"):
-        self.memory_stack = MemoryStack()
-        from src.agents.SubAgentManager import SubAgentManager
-
-        self.sub_agent_manager = SubAgentManager(self)
-
-        sub_agents = get_sub_agents_by_global_type(graph_format)
-        logger.info(f"初始化中枢Agent，使用子Agent类型: {sub_agents}")
-
-        # 初始化子Agent相关信息
-        self.available_sub_agents = [agent["name"] for agent in sub_agents]
-        self.sub_agents_description = ""
-        for agent in sub_agents:
-            self.sub_agents_description += (
-                f"- **{agent['name']}**: {agent['description']}\n"
-            )
-
-        # 动作处理器映射表
-        self.action_handlers = {
-            CentralAgentAction.THINK: self._handle_think,
-            CentralAgentAction.REFLECT: self._handle_reflect,
-            CentralAgentAction.SUMMARIZE: self._handle_summarize,
-            CentralAgentAction.DELEGATE: self._handle_delegate,
-            CentralAgentAction.FINISH: self._handle_finish,
-        }
-
-        # 动作类型对应的指令模板
-        self.action_instructions = {
-            CentralAgentAction.THINK: "分析当前状态并思考下一步行动",
-            CentralAgentAction.REFLECT: "反思之前的动作和结果",
-            CentralAgentAction.SUMMARIZE: "总结当前已获得的信息",
-            CentralAgentAction.DELEGATE: "决定委派哪个子Agent执行任务",
-            CentralAgentAction.FINISH: "判断是否可以完成任务并生成最终报告",
-        }
-
+    
     def __init__(
         self,
         initial_query: str,
@@ -129,7 +94,14 @@ class OutlineAgent:
         self.feedback = state.get("feedback")
         self.total_word_limit = state.get("total_word_limit")
 
-
+        # Outline 工具处理器映射表
+        self.tool_handlers = {
+            "initialization": self._tool_initialization,
+            "expandation": self._tool_expandation,
+            "reduction": self._tool_reduction,
+            "reflect": self._tool_reflect,
+            "finish": self._tool_finish,
+        }
 
 
     def make_decision(
@@ -234,40 +206,48 @@ class OutlineAgent:
         )
 
 
-    def execute_action(
-        self, decision: CentralDecision, state: State, config: RunnableConfig
+    def execute_tool(
+        self,
+        decision: OutlineToolDecision,
+        state: State,
+        config: RunnableConfig,
     ) -> Command:
         """
-        执行决策动作，调度对应的动作处理器
-
-        Args:
-            decision: 决策结果
-            state: 当前系统状态
-            config: 运行配置
-
-        Returns:
-            动作执行结果Command对象
+        根据 Outline Agent 的 tool 决策，调用对应的 outline 工具函数
         """
-        handler = self.action_handlers.get(decision.action)
+
+        tool_name = decision.tool
+        handler = self.tool_handlers.get(tool_name)
+
         if not handler:
-            error_msg = f"未知动作: {decision.action}"
+            error_msg = f"未知 outline tool: {tool_name}"
             logger.error(error_msg)
+
             return Command(
                 update={
                     "messages": [
                         AIMessage(
-                            content=f"错误：未知动作: {decision.action}",
-                            name="central_error",
+                            content=f"错误：未知 outline tool: {tool_name}",
+                            name="outline_error",
                         )
                     ],
                     "locale": state.get("locale"),
-                    "current_node": "central_agent",
-                    "memory_stack": self.memory_stack.to_dict(),
+                    "current_node": "outline_agent",
                 },
-                goto="central_agent",
+                goto="outline_agent",
             )
 
-        return handler(decision, state, config)
+        logger.info(
+            f"Outline Agent 执行工具: {tool_name}, params={decision.params}"
+        )
+
+        return handler(
+            params=decision.params or {},
+            reasoning=decision.reasoning,
+            state=state,
+            config=config,
+        )
+
 
     def _handle_think(
         self, decision: CentralDecision, state: State, config: RunnableConfig
