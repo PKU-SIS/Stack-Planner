@@ -64,11 +64,6 @@
 - 在继续结构操作前是否需要进行反思（reflect）
 {% endif %}
 
-{% if SOP %}
-### 操作约束（SOP）
-{{ SOP }}
-{% endif %}
-
 ---
 
 ## 可用工具（Available Tools）

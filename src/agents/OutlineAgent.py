@@ -222,10 +222,6 @@ class OutlineAgent:
             "factstruct_outline": state.get("factstruct_outline"),
             "total_word_limit": state.get("total_word_limit"),
             "feedback": state.get("feedback"),
-            "SOP": state.get("sop"),
-
-            # 语言
-            "locale": state.get("locale", "zh-CN"),
         }
 
         # 合并 config（如需要）

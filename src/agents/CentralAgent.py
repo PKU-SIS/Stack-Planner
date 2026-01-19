@@ -115,98 +115,155 @@ class CentralAgent:
 
         #增加 SOP 部分，用于加入 decision 模块
         #SOP改成中文，SOP应该要的是抽象的。不能写是outline，replanner，具体谁来生成是让 CentralAgent 自己找
-        DECISION_SOP_FactStruct='''### Execution Workflow Guidelines
-        You are operating within a multi-agent system with a defined execution workflow.
-        Your responsibility is to advance the task toward completion by following the workflow below,
-        while inserting additional steps only when required by task complexity or missing information.
+        DECISION_SOP_FactStruct = '''### 执行流程指南（Execution Workflow Guidelines）
 
-        #### Mandatory High-Level Workflow
+        你正在一个具有明确执行流程的多智能体系统中工作。
+        你的职责是**严格遵循以下流程推进任务直至完成**，仅在任务复杂度或信息缺失确有必要时，才允许插入额外步骤。
 
-        1. **Planning Phase (Mandatory, First Step)**
-        - You MUST begin by delegating to the replanner agent.
-        - In this phase, the replanner agent produces a **content plan**, not a system workflow.
-        - The content plan defines:
-            - How the target document should be decomposed into major sections or parts
-            - The logical ordering and scope of those sections
-        - This phase does NOT determine system execution logic or agent orchestration.
-        - This phase must be executed exactly once at the beginning of the task.
+        ---
 
-        2. **Outline Construction Phase (Mandatory, After Planning)**
-        - After a content plan is available, you MUST delegate to the outline agent.
-        - The outline agent generates or refines a structured outline based on the content plan or existing context.
-        - This phase MUST be executed at least once.
-        - Internal outline strategies (such as iteration depth, expansion, or reduction) are handled entirely by the outline agent.
+        #### 强制性的高层执行流程（Mandatory High-Level Workflow）
 
-        3. **Content Generation Phase (Mandatory, After Outline Confirmation)**
-        - Once an outline has been generated and confirmed, you MUST delegate to the reporter agent.
-        - The reporter agent generates the final content strictly following the confirmed outline.
-        - This phase is required for task completion.
+        ### 1. 规划阶段（Planning Phase，强制，第一步）
 
-        #### Execution Constraints and Rules
-        - The execution order MUST follow: Content Planning → Outline Construction → Content Generation.
-        - You may revisit earlier phases only if later phases reveal issues in content structure or section planning.
-        - Do NOT skip the outline phase under any circumstances.
-        - Do NOT proceed to FINISH unless the reporter agent has produced the final content.
-        - If information is insufficient at any stage, insert appropriate additional steps before proceeding.
-        - **Default Assumption of Information Sufficiency**:
-        - You MUST assume that the provided documents and existing context are sufficient to support both outline construction and content generation.
-        - You MUST NOT invoke any Researcher or external information-gathering agent by default.
-        - **Strict Conditions for Research Invocation**:
-        - A Researcher agent may be invoked ONLY IF:
-            - During outline construction, a significant number of outline sections cannot be reasonably grounded in the provided documents, AND
-            - The missing information is structural or foundational (not stylistic, explanatory, or elaborative).
+        - 你 **必须** 首先委派给 **replanner agent**。
+        - 在该阶段，replanner agent 产出的是 **内容规划（content plan）**，而不是系统执行流程。
+        - 内容规划需要明确：
+        - 目标文档应如何拆分为主要章节或部分
+        - 各章节之间的逻辑顺序与覆盖范围
+        - 该阶段 **不负责** 决定系统执行逻辑或多智能体编排方式。
+        - 该阶段 **只能在任务开始时执行一次，且仅一次**。
 
-        Your goal is to ensure strict adherence to the required workflow while maintaining logical completeness,
-        sufficient preparation, and coordinated multi-agent execution.'''
-        DECISION_SOP_SP='''### Execution Workflow Guidelines
-        You are operating within a multi-agent system with a defined execution workflow.
-        Your responsibility is to advance the task toward completion by following the workflow below,
-        while inserting additional steps only when required by task complexity or missing information.
+        ---
 
-        #### Mandatory High-Level Workflow
+        ### 2. 大纲构建阶段（Outline Construction Phase，强制，规划之后）
 
-        1. **Planning Phase (Mandatory, First Step)**
-        - You MUST begin by delegating to the replanner agent.
-        - In this phase, the replanner agent produces a **content plan**, not a system workflow.
-        - The content plan defines:
-            - How the target document should be decomposed into major sections or parts
-            - The logical ordering and scope of those sections
-        - This phase does NOT determine system execution logic or agent orchestration.
-        - This phase must be executed exactly once at the beginning of the task.
+        - 在内容规划完成后，你 **必须** 委派给 **outline agent**。
+        - outline agent 负责基于内容规划或已有上下文：
+        - 生成新的结构化大纲，或
+        - 对现有大纲进行结构性优化
+        - 该阶段 **至少必须执行一次**。
+        - 所有内部的大纲策略（如迭代深度、扩展、删减等）**完全由 outline agent 自行处理**。
 
-        2. **Outline Construction Phase (Mandatory, After Planning)**
-        - After a content plan is available, you MUST delegate to the outline agent.
-        - The outline agent generates or refines a structured outline based on the content plan or existing context.
-        - This phase MUST be executed at least once.
-        - Internal outline strategies (such as iteration depth, expansion, or reduction) are handled entirely by the outline agent.
+        ---
 
-        3. **Reasoning & Research Phase (Mandatory, Between Outline and Content Generation)**
-        - After an outline has been generated, you MUST perform a centralized reasoning phase.
-        - In this phase, the central agent MUST:
-            - Invoke the Researcher agent at least once
-            - Use available tools, documents, or external sources to validate, enrich, or challenge the outline
-        - This phase is responsible for:
-            - Identifying missing, weak, or unsupported sections in the outline
-            - Resolving ambiguities or uncertainties before content generation
-        - This phase MUST be executed for every task, regardless of perceived information completeness.
+        ### 3. 内容生成阶段（Content Generation Phase，大纲确认之后，强制）
 
-        4. **Content Generation Phase (Mandatory, After Outline Confirmation)**
-        - Once an outline has been generated and confirmed, you MUST delegate to the reporter agent.
-        - The reporter agent generates the final content strictly following the confirmed outline.
-        - This phase is required for task completion.
+        - 一旦大纲生成并被确认，你 **必须** 委派给 **reporter agent**。
+        - reporter agent 必须 **严格按照已确认的大纲结构** 生成最终内容。
+        - 该阶段是任务完成的 **必要条件**。
 
-        #### Execution Constraints and Rules
-        - The execution order MUST follow: Content Planning → Outline Construction → Reasoning & Research → Content Generation.
-        - You may revisit earlier phases only if later phases reveal issues in content structure or section planning.
-        - Do NOT skip the outline phase under any circumstances.
-        - Do NOT proceed to FINISH unless the reporter agent has produced the final content.
-        - If information is insufficient at any stage, insert appropriate additional steps before proceeding.
-        - **Mandatory Research Invocation**:
-        - The Researcher agent MUST be invoked in every task execution as part of the Reasoning & Research Phase.
-        - Skipping or simulating this phase without an actual Researcher invocation is not allowed.
+        ---
 
-        Your goal is to ensure strict adherence to the required workflow while maintaining logical completeness,
-        sufficient preparation, and coordinated multi-agent execution.'''
+        #### 执行约束与规则（Execution Constraints and Rules）
+
+        - 执行顺序 **必须严格遵循**：  
+        **内容规划 → 大纲构建 → 内容生成**
+        - 仅当后续阶段暴露出结构性问题或章节规划问题时，才允许回退到早期阶段。
+        - 在任何情况下，**都不得跳过大纲阶段**。
+        - **在 reporter agent 尚未生成最终内容之前，不得进入 FINISH 状态**。
+        - 如果在任何阶段发现信息不足，应在继续之前插入适当的补充步骤。
+
+        ---
+
+        #### 默认信息充分性假设（Default Assumption of Information Sufficiency）
+
+        - 你 **必须假设**：
+        - 已提供的文档和现有上下文信息
+        - 足以支持大纲构建与内容生成
+        - **默认情况下，不得调用 Researcher 或任何外部信息收集类智能体**。
+
+        ---
+
+        #### 研究智能体调用的严格条件（Strict Conditions for Research Invocation）
+
+        只有在 **同时满足以下两个条件时**，才允许调用 Researcher agent：
+
+        1. 在大纲构建过程中，发现**大量大纲章节无法基于已有材料合理构建**，并且  
+        2. 缺失的信息属于 **结构性或基础性信息**（而非文风、解释性或扩展性内容）
+
+        ---
+
+        你的目标是：  
+        在严格遵循上述流程的前提下，确保任务在逻辑上完整、准备充分，并实现多智能体之间的高效协同执行。
+        '''
+
+        DECISION_SOP_SP = '''### 执行流程指南（Execution Workflow Guidelines）
+
+        你正在一个具有明确执行流程的多智能体系统中运行。
+        你的职责是**严格按照以下流程推进任务直至完成**，仅在任务复杂度提升或信息确实缺失时，才允许插入额外步骤。
+
+        ---
+
+        #### 强制性的高层执行流程（Mandatory High-Level Workflow）
+
+        ### 1. 规划阶段（Planning Phase，强制，第一步）
+
+        - 你 **必须** 首先委派给 **replanner agent**。
+        - 在该阶段，replanner agent 产出的是 **内容规划（content plan）**，而不是系统执行流程。
+        - 内容规划需要明确：
+        - 目标文档应如何拆分为主要章节或部分
+        - 各章节之间的逻辑顺序与覆盖范围
+        - 该阶段 **不负责** 决定系统执行逻辑或多智能体编排。
+        - 该阶段 **只能在任务开始时执行一次，且仅一次**。
+
+        ---
+
+        ### 2. 大纲构建阶段（Outline Construction Phase，强制，规划之后）
+
+        - 在内容规划完成后，你 **必须** 委派给 **outline agent**。
+        - outline agent 负责基于内容规划或已有上下文：
+        - 生成新的结构化大纲，或
+        - 对现有大纲进行结构性优化与修正。
+        - 该阶段 **至少必须执行一次**。
+        - 所有内部的大纲策略（如迭代深度、扩展、删减等）**完全由 outline agent 自主处理**。
+
+        ---
+
+        ### 3. 推理与研究阶段（Reasoning & Research Phase，强制，位于大纲与内容生成之间）
+
+        - 在大纲生成之后，你 **必须** 执行一个集中式的推理阶段。
+        - 在该阶段，中枢智能体（central agent）**必须**：
+        - 至少调用 **Researcher agent** 一次；
+        - 使用可用工具、文档或外部信息源，对大纲进行验证、补充或质疑。
+        - 该阶段的核心职责包括：
+        - 识别大纲中缺失、薄弱或缺乏支撑的章节；
+        - 在进入内容生成之前，解决结构性歧义或不确定性问题。
+        - **无论当前信息是否看似充分，该阶段都必须为每一个任务执行一次**。
+
+        ---
+
+        ### 4. 内容生成阶段（Content Generation Phase，强制，大纲确认之后）
+
+        - 一旦大纲生成并被确认，你 **必须** 委派给 **reporter agent**。
+        - reporter agent 必须 **严格依据已确认的大纲结构** 生成最终内容。
+        - 该阶段是任务完成的 **必要条件**。
+
+        ---
+
+        #### 执行约束与规则（Execution Constraints and Rules）
+
+        - 执行顺序 **必须严格遵循**：  
+        **内容规划 → 大纲构建 → 推理与研究 → 内容生成**
+        - 仅当后续阶段暴露出内容结构或章节规划问题时，才允许回退至早期阶段。
+        - 在任何情况下，**都不得跳过大纲构建阶段**。
+        - **在 reporter agent 尚未生成最终内容之前，不得进入 FINISH 状态**。
+        - 若在任何阶段发现信息不足，必须在继续之前插入适当的补充步骤。
+
+        ---
+
+        #### 强制研究调用规则（Mandatory Research Invocation）
+
+        - 在 **每一次任务执行中**，Researcher agent **必须** 作为「推理与研究阶段」的一部分被调用。
+        - **不得跳过、伪造或模拟该阶段**；
+        - 在没有真实调用 Researcher agent 的情况下继续执行，是不被允许的。
+
+        ---
+
+        你的目标是：  
+        在严格遵循上述执行流程的前提下，确保任务在逻辑上完整、准备充分，并实现多智能体之间的高效、协调执行。
+        '''
+
 
         graph_format=config["configurable"]["graph_format"]
         if graph_format=="FactStruct":
