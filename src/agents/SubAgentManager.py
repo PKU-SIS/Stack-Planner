@@ -28,6 +28,7 @@ from src.tools.get_docs_info import search_docs_with_ref
 from ..graph.types import State
 from ..config import SELECTED_SEARCH_ENGINE, SearchEngine
 from src.utils.statistics import global_statistics, timed_step
+import re
 
 
 # -------------------------
@@ -985,7 +986,60 @@ class SubAgentManager:
             feedback = state.get("hitl_feedback", "")
             # if the feedback is not accepted, return the planner node
             if feedback and str(feedback).upper().startswith("[CONFIRMED_OUTLINE]"):
+                previous_outline = state.get("report_outline", "")
                 outline_confirmed = feedback[len("[CONFIRMED_OUTLINE]") :].strip()
+
+                #原先的outline中有形如【id】的引用标志，而确认后的outline不仅删除了所有引用标志，还修改了文字部分。我需要把原先的引用标志补全回来：如果原先这个位置有引用标志而现在这个位置附近的文字也没被修改，那么补充回来；如果被修改了就不用补充了
+                def repair_outline_citations(previous_outline, outline_confirmed):
+                    """
+                    把 previous_outline 中的【id】引用标志，尽可能无损地回补到 outline_confirmed 中。
+                    规则：
+                    1. 如果原文附近文字未被改动，则把【id】补回；
+                    2. 若文字被改写，则不再补回；
+                    3. 若 confirmed 中已自带引用，则保留其引用，不再叠加。
+                    """
+                    # 提取 previous 中的引用映射：{纯文本: 【id】}
+                    prev_map = {}
+                    for m in re.finditer(r'(.*?)(【\d+】)', previous_outline):
+                        text_snippet = m.group(1).strip()
+                        citation = m.group(2)
+                        if text_snippet:
+                            prev_map[text_snippet] = citation
+                    logger.debug(f"Previous outline citation map: {prev_map}")
+                    # 按段落逐句扫描 confirmed，尝试回补
+                    def replace_func(match):
+                        sentence = match.group(1)
+                        # 若句子已含引用，跳过
+                        if re.search(r'【\d+】', sentence):
+                            return match.group(0)
+                        # 寻找最近似原文片段
+                        best_key = None
+                        best_ratio = 0.6   # 阈值，可微调
+                        for key in prev_map:
+                            # 简单相似：包含关系即可
+                            if key in sentence or sentence in key:
+                                best_key = key
+                                best_ratio = 1.0
+                                break
+                        if best_key:
+                            return sentence + prev_map[best_key]
+                        return match.group(0)
+
+                    # 以句号为界，逐句处理
+                    confirmed_repaired = re.sub(
+                        r'([^。！？\n]+[。！？])',
+                        replace_func,
+                        outline_confirmed
+                    )
+                    return confirmed_repaired
+
+                if re.search(r'【\d+】', outline_confirmed):
+                    # 如果确认后的大纲中已经有引用标志，就不需要回补了
+                    logger.debug("确认后的大纲中已有引用标志，无需回补")
+                    pass
+                else:
+                    outline_confirmed = repair_outline_citations(previous_outline, outline_confirmed)
+                    
                 logger.info(f"大纲确认: {outline_confirmed}")
 
                 return Command(

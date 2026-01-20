@@ -240,3 +240,8 @@ if the **current action** is **SUMMARIZE**, condense information based on {{summ
 * **URL Completeness**: Ensure that ALL relevant URLs(include image URLs) are included in the summary to provide context and ensure that the summary is complete and accurate.
 * **Citation Completeness**: Ensure that ALL citation marks(e.g.,【3】【4】) are retained in  the summary.
   {% endif %}
+
+CRITICAL LANGUAGE POLICY:
+All explanatory and descriptive natural language output MUST be written in Chines,
+while ALL control keywords, action names, agent types, JSON field names, enum values, and schema-related tokens MUST remain in English exactly as defined.
+Do NOT translate or localize any technical identifiers.
