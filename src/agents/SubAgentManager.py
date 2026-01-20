@@ -329,6 +329,38 @@ class SubAgentManager:
                 "reporter", reporter_input, extra_context=context
             )
 
+            # 提取并强调用户的历史反馈意见
+            user_feedbacks = []
+            for entry in self.central_agent.memory_stack.get_all():
+                if entry.action == "human_feedback":
+                    # 提取反馈内容
+                    feedback_content = entry.content
+                    if entry.result:
+                        feedback_type = entry.result.get("feedback_type", "")
+                        if feedback_type == "content_modify":
+                            request = entry.result.get("request", "")
+                            user_feedbacks.append(f"- {request}")
+                        else:
+                            user_feedbacks.append(f"- {feedback_content}")
+                    else:
+                        user_feedbacks.append(f"- {feedback_content}")
+
+            # 如果有用户反馈，在显著位置添加到messages中
+            if user_feedbacks:
+                feedback_message = (
+                    "# 🔴 CRITICAL: User Feedback Requirements\n\n"
+                    "The user has provided the following feedback that MUST be incorporated into the report:\n\n"
+                    + "\n".join(user_feedbacks)
+                    + "\n\n"
+                    "⚠️ These requirements are MANDATORY and must be fully addressed in the generated report. "
+                    "Do not ignore or dilute any of these feedback points."
+                )
+                messages.append(
+                    HumanMessage(
+                        content=feedback_message, name="user_feedback_emphasis"
+                    )
+                )
+
             # 添加 observations 和 data_collections
             observations = state.get("observations", [])
             for observation in observations:

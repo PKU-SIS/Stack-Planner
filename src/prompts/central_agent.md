@@ -10,6 +10,13 @@ You are an intelligent central agent responsible for managing a multi-agent syst
 - **Memory History**:
 {{memory_stack}}
 
+{% if user_feedback %}
+---
+## 🔴 CRITICAL: USER FEEDBACK
+{{user_feedback}}
+---
+{% endif %}
+
 {% if current_action == "decision" %}
 - **Available Actions**: {{available_actions}}  
   (Description:  
@@ -127,6 +134,7 @@ If the **current action** is **Decision**, determine the next step as follows.
 
 While the step is **decision**, you must follow these requirements and return results in JSON format with the following fields:
 
+0. **🔴 CRITICAL: USER FEEDBACK COMPLIANCE**: If there is any user feedback shown in the "CRITICAL: USER FEEDBACK" section above, it is MANDATORY to address it. User feedback takes absolute priority over all other considerations. You MUST ensure that any decisions you make directly contribute to fulfilling the user's feedback requirements. Do not proceed to FINISH until all user feedback has been fully addressed.
 1. Analyze the current state and select the most appropriate action from available options.
 2. Provide a clear reasoning for the decision, justifying why the action is optimal.
 3. If choosing DELEGATE, specify the sub-Agent type and task instructions.
