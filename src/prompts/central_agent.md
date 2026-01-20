@@ -108,16 +108,6 @@ If the **current action** is **Decision**, determine the next step as follows.
 }
 ```
 
-```json
-{
-  "action": "delegate",
-  "reasoning": "To further increase retrieval depth and ensure comprehensiveness and diversity, I need to use the replanner agent to formulate a specialized plan.",
-  "params": {
-    "agent_type": "replanner",
-    "task_description": "Decompose this question into multi steps: Global AI investment trends in 2025, focusing on ethical considerations"
-  } 
-}
-```
 
 #### FINISH Action (Complete Task)
 
@@ -141,7 +131,6 @@ While the step is **decision**, you must follow these requirements and return re
 2. Provide a clear reasoning for the decision, justifying why the action is optimal.
 3. If choosing DELEGATE, specify the sub-Agent type and task instructions.
 
-   * If choosing replanner agent: This agent can only handle **search steps planning** and is limited to decomposing retrieval tasks into actionable steps. Do not include any requirements about report writing in the task description. You MUST and ONLY use it at the beginning of the task.
 4. Please remember to check if report is generated before you decide to FINISH the task.
 5. **You must carefully check if the current information is sufficient to support the current decision-making requirements**. Regardless of whether the information is sufficient or not, you must provide detailed reasoning. If the information is insufficient, you must take appropriate actions to supplement it (for example, by delegating to a sub-agent capable of information gathering); if the information is sufficient, you must provide detailed reasoning explaining why the current information supports the decision.
 6. **[CRITICAL - MANDATORY STEP] After outline confirmation, you MUST delegate to researcher agent**:
@@ -238,7 +227,10 @@ if the **current action** is **SUMMARIZE**, condense information based on {{summ
 * **Citation Completeness**: Ensure that ALL citation marks(e.g.,【3】【4】) are retained in  the summary.
   {% endif %}
 
-CRITICAL LANGUAGE POLICY:
-All explanatory and descriptive natural language output MUST be written in Chines,
-while ALL control keywords, action names, agent types, JSON field names, enum values, and schema-related tokens MUST remain in English exactly as defined.
-Do NOT translate or localize any technical identifiers.
+# CRITICAL LANGUAGE POLICY
+
+1. All explanatory, descriptive, summarizing, and analytical natural language output **must be written in Chinese**.  
+2. **All `instruction` texts within action fields must also be written in Chinese**, regardless of whether the action is THINK, REFLECT, SUMMARIZE, DELEGATE, or FINISH.  
+3. The following elements must remain in English and **must not be translated**: control keywords, action names, agent types, JSON field names, enum values, and schema-related tokens.  
+4. If an `instruction` involves technical identifiers or JSON parameters, it should describe the operation intent in Chinese, while keeping the technical identifiers in English.  
+5. DO NOT output English natural language anywhere except for the technical identifiers specified above.

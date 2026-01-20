@@ -1,17 +1,26 @@
+import requests
 
+url = "https://ragflow.pkubir.cn/v1/kb_api/list"
+params = {
+    "page": 1,
+    "page_size": 20,
+    "keywords": "",
+    "orderby": "create_time",
+    "desc": "true"
+}
+data = {
+    "tenant_id": "e38fafc3e07411f0bf2ecd6543f8a381",#"cbae14fb8c8411f0bf2ecd6543f8a381"  #这里提供的子然账号，XXQG知识库在这上面
+    "owner_ids": ["cbae14fb8c8411f0bf2ecd6543f8a381", "dc55bde9b62911f0bf2ecd6543f8a381"]
+}
 
-# from openai import OpenAI
+response = requests.post(url, params=params, json=data)
+result = response.json()
 
-# client = OpenAI(
-#     base_url="http://123.57.228.132:8285/v1",
-#     api_key="sk-d47ad54165ee456093bc9ffd599e354e"  # 大多数自建服务不校验，随便填
-# )
-
-# response = client.chat.completions.create(
-#   model="deepseek-v3.2-20251201-160k-local",
-#   messages=[{"role": "user", "content": "Why is the sky blue?"}],
-# )
-
-# response = response.choices[0].message.content
-# print(response)
-
+if result["code"] == 0:
+    kbs = result["data"]["kbs"]
+    total = result["data"]["total"]
+    print(f"获取到 {total} 个知识库")
+    for kb in kbs:
+        print(f"- {kb['name']} (ID: {kb['id']})")
+else:
+    print(f"Error: {result.get('message', 'Unknown error')}") 
