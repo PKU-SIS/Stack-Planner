@@ -6,7 +6,6 @@ from datetime import datetime
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import Command, interrupt
-from sentence_transformers import CrossEncoder
 
 from src.agents.CoderAgent import CoderAgent
 from src.agents.ResearcherAgent_SP import ResearcherAgentSP
@@ -24,28 +23,15 @@ from src.llms.llm import get_llm_by_type
 from src.prompts.template import apply_prompt_template
 from src.memory import MemoryStack, MemoryStackEntry
 from src.agents.CentralAgent import CentralAgent
-from src.tools.get_docs_info import search_docs
-from src.tools.bocha_search.web_search_en import web_search
-from src.factstruct import (
-    run_factstruct_stage1,
-    outline_node_to_markdown,
-    outline_node_to_dict,
-    memory_to_dict,
-    filter_content_by_relevant_docs,
-    mark_content_with_support,
-    repair_unknown_citations
-)
-
-from src.factstruct import outline_node_to_dict, memory_to_dict
-from src.factstruct.outline_node import OutlineNode
+from src.agents.OutlineAgent import OutlineAgent
+from src.tools.get_docs_info import search_docs_with_ref
 
 from ..graph.types import State
 from ..config import SELECTED_SEARCH_ENGINE, SearchEngine
 from src.utils.statistics import global_statistics, timed_step
 import re
-from typing import Dict, Any
-import json
-from src.utils.reference_utils import global_reference_map, process_final_report
+
+
 # -------------------------
 # 子Agent管理模块
 # TODO: check sub-agent bugs
@@ -57,6 +43,7 @@ class SubAgentManager:
 
     def __init__(self, central_agent: "CentralAgent"):
         self.central_agent = central_agent
+
 
     @timed_step("execute_researcher")
     async def execute_researcher(self, state: State, config: RunnableConfig) -> Command:
@@ -168,7 +155,7 @@ class SubAgentManager:
 
         # 实例化研究Agent
         research_agent = ResearcherAgentSP(
-            config=config, agent_type="researcher_xxqg", default_tools=tools
+            config=config, agent_type="researcher_xxqg_demo", default_tools=tools
         )
 
         # 执行研究任务并处理异常
@@ -186,6 +173,9 @@ class SubAgentManager:
                 )
 
         except Exception as e:
+            import traceback
+
+            logger.error(traceback.format_exc())
             logger.error(f"研究Agent执行失败: {str(e)}")
             return Command(
                 update={
@@ -228,94 +218,6 @@ class SubAgentManager:
             },
             goto="central_agent",
         )
-
-    @timed_step("execute_web_researcher")
-    async def execute_web_researcher(
-        self, state: State, config: RunnableConfig
-    ) -> Command:
-        """
-        执行研究Agent，负责信息检索与分析
-
-        Args:
-            state: 当前系统状态
-            config: 运行配置
-
-        Returns:
-            执行结果Command对象
-        """
-        logger.info("Web Agent开始执行...")
-        delegation_context = state.get("delegation_context", {})
-        task_description = delegation_context.get("task_description", "未知研究任务")
-
-        # 配置研究工具链
-        # tools = [search_docs_tool]
-        tools = [get_web_search_tool(10)]
-        
-        # 实例化研究Agent
-        research_agent = ResearcherAgentSP(
-            config=config, agent_type="researcher_web", default_tools=tools
-        )
-
-        # 执行研究任务并处理异常
-        try:
-            result_command = await research_agent.execute_agent_step(state)
-
-            # 从结果中提取数据用于记忆栈
-            result_observations = []
-            result_data_collections = []
-
-            if result_command and result_command.update:
-                result_observations = result_command.update.get("observations", [])
-                result_data_collections = result_command.update.get(
-                    "data_collections", []
-                )
-
-        except Exception as e:
-            logger.error(f"研究Agent执行失败: {str(e)}")
-            return Command(
-                update={
-                    "messages": [
-                        HumanMessage(
-                            content=f"研究任务失败: {str(e)}", name="researcher"
-                        )
-                    ],
-                    "current_node": "central_agent",
-                    "memory_stack": self.central_agent.memory_stack.to_dict(),
-                },
-                goto="central_agent",
-            )
-
-        # 记录到中枢Agent记忆栈
-        memory_entry = MemoryStackEntry(
-            timestamp=datetime.now().isoformat(),
-            action="delegate",
-            agent_type="researcher",
-            content=f"研究任务: {task_description}",
-            result={
-                "observations": result_observations,
-                # "data_collections": result_data_collections,
-            },
-        )
-        self.central_agent.memory_stack.push(memory_entry)
-
-        logger.info("研究任务完成，返回中枢Agent")
-        logger.info("Web研究任务完成，返回中枢Agent")
-        logger.info(f"state:{state}")
-        return Command(
-            update={
-                "messages": [
-                    HumanMessage(
-                        content="研究任务完成，返回中枢Agent", name="researcher"
-                    )
-                ],
-                "current_node": "central_agent",
-                "memory_stack": self.central_agent.memory_stack.to_dict(),
-                "data_collections": result_data_collections,
-                "observations": result_observations,
-            },
-            goto="central_agent",
-        )
-
 
     @timed_step("execute_coder")
     async def execute_coder(self, state: State, config: RunnableConfig) -> Command:
@@ -398,10 +300,27 @@ class SubAgentManager:
         delegation_context = state.get("delegation_context", {})
         task_description = delegation_context.get("task_description", "生成最终报告")
 
+        # 构建精简的 reporter 输入，只包含必要信息
+        # 避免传入完整 state["messages"]（包含大量 central agent 调度信息）
+        current_plan = state.get("current_plan")
+        plan_info = ""
+        if current_plan:
+            plan_title = getattr(current_plan, "title", str(current_plan))
+            plan_thought = getattr(current_plan, "thought", "")
+            plan_info = f"## Task\n\n{plan_title}\n\n## Description\n\n{plan_thought}"
+
+        reporter_input = {
+            "messages": [
+                HumanMessage(
+                    content=f"# Research Requirements\n\n## User Query\n\n{state.get('user_query', '')}\n\n{plan_info}"
+                )
+            ],
+            "locale": state.get("locale", "zh-CN"),
+        }
+
         # 收集报告生成所需上下文
         context = {
             "user_query": state.get("user_query", ""),
-            "memory_history": self.central_agent.memory_stack.get_all(),
             "task_description": task_description,
         }
 
@@ -409,8 +328,27 @@ class SubAgentManager:
         final_report = "报告生成失败: 未知错误"
         try:
             messages = apply_prompt_template(
-                "reporter", state, extra_context=context
-            )  # 修复：参数顺序
+                "reporter", reporter_input, extra_context=context
+            )
+
+            # 添加 observations 和 data_collections
+            observations = state.get("observations", [])
+            for observation in observations:
+                messages.append(
+                    HumanMessage(
+                        content=f"Below are some observations for the research task:\n\n{observation}",
+                        name="observation",
+                    )
+                )
+            data_collections = state.get("data_collections", [])
+            for data_collection in data_collections:
+                messages.append(
+                    HumanMessage(
+                        content=f"Below are data collected in previous tasks:\n\n{data_collection}",
+                        name="observation",
+                    )
+                )
+
             llm = get_llm_by_type(AGENT_LLM_MAP.get("reporter", "default"))
             response = llm.invoke(messages)
             final_report = response.content
@@ -446,10 +384,162 @@ class SubAgentManager:
             goto="central_agent",
         )
 
+    # 风格约束定义（类级别常量，供 reporter 相关方法共用）
+    ROLE_CONSTRAINTS = {
+        "鲁迅": """我希望生成的文字具备鲁迅式风格，语言尖锐、冷峻、带讽刺，但保持自然白话表达，可以使用少量文言。
+标题要求：文章必须包含一个标题，标题应简短有力、富隐喻或冷讽意味，可为一句或两句并列句。标题风格应与正文一致，具有鲁迅式的锋芒与余味，不得中性或平淡。标题必须使用 Markdown 一级标题格式呈现（即 # 标题），不得使用书名号、引号、括号等符号。
+重要禁止项：文中不要有"鲁迅"这个词，严禁在生成的文本中出现任何提及或引用"鲁迅"、"鲁迅先生"、"鲁迅笔下"、"他的作品"、"他的笔下的人物"等字眼的语句。文本风格应是直接的、沉浸式的鲁迅式表达，而非对鲁迅风格的引用或评论。此禁令在任何标题或正文中均适用，绝不可出现任何直接或间接的提及。
+风格应用强制要求：请确保文章的每一个自然段，乃至每一句的行文，都贯彻鲁迅式用词、句式和节奏。特别是在文章的中间部分，必须维持并强化这种尖锐、冷峻的语感。全篇保持一致的鲁迅式节奏与语气，特别在中段保持最高的语言张力与思想锋芒。
+正文开头必须紧接标题生成一个呼语（如'诸君！'），用于称呼听众。
+
+句式与节奏：
+采用短句、并列句和重复句（如"不是为了……，而是为了……"，"我们不能……再……"，"然而……"）；
+逻辑紧凑，节奏鲜明，读来有推力；
+可以用反问、讽刺、比喻、小见大，表达社会或人性的荒谬；
+偶尔自嘲或旁观者冷笑，保持"孤独知识分子"的视角。
+可出现明显的鲁迅式呼喊与强调，如"我要说的是……"，"我们不能……"，或"人类的悲欢并不相通"式的冷峻洞察。
+情感与气质：
+理性中带愤怒与冷漠，情感压抑而清醒；
+既有悲悯，也有讽刺与愤世嫉俗感；
+文字有"铁屋呐喊"的张力，让读者感受到现实的紧迫与不容回避。
+目标效果：
+生成文字中，应多出现类似"我今日站在这里，不是为了说些空话，而是为了……"、"我们不能让那些已经站起来的人，再倒下去"这种短句反复、强调现实责任与道德选择的表达；
+用词可带有鲁迅的语感，如"诸君""呐喊""罢了""然而""我想"之类。
+保证整体风格既现代白话，又显鲁迅式锋利、冷峻、理性批判。""",
+        "赵树理": """
+我希望你写一篇具有赵树理式风格的文字。
+
+标题要求求如下：
+- 必须生成一个标题，标题放在开头，独立一行。
+- 标题必须使用 Markdown 一级标题格式呈现（即 # 标题），不得使用书名号、引号、括号等符号。
+- 标题应带有乡土气息和讽刺意味，像村里人说的俏皮话或民间俗语，可用双关、反讽或生活化比喻。
+- 标题不宜过长，最好一句话或短语，如《谁家的锅糊了》《这买卖不亏》《要不是老张那张嘴》。
+- 标题与正文的风格要统一，读来就能听出"赵树理式说书味"。
+- 正文开头必须紧接标题生成一个呼语（如'同志们''各位朋友！'等），用于称呼听众。
+  
+风格要求如下：
+- 语言质朴、俏皮、有讽刺意味，带浓厚乡土气息。
+- 用词自然，不做作，可用"咱们""你要问我说""他那一伙""这话得好好想想"等日常口语。
+- 句式短促通俗，可用民间比喻、对话穿插叙述。
+- 整体有"说书式"的节奏感，语气平和、有观察力，体现民间智慧。
+- 文字可带幽默与讽喻，但要冷静、克制。
+- 内容上要讲一个具体的人或事，不空谈道理。
+- 每一段都要有推进，不在同一句式上来回打转，避免机械重复。
+- 每一段可有轻微转折或反思，像一个清醒的乡村叙述者慢慢讲理。
+- 叙述者口吻要像村里一个明白人，既有点打趣，又不失公道。
+- 可适当出现人物间的对话，像"老李说……""我就笑他：你这不是自找的吗？"这种自然插话，增强活气。
+- 全篇最好像是"说理带故事"，故事里有人情味，理里带一点反讽的劲。
+- 结尾要自然收束，像"话说到这儿也就明白了"那种收口，不要突兀或反复强调。
+""",
+        "侠客岛": """
+我希望这篇文字具有"侠客岛式"风格。
+
+标题要求:必须生成一个标题，标题单独成行，置于开头。标题不宜空洞或平铺，应让人"一看就像媒体评论标题"，既有理性，也有锋芒。标题与正文风格必须统一，不得割裂。标题必须使用 Markdown 一级标题格式呈现（即 # 标题），不得使用书名号、引号、括号等符号。
+
+语言上，应当稳健、凝练、带有理性克制的批评与分析气质；文风应兼具媒体的客观与评论的锋锐，体现出"冷静叙事 + 犀利观点"的融合。
+
+务必保持我在提示词中指定的叙述者身份，不得擅自替换为"侠客岛""岛叔""评论员"等其他主体。
+
+用词应体现，具备权威媒体评论的庄重感，同时不失亲切；避免空洞口号和套话，多用现实感、新闻语体、分析性句式。
+
+语气上，应平实理智，不浮夸、不喊口号。可适度带有讽刺或反问，但要有分寸感，始终保持理性、冷静、逻辑清晰。
+
+正文开头必须紧接标题生成一个呼语（如'同志们'等），用于称呼听众
+
+文风要求：
+
+句式以短句和中长句结合，节奏稳健、有呼吸感；  
+描写注重事实、逻辑递进与背景铺陈，观点要自然生成于叙述之中；  
+语气要克制而有力，结尾多以总结或警醒收束，形成自然的闭合感。
+
+气质上要体现"有理有据、有温度、有锋芒"的评论者姿态，既有大局观，又有民间温度，传达出媒体理性与现实关怀并存的特质。
+
+注意避免机械复述与句式雷同，应当在逻辑上自洽、在节奏上有层次感，结尾要自然收束而非突兀收尾。
+""",
+    }
+
+    def _generate_report_with_style(self, state: State, style_role: str) -> str:
+        """根据指定风格生成报告（内部辅助方法）"""
+        delegation_context = state.get("delegation_context", {})
+        task_description = delegation_context.get("task_description", "生成最终报告")
+
+        # 构建精简的 reporter 输入，只包含必要信息
+        # 避免传入完整 state["messages"]（包含大量 central agent 调度信息）
+        user_query = state.get("user_query", "")
+        user_dst = state.get("user_dst", "")
+        report_outline = state.get("report_outline", "用户未提供大纲")
+
+        reporter_input = {
+            "messages": [
+                HumanMessage(
+                    content=f"# Research Requirements\n\n## User Query\n\n{user_query}"
+                )
+            ],
+            "locale": state.get("locale", "zh-CN"),
+        }
+
+        context = {
+            "user_query": user_query,
+            "task_description": task_description,
+        }
+
+        report = "报告生成失败: 未知错误"
+        try:
+            messages = apply_prompt_template(
+                "reporter_xxqg", reporter_input, extra_context=context
+            )
+
+            # 添加用户约束、大纲和数据收集
+            # data_collections = state.get("data_collections", [])
+            # data_collections_str = "\n\n".join(data_collections)
+            constraint = self.ROLE_CONSTRAINTS.get(style_role, "")
+
+            # 检查是否存在原始报告（风格切换场景）
+            original_report = state.get("original_report", "")
+            reference_hint = ""
+            if original_report:
+                # 提取原始报告中的引用编号
+                import re
+
+                citations = re.findall(r"【(\d+)】", original_report)
+                if citations:
+                    unique_citations = sorted(set(citations), key=lambda x: int(x))
+                    reference_hint = f"\n\n##引用保持要求\n\n原始报告使用了以下引用编号：{'、'.join(['【' + c + '】' for c in unique_citations])}。请在新风格的报告中尽量保持使用相同的引用来源，确保引用的完整性和一致性。"
+
+            messages.append(
+                HumanMessage(
+                    content=f"{constraint}##User Query\n\n{user_query}\n\n##任务描述\n\n{task_description}\n\n##用户约束\n\n{user_dst}\n\n##报告大纲\n\n{report_outline}{reference_hint}"
+                )
+            )
+
+            # 添加 observations
+            observations = state.get("observations", [])
+            for observation in observations:
+                messages.append(
+                    HumanMessage(
+                        content=f"以下是检索智能体收集到的高质量信息: \n\n{observation}",
+                        name="search_agent",
+                    )
+                )
+
+            logger.debug(f"Reporter messages: {messages}")
+            llm = get_llm_by_type(AGENT_LLM_MAP.get("reporter", "default"))
+            response = llm.invoke(messages)
+            report = response.content
+        except Exception as e:
+            import traceback
+
+            logger.error(traceback.format_exc())
+            logger.error(f"报告Agent执行失败: {str(e)}")
+            report = f"报告生成失败: {str(e)}"
+        return report
+
     @timed_step("execute_xxqg_reporter")
     def execute_xxqg_reporter(self, state: State, config: RunnableConfig) -> Command:
         """
-        执行报告Agent，负责结果整理与报告生成
+        执行报告Agent，负责结果整理与报告生成。
+        使用 wait_stage 模式：首次进入生成报告后跳转到 human_feedback，
+        从 human_feedback 返回后处理用户反馈。
 
         Args:
             state: 当前系统状态
@@ -459,199 +549,94 @@ class SubAgentManager:
             执行结果Command对象
         """
         logger.info("报告Agent开始执行...")
-        logger.info(f"state:{state}")
+
         delegation_context = state.get("delegation_context", {})
         task_description = delegation_context.get("task_description", "生成最终报告")
 
-        # 收集报告生成所需上下文
-        context = {
-            "user_query": state.get("user_query", ""),
-            "memory_history": self.central_agent.memory_stack.get_all(),
-            "task_description": task_description,
-        }
+        # 直接从 state 获取风格（已在入口处提取并存储）
+        current_style = state.get("current_style", "")
 
-        # 生成报告并处理异常
-        final_report = "报告生成失败: 未知错误"
-        try:
-            messages = apply_prompt_template(
-                "reporter_xxqg", state, extra_context=context
-            )  # 修复：参数顺序
-            data_collections = state.get("data_collections", [])
-            observations = state.get("observations", [])
+        wait_stage = state.get("wait_stage", "")
+        if wait_stage != "reporter":
+            # 首次进入：生成报告
+            logger.info(f"使用风格 '{current_style}' 生成报告...")
+            final_report = self._generate_report_with_style(state, current_style)
 
-            messages.append(
-                HumanMessage(
-                    f"##User Query\n\n{state.get('user_query', '')}\n\n##用户约束\n\n{state.get("user_dst","")}\n\n##报告大纲{state.get('report_outline','用户未提供大纲')}\n\nBelow are information collected in previous tasks:\n\n{"\n\n".join(observations)}"
+            # 记录到中枢Agent记忆栈
+            memory_entry = MemoryStackEntry(
+                timestamp=datetime.now().isoformat(),
+                action="delegate",
+                agent_type="reporter",
+                content=f"报告任务: {task_description}，风格: {current_style}",
+                result={"final_report": final_report},
+            )
+            self.central_agent.memory_stack.push(memory_entry)
+
+            # 跳转到 human_feedback 节点等待用户反馈
+            logger.info("报告生成完成，跳转到 human_feedback 节点等待用户反馈")
+            return Command(
+                update={
+                    "final_report": final_report,
+                    "original_report": final_report,  # 保存首次生成的报告作为参考
+                    "current_style": current_style,
+                    "wait_stage": "reporter",
+                    "current_node": "reporter",
+                },
+                goto="human_feedback",
+            )
+
+        # 从 human_feedback 返回：处理用户反馈
+        if wait_stage == "reporter":
+            feedback = state.get("hitl_feedback", "")
+            final_report = state.get("final_report", "")
+            current_style = state.get("current_style", "")
+
+            if feedback and str(feedback).upper().startswith("[CHANGED_STYLE]"):
+                # 解析新风格，清空 wait_stage 后重新进入 reporter 节点生成报告
+                # 提取风格名称：取第一个空格或换行之前的内容，避免客户端附带多余内容
+                raw_style = str(feedback)[len("[CHANGED_STYLE]") :].strip()
+                # 风格名称只取第一部分（空格、换行、[STYLE_ROLE] 之前的内容）
+                new_style = raw_style.split()[0] if raw_style.split() else raw_style
+                # 如果风格名称中包含 [STYLE_ROLE]，截断它
+                if "[STYLE_ROLE]" in new_style:
+                    new_style = new_style.split("[STYLE_ROLE]")[0]
+                new_style = new_style.strip()
+                logger.info(f"用户请求切换风格: {current_style} -> {new_style}")
+
+                # 只更新 current_style，不再修改 user_query
+                return Command(
+                    update={
+                        "current_style": new_style,
+                        "wait_stage": "",  # 清空 wait_stage，下次进入时重新生成报告
+                        "current_node": "reporter",
+                    },
+                    goto="reporter",
                 )
-            )        
-            # messages.append(
-            #     HumanMessage(
-            #         f"##User Query\n\n{state.get('user_query', '')}\n\n##用户约束\n\n{state.get("user_dst","")}\n\n##报告大纲{state.get('report_outline','用户未提供大纲')}\n\nBelow are information collected in previous tasks:\n\n{"\n\n".join(data_collections)}"
-            #     )
-            # )        
-            logger.debug(f"Reporter messages: {messages}")
-            llm = get_llm_by_type(AGENT_LLM_MAP.get("reporter", "default"))
-            response = llm.invoke(messages)
-            final_report = response.content
-            #可以在这个地方加一个对final_report的处理
-            
+            elif feedback and str(feedback).upper().startswith("[SKIP]"):
+                # 用户跳过，正常结束
+                logger.info("用户跳过风格切换，报告生成完成")
+            elif feedback and str(feedback).upper().startswith("[END]"):
+                # 用户跳过，正常结束
+                logger.info("用户跳过风格切换，报告生成完成")
+            else:
+                # 其他反馈，正常结束
+                logger.info(f"收到其他反馈: {feedback}，报告生成完成")
 
-            
-            
-            session_id = config["configurable"]["thread_id"]
-            reference_map=global_reference_map.get_session_ref_map(session_id)
-            # logger.info(f"before reference_map:{reference_map}")
-            # logger.info(f"before final_report :{final_report}")
-            final_report = process_final_report(final_report, reference_map)
-            # logger.info(f"after final_report :{final_report}")
-
-
-            #增加引用检查部分
-            logger.info(f"引用检查")
-            # logger.info(f"state:{state}")
-            logger.info(f"observations:{observations}")
-            # logger.info(f"data_collections:{data_collections}")
-            logger.info(f"final_report:{final_report}")
-            semantic_cls = CrossEncoder("/data1/Yangzb/Model/StructBert/cross-encoder/nli-deberta-v3-small")
-            #这个是判断引用和句子的关系
-            supported = filter_content_by_relevant_docs(
-                content=final_report,
-                relevant_docs=reference_map,
-                semantic_cls=semantic_cls
+            logger.info("报告生成完成，返回中枢Agent")
+            return Command(
+                update={
+                    "messages": [
+                        HumanMessage(
+                            content="报告生成完成，返回中枢Agent", name="reporter"
+                        )
+                    ],
+                    "final_report": final_report,
+                    "current_node": "central_agent",
+                    "wait_stage": "",
+                    "memory_stack": self.central_agent.memory_stack.to_dict(),
+                },
+                goto="central_agent",
             )
-            logger.info(f"supported :{supported}")
-            
-            #这个是把关系应用到生成文章上
-            new_content = mark_content_with_support(
-                content=final_report,
-                nli_results=supported
-            )
-            logger.info(f"new_content :{new_content}")
-            
-            #这个是把错误引用进行处理的
-            final_report=repair_unknown_citations(
-                content=new_content,
-                relevant_docs=reference_map,
-                semantic_cls=semantic_cls
-            )
-            logger.info(f"final_report :{final_report}")
-            
-        except Exception as e:
-            import traceback
-
-            logger.error(traceback.format_exc())
-            logger.error(f"报告Agent执行失败: {str(e)}")
-            final_report = f"报告生成失败: {str(e)}"
-
-        # 记录到中枢Agent记忆栈
-        memory_entry = MemoryStackEntry(
-            timestamp=datetime.now().isoformat(),
-            action="delegate",
-            agent_type="reporter",
-            content=f"报告任务: {task_description}",
-            result={"final_report": final_report},
-        )
-        self.central_agent.memory_stack.push(memory_entry)
-
-        logger.info("报告生成完成，返回中枢Agent")
-        return Command(
-            update={
-                "messages": [
-                    HumanMessage(content="报告生成完成，返回中枢Agent", name="reporter")
-                ],
-                "final_report": final_report,
-                "current_node": "central_agent",
-                "memory_stack": self.central_agent.memory_stack.to_dict(),
-            },
-            goto="central_agent",
-        )
-
-    @timed_step("execute_xxqg_reporter_factstruct")
-    def execute_xxqg_reporter_factstruct(
-        self, state: State, config: RunnableConfig
-    ) -> Command:
-        """
-        执行报告Agent（使用 FactStruct Stage 2）
-
-        基于 FactStruct Stage 1 生成的大纲和 Memory，为每个叶子节点
-        分别生成内容，最终合并为完整报告。
-
-        Args:
-            state: 当前系统状态
-            config: 运行配置
-
-        Returns:
-            执行结果Command对象
-        """
-        logger.info("报告Agent开始执行（FactStruct Stage 2）...")
-
-        factstruct_outline = state.get("factstruct_outline")
-        factstruct_memory = state.get("factstruct_memory")
-
-        if not factstruct_outline or not factstruct_memory:
-            logger.warning(
-                "FactStruct 数据缺失，回退到传统 Reporter 方法"
-            )
-            return self.execute_xxqg_reporter(state, config)
-
-        user_query = state.get("user_query", "")
-
-        final_report = "报告生成失败: 未知错误"
-        try:
-            from src.factstruct import run_factstruct_stage2
-            from src.config.agents import AGENT_LLM_MAP
-
-            final_report = run_factstruct_stage2(
-                outline_dict=factstruct_outline,
-                memory_dict=factstruct_memory,
-                user_query=user_query,
-                llm_type=AGENT_LLM_MAP.get("reporter_factstruct", "basic"),
-                locale=state.get("locale", "zh-CN"),
-            )
-            
-            #可以在这个地方加一个对final_report的处理
-            session_id = config["configurable"]["thread_id"]
-            reference_map=global_reference_map.get_session_ref_map(session_id)
-            logger.info(f"before reference_map:{reference_map}")
-            logger.info(f"before final_report :{final_report}")
-            final_report = process_final_report(final_report, reference_map)
-            logger.info(f"after final_report :{final_report}")
-            
-            logger.info(
-                f"FactStruct Stage 2 报告生成完成: {len(final_report)} 个字符"
-            )
-
-        except Exception as e:
-            import traceback
-
-            logger.error(traceback.format_exc())
-            logger.error(f"FactStruct Stage 2 报告生成失败: {str(e)}")
-            final_report = f"报告生成失败: {str(e)}"
-
-        memory_entry = MemoryStackEntry(
-            timestamp=datetime.now().isoformat(),
-            action="delegate",
-            agent_type="reporter",
-            content="报告任务: 使用 FactStruct Stage 2 生成报告",
-            result={"final_report": final_report},
-        )
-        self.central_agent.memory_stack.push(memory_entry)
-
-        logger.info("报告生成完成（FactStruct Stage 2），返回中枢Agent")
-        return Command(
-            update={
-                "messages": [
-                    HumanMessage(
-                        content="报告生成完成（FactStruct Stage 2），返回中枢Agent",
-                        name="reporter",
-                    )
-                ],
-                "final_report": final_report,
-                "current_node": "central_agent",
-                "memory_stack": self.central_agent.memory_stack.to_dict(),
-            },
-            goto="central_agent",
-        )
 
     @timed_step("execute_sp_planner")
     def execute_sp_planner(self, state: State, config: RunnableConfig) -> Command:
@@ -762,16 +747,16 @@ class SubAgentManager:
             goto="central_agent",
         )
 
-
-
     @timed_step("execute_human_feedback")
-    async def execute_human_feedback(self, state: State, config: RunnableConfig) -> Command:
+    async def execute_human_feedback(
+        self, state: State, config: RunnableConfig
+    ) -> Command:
         stage = state.get("wait_stage", "perception")
         if stage == "perception":
             dst_question = state.get("dst_question", "")
             feedback = interrupt(
-                    "Please Fill the Question.[DST]" + dst_question + "[/DST]"
-                )
+                "Please Fill the Question.[DST]" + dst_question + "[/DST]"
+            )
             logger.info(f"用户反馈的DST问题: {feedback}. goto perception node again.")
             return Command(
                 update={
@@ -783,10 +768,8 @@ class SubAgentManager:
         elif stage == "outline":
             outline = state.get("report_outline", "")
             feedback = interrupt(
-                    "Please Confirm or Edit the Outline.[OUTLINE]"
-                    + outline
-                    + "[/OUTLINE]"
-                )
+                "Please Confirm or Edit the Outline.[OUTLINE]" + outline + "[/OUTLINE]"
+            )
             logger.info(f"用户反馈的大纲: {feedback}. goto outline node again.")
             return Command(
                 update={
@@ -795,33 +778,68 @@ class SubAgentManager:
                 },
                 goto="outline",
             )
+        elif stage == "reporter":
+            final_report = state.get("final_report", "")
+            feedback = interrupt(
+                "Report generated. You can change style or finish.[REPORT]"
+                + final_report
+                + "[/REPORT]"
+            )
+            logger.info(f"用户反馈: {feedback}")
+
+            # 分类处理：内容修改走 central_agent，风格切换直接返回 reporter
+            if feedback and str(feedback).upper().startswith("[CONTENT_MODIFY]"):
+                # 复杂修改：入栈并跳转到 central_agent 决策
+                modify_request = str(feedback)[len("[CONTENT_MODIFY]") :].strip()
+
+                # 从 state 中恢复 memory_stack（因为 central_agent 每次请求都会重新创建）
+                state_memory_stack = state.get("memory_stack")
+                if state_memory_stack:
+                    self.central_agent.memory_stack.load_from_dict(state_memory_stack)
+
+                memory_entry = MemoryStackEntry(
+                    timestamp=datetime.now().isoformat(),
+                    action="human_feedback",
+                    content=f"用户对报告的修改意见: {modify_request}",
+                    result={
+                        "feedback_type": "content_modify",
+                        "request": modify_request,
+                    },
+                )
+                self.central_agent.memory_stack.push(memory_entry)
+                logger.info(f"内容修改请求入栈，跳转到 central_agent: {modify_request}")
+                return Command(
+                    update={
+                        "hitl_feedback": feedback,
+                        "current_node": "human_feedback",
+                        "memory_stack": self.central_agent.memory_stack.to_dict(),
+                        "wait_stage": "",  # 重置 wait_stage，以便 reporter 重新生成报告
+                        "messages": [
+                            HumanMessage(
+                                content=f"用户对报告的修改意见: {modify_request}",
+                                name="human_feedback",
+                            )
+                        ],
+                    },
+                    goto="central_agent",
+                )
+            else:
+                # 简单修改（风格切换等）：直接返回 reporter 处理
+                return Command(
+                    update={
+                        "hitl_feedback": feedback,
+                        "current_node": "human_feedback",
+                    },
+                    goto="reporter",
+                )
 
     @timed_step("execute_perception")
     async def execute_perception(self, state: State, config: RunnableConfig) -> Command:
         user_query = state.get("user_query", "")
         # check if the plan is auto accepted
         perception_llm = get_llm_by_type(AGENT_LLM_MAP.get("perception", "default"))
-        auto_accepted_plan = state.get("auto_accepted_plan", False)
-        skip_perception = state.get("skip_perception", False)
-        
-        if skip_perception:
-            logger.info("跳过感知层，直接进入大纲生成")
-            return Command(
-                update={
-                    "messages": [
-                        HumanMessage(
-                            content="感知层已跳过",
-                            name="perception",
-                        )
-                    ],
-                    "user_dst": "",
-                    "current_node": "perception",
-                    "wait_for_user": False,
-                },
-                goto="outline",
-            )
-
-        if auto_accepted_plan:
+        wait_stage = state.get("wait_stage", "")
+        if wait_stage != "perception":
             try:
                 # messages = apply_prompt_template("perception", state) + [
                 #     HumanMessage(f"##User Query\n\n{user_query}\n\n")
@@ -877,14 +895,11 @@ class SubAgentManager:
                 )
             elif feedback and str(feedback).upper().startswith("[SKIP]"):
                 logger.info("DST question is skipped by user.")
-                messages.append(
-                    AIMessage(content=f"##LLM DST Question\n\n{dst_question}\n\n")
-                )
-                messages.append(
+                messages = apply_prompt_template("perception", state) + [
                     HumanMessage(
-                        content=f"用户跳过了回答，你可以根据自己的理解进行总结\n\n"
+                        f"##User Query\n\n{user_query}\n\n##希望用户回答的问题\n\n{dst_question}\n\n##用户跳过了回答，你可以按照自己的理解总结\n\n"
                     )
-                )
+                ]
                 response = perception_llm.invoke(messages)
                 summary = response.content
                 return Command(
@@ -911,8 +926,9 @@ class SubAgentManager:
         outline_llm = get_llm_by_type(AGENT_LLM_MAP.get("outline", "default"))
         wait_stage = state.get("wait_stage", "")
         if wait_stage != "outline":
-            #bg_investigation = search_docs(user_query, top_k=5)
-            bg_investigation = web_search(user_query, top_k=5)
+            bg_investigation = search_docs_with_ref(
+                user_query, top_k=5, config=config
+            ).get("docs", [])
             user_dst = state.get("user_dst", "")
             try:
                 messages = [
@@ -923,129 +939,172 @@ class SubAgentManager:
                 response = outline_llm.invoke(messages)
                 outline_response = response.content
                 outline_response = repair_json_output(outline_response)
+                if "[STYLE_ROLE]" in outline_response:
+                    outline_response = outline_response.split("[STYLE_ROLE]")[0]
                 logger.info(f"大纲生成完成: {outline_response}")
-
+                return Command(
+                    update={
+                        "report_outline": outline_response,
+                        "wait_stage": "outline",
+                        "current_node": "outline",
+                    },
+                    goto="human_feedback",
+                )
             except Exception as e:
                 logger.error(f"大纲生成执行失败: {str(e)}")
-                # 返回最简单的默认大纲
-                import json
+        if wait_stage == "outline":
+            feedback = state.get("hitl_feedback", "")
+            # if the feedback is not accepted, return the planner node
+            if feedback and str(feedback).upper().startswith("[CONFIRMED_OUTLINE]"):
+                previous_outline = state.get("report_outline", "")
+                outline_confirmed = feedback[len("[CONFIRMED_OUTLINE]") :].strip()
 
-                outline_response = json.dumps(
-                    {"title": user_query, "children": []}, ensure_ascii=False
+                #原先的outline中有形如【id】的引用标志，而确认后的outline不仅删除了所有引用标志，还修改了文字部分。我需要把原先的引用标志补全回来：如果原先这个位置有引用标志而现在这个位置附近的文字也没被修改，那么补充回来；如果被修改了就不用补充了
+                def repair_outline_citations(previous_outline, outline_confirmed):
+                    """
+                    把 previous_outline 中的【id】引用标志，尽可能无损地回补到 outline_confirmed 中。
+                    规则：
+                    1. 如果原文附近文字未被改动，则把【id】补回；
+                    2. 若文字被改写，则不再补回；
+                    3. 若 confirmed 中已自带引用，则保留其引用，不再叠加。
+                    """
+                    # 提取 previous 中的引用映射：{纯文本: 【id】}
+                    prev_map = {}
+                    for m in re.finditer(r'(.*?)(【\d+】)', previous_outline):
+                        text_snippet = m.group(1).strip()
+                        citation = m.group(2)
+                        if text_snippet:
+                            prev_map[text_snippet] = citation
+                    logger.debug(f"Previous outline citation map: {prev_map}")
+                    # 按段落逐句扫描 confirmed，尝试回补
+                    def replace_func(match):
+                        sentence = match.group(1)
+                        # 若句子已含引用，跳过
+                        if re.search(r'【\d+】', sentence):
+                            return match.group(0)
+                        # 寻找最近似原文片段
+                        best_key = None
+                        best_ratio = 0.6   # 阈值，可微调
+                        for key in prev_map:
+                            # 简单相似：包含关系即可
+                            if key in sentence or sentence in key:
+                                best_key = key
+                                best_ratio = 1.0
+                                break
+                        if best_key:
+                            return sentence + prev_map[best_key]
+                        return match.group(0)
+
+                    # 以句号为界，逐句处理
+                    confirmed_repaired = re.sub(
+                        r'([^。！？\n]+[。！？])',
+                        replace_func,
+                        outline_confirmed
+                    )
+                    return confirmed_repaired
+
+                if re.search(r'【\d+】', outline_confirmed):
+                    # 如果确认后的大纲中已经有引用标志，就不需要回补了
+                    logger.debug("确认后的大纲中已有引用标志，无需回补")
+                    pass
+                else:
+                    outline_confirmed = repair_outline_citations(previous_outline, outline_confirmed)
+                    
+                logger.info(f"大纲确认: {outline_confirmed}")
+
+                return Command(
+                    update={
+                        "messages": [
+                            HumanMessage(
+                                content=f"大纲确认: {outline_confirmed}", name="outline"
+                            )
+                        ],
+                        "report_outline": outline_confirmed,
+                        "current_node": "outline",
+                        "wait_stage": "",
+                    },
+                    goto="central_agent",
                 )
+            elif feedback and str(feedback).upper().startswith("[SKIP]"):
+                outline_confirmed = feedback[len("[SKIP]") :].strip()
+                logger.info(f"大纲确认: {outline_confirmed}")
 
-
-            outline_confirmed = outline_response.strip()
-            logger.info(f"大纲自动确认: {outline_confirmed}")
-
-            return Command(
-                update={
-                    "messages": [
-                        HumanMessage(content=f"大纲确认: {outline_confirmed}", name="outline")
-                    ],
-                    "report_outline": outline_confirmed,
-                    "current_node": "outline",
-                },
-                goto="central_agent",
-            )
+                return Command(
+                    update={
+                        "messages": [
+                            HumanMessage(
+                                content=f"大纲确认: {outline_confirmed}", name="outline"
+                            )
+                        ],
+                        "report_outline": outline_confirmed,
+                        "current_node": "outline",
+                        "wait_stage": "",
+                    },
+                    goto="central_agent",
+                )
+            else:
+                raise TypeError(f"Interrupt value of {feedback} is not supported.")
 
 
     @timed_step("execute_outline_factstruct")
     async def execute_outline_factstruct(self, state: State, config: RunnableConfig) -> Command:
-        """
-        执行大纲子Agent（FactStruct Stage 1）
-
-        基于用户问题和已确认的任务规划，生成或调整报告的大纲结构，
-        并为后续 FactStruct Stage 2 提供结构化 Outline 与 Memory。
-        """
-        logger.info("大纲Agent开始执行（FactStruct Stage 1）...")
+        logger.info("大纲Agent开始执行")
 
         user_query = state.get("user_query", "")
         user_dst = state.get("user_dst", "")
+        #你不能保证一开始是没有这个的
         factstruct_outline_dict = state.get("factstruct_outline", None)#如果有的话，后续更改到时候再修
         factstruct_memory_dict = state.get("factstruct_memory",None)
         #提取的是 guideline
         delegation_context = state.get("delegation_context", {})
         task_description = delegation_context.get("task_description", "未知研究任务")
-        outline_response = "大纲生成失败: 未知错误"
+        report_outline = "大纲生成失败: 未知错误"
         
-        #这玩意是人工确认 human node的，感觉没啥用，FactStruct 如果配上 Human feedback 才需要这个
-        # auto_accepted_plan = state.get("auto_accepted_plan", False)
-        # if not auto_accepted_plan:
-        #     logger.warning("任务规划未确认，Outline Agent 不执行")
-        #     return Command(
-        #         update={
-        #             "messages": [
-        #                 HumanMessage(
-        #                     content="任务规划尚未确认，跳过大纲生成",
-        #                     name="outline",
-        #                 )
-        #             ],
-        #             "current_node": "central_agent",
-        #         },
-        #         goto="central_agent",
-        #     )
+        
+        full_query = user_query
+        if user_dst:
+            full_query = f"{user_query}\n\n用户补充需求：{user_dst}"
+
+
+
+
+        outline_agent = OutlineAgent(initial_query=full_query,central_guidance=delegation_context,state=state)
 
         try:
-            replan_result= state.get("replan_result", None)
-            full_query = user_query
-            if user_dst:
-                full_query = f"{user_query}\n\n用户补充需求：{user_dst}"
-
-            # 创建大纲
-            # 扩展大纲
-            # 删减大纲
-            # 字数控制反馈
-            # 使用FactStruct自己的 LLM 来做这个事情。
-            
-            outline_root, memory = run_factstruct_stage1(
-                query=full_query,
-                max_iterations=state.get("factstruct_max_iterations", 4),
-                batch_size=state.get("factstruct_batch_size", 2),
-                task_description=task_description,
-                replan_result=replan_result,
-                config=config,
+            state.update(
+                {
+                    "initial_query": full_query,
+                    "task_description": task_description,
+                }
             )
 
-            # 大纲的字数匹配
-            total_word_limit = state.get("total_word_limit", 5000)
-            if total_word_limit > 0:
-                logger.info(f"检测到字数限制 {total_word_limit}，执行字数规划...")
-                outline_root = self.execute_word_planning(
-                    outline_root, total_word_limit
-                )
-                outline_response = outline_root.to_text_tree(
-                    include_word_limit=True
-                )
-            else:
-                outline_response = outline_node_to_markdown(
-                    outline_root, max_depth=None, include_root=True
-                )
+            command = await outline_agent.execute(state, config)
+            update = command.update or {}
 
-            factstruct_outline_dict = outline_node_to_dict(outline_root)
-            factstruct_memory_dict = memory_to_dict(memory)
+            # === 强制对齐老接口字段 ===
+            factstruct_outline_dict =outline_node_to_dict(update.get("factstruct_outline"))
+            factstruct_memory_dict = memory_to_dict(update.get("factstruct_memory"))
 
-            logger.info(
-                f"FactStruct Stage 1 完成: "
-                f"{len(outline_root.get_all_nodes())} 个节点"
-            )
+            #这个是干啥的，还没弄明白，但是确定应该有个 observation
+            if update.get("report_outline"):
+                report_outline = update["report_outline"]
+
+            logger.info("FactStruct Stage 1 完成")
 
         except Exception as e:
             import traceback
 
             logger.error(traceback.format_exc())
-            logger.error(f"FactStruct Stage 1 执行失败: {str(e)}")
+            report_outline = f"大纲生成失败（FactStruct Stage 1）: {str(e)}"
 
-            outline_response = f"大纲生成失败（FactStruct Stage 1）: {str(e)}"
-
-        # === 写入 central agent memory stack ===
+        # === Memory Stack：保持老结构 ===
         memory_entry = MemoryStackEntry(
             timestamp=datetime.now().isoformat(),
             action="delegate",
             agent_type="outline",
             content="大纲任务: 使用 FactStruct Stage 1 生成或调整报告大纲",
             result={
-                "outline": outline_response,
+                "outline": report_outline,               #observation
                 "factstruct_outline": factstruct_outline_dict,
             },
         )
@@ -1061,7 +1120,7 @@ class SubAgentManager:
                         name="outline",
                     )
                 ],
-                "report_outline": outline_response,
+                "report_outline": report_outline,        # SP的 Outline 大纲是大纲，Factstruct 的大纲是给中枢智能体的大纲的反馈
                 "factstruct_outline": factstruct_outline_dict,
                 "factstruct_memory": factstruct_memory_dict,
                 "current_node": "central_agent",
@@ -1074,108 +1133,125 @@ class SubAgentManager:
 
 
 
-    @timed_step("execute_word_planning")
-    def execute_word_planning(
-        self, outline_root: OutlineNode, total_word_limit: int
-    ) -> OutlineNode:
-        """
-        执行字数规划，为大纲中的每个叶子节点分配字数配额
+    # #老接口
+    # @timed_step("execute_outline_factstruct")
+    # async def execute_outline_factstruct(self, state: State, config: RunnableConfig) -> Command:
+    #     """
+    #     执行大纲子Agent（FactStruct Stage 1）
 
-        Args:
-            outline_root: 大纲根节点
-            total_word_limit: 用户指定的总字数限制
+    #     基于用户问题和已确认的任务规划，生成或调整报告的大纲结构，
+    #     并为后续 FactStruct Stage 2 提供结构化 Outline 与 Memory。
+    #     """
+    #     logger.info("大纲Agent开始执行（FactStruct Stage 1）...")
 
-        Returns:
-            更新了字数配额的大纲根节点
-        """
-        import json
+    #     user_query = state.get("user_query", "")
+    #     user_dst = state.get("user_dst", "")
+    #     factstruct_outline_dict = state.get("factstruct_outline", None)#如果有的话，后续更改到时候再修
+    #     factstruct_memory_dict = state.get("factstruct_memory",None)
+    #     #提取的是 guideline
+    #     delegation_context = state.get("delegation_context", {})
+    #     task_description = delegation_context.get("task_description", "未知研究任务")
+    #     outline_response = "大纲生成失败: 未知错误"
+        
+    #     #这玩意是人工确认 human node的，感觉没啥用，FactStruct 如果配上 Human feedback 才需要这个
+    #     # auto_accepted_plan = state.get("auto_accepted_plan", False)
+    #     # if not auto_accepted_plan:
+    #     #     logger.warning("任务规划未确认，Outline Agent 不执行")
+    #     #     return Command(
+    #     #         update={
+    #     #             "messages": [
+    #     #                 HumanMessage(
+    #     #                     content="任务规划尚未确认，跳过大纲生成",
+    #     #                     name="outline",
+    #     #                 )
+    #     #             ],
+    #     #             "current_node": "central_agent",
+    #     #         },
+    #     #         goto="central_agent",
+    #     #     )
 
-        logger.info(f"开始字数规划，总字数限制: {total_word_limit}")
+    #     try:
+    #         replan_result= state.get("replan_result", None)
+    #         full_query = user_query
+    #         if user_dst:
+    #             full_query = f"{user_query}\n\n用户补充需求：{user_dst}"
 
-        # 构建大纲结构信息供LLM分析
-        def build_outline_info(node: OutlineNode, depth: int = 0) -> list:
-            nodes_info = []
-            nodes_info.append(
-                {
-                    "id": node.id,
-                    "title": node.title,
-                    "depth": depth,
-                    "is_leaf": node.is_leaf(),
-                }
-            )
-            for child in node.children:
-                nodes_info.extend(build_outline_info(child, depth + 1))
-            return nodes_info
+    #         # 创建大纲
+    #         # 扩展大纲
+    #         # 删减大纲
+    #         # 字数控制反馈
+    #         # 使用FactStruct自己的 LLM 来做这个事情。
+            
+    #         outline_root, memory = run_factstruct_stage1(
+    #             query=full_query,
+    #             max_iterations=state.get("factstruct_max_iterations", 4),
+    #             batch_size=state.get("factstruct_batch_size", 2),
+    #             task_description=task_description,
+    #             replan_result=replan_result,
+    #             config=config,
+    #         )
 
-        outline_info = build_outline_info(outline_root)
-        leaf_nodes = [n for n in outline_info if n["is_leaf"]]
+    #         # 大纲的字数匹配
+    #         total_word_limit = state.get("total_word_limit", 5000)
+    #         if total_word_limit > 0:
+    #             logger.info(f"检测到字数限制 {total_word_limit}，执行字数规划...")
+    #             outline_root = self.execute_word_planning(
+    #                 outline_root, total_word_limit
+    #             )
+    #             outline_response = outline_root.to_text_tree(
+    #                 include_word_limit=True
+    #             )
+    #         else:
+    #             outline_response = outline_node_to_markdown(
+    #                 outline_root, max_depth=None, include_root=True
+    #             )
 
-        # 构建LLM请求
-        outline_text = outline_root.to_text_tree()
-        prompt_content = f"""请为以下报告大纲分配字数。
+    #         factstruct_outline_dict = outline_node_to_dict(outline_root)
+    #         factstruct_memory_dict = memory_to_dict(memory)
 
-        ## 大纲结构
-        {outline_text}
+    #         logger.info(
+    #             f"FactStruct Stage 1 完成: "
+    #             f"{len(outline_root.get_all_nodes())} 个节点"
+    #         )
 
-        ## 叶子节点列表
-        {json.dumps(leaf_nodes, ensure_ascii=False, indent=2)}
+    #     except Exception as e:
+    #         import traceback
 
-        ## 总字数限制
-        {total_word_limit} 字
+    #         logger.error(traceback.format_exc())
+    #         logger.error(f"FactStruct Stage 1 执行失败: {str(e)}")
 
-        请根据每个叶子节点的重要性和内容复杂度，智能分配字数配额。
-        你必须只输出一个合法的 JSON 对象。禁止输出任何解释、说明、注释、标题或额外文本。如果输出包含非 JSON 内容，将被视为错误。
-        """
+    #         outline_response = f"大纲生成失败（FactStruct Stage 1）: {str(e)}"
 
-        try:
-            messages = apply_prompt_template("word_planner", {"messages": []}) + [
-                HumanMessage(content=prompt_content)
-            ]
-            llm = get_llm_by_type(AGENT_LLM_MAP.get("outline", "default"))
-            response = llm.invoke(messages)
-            result = response.content
+    #     # === 写入 central agent memory stack ===
+    #     memory_entry = MemoryStackEntry(
+    #         timestamp=datetime.now().isoformat(),
+    #         action="delegate",
+    #         agent_type="outline",
+    #         content="大纲任务: 使用 FactStruct Stage 1 生成或调整报告大纲",
+    #         result={
+    #             "outline": outline_response,
+    #             "factstruct_outline": factstruct_outline_dict,
+    #         },
+    #     )
+    #     self.central_agent.memory_stack.push(memory_entry)
 
-            # 解析JSON结果
-            logger.info(f"result:{result}")
-            # result = result.replace("```json", "").replace("```", "").strip()
+    #     logger.info("大纲生成完成（FactStruct Stage 1），返回中枢Agent")
 
-            match = re.search(r"\{[\s\S]*\}", result)
-            if not match:
-                raise ValueError("No JSON object found in LLM output")
+    #     return Command(
+    #         update={
+    #             "messages": [
+    #                 HumanMessage(
+    #                     content="大纲生成完成（FactStruct Stage 1），返回中枢Agent",
+    #                     name="outline",
+    #                 )
+    #             ],
+    #             "report_outline": outline_response,
+    #             "factstruct_outline": factstruct_outline_dict,
+    #             "factstruct_memory": factstruct_memory_dict,
+    #             "current_node": "central_agent",
+    #             "memory_stack": self.central_agent.memory_stack.to_dict(),
+    #         },
+    #         goto="central_agent",
+    #     )
 
-            allocations = json.loads(match.group(0))
 
-            # 将字数配额写入节点
-            for alloc in allocations.get("allocations", []):
-                node_id = alloc.get("node_id")
-                word_limit = alloc.get("word_limit", 0)
-                node = outline_root.find_node_by_id(node_id)
-                if node:
-                    node.word_limit = word_limit
-                    logger.debug(
-                        f"节点 {node_id} ({node.title}) 分配字数: {word_limit}"
-                    )
-
-            # 自底向上计算非叶子节点的字数
-            def update_parent_word_limits(node: OutlineNode) -> int:
-                if node.is_leaf():
-                    return node.word_limit
-                total = sum(update_parent_word_limits(child) for child in node.children)
-                node.word_limit = total
-                return total
-
-            update_parent_word_limits(outline_root)
-            logger.info(f"字数规划完成，根节点总字数: {outline_root.word_limit}")
-
-        except Exception as e:
-            logger.error(f"字数规划失败: {str(e)}")
-            # Fallback: 平均分配
-            leaf_nodes_obj = outline_root.get_leaf_nodes()
-            avg_words = total_word_limit // len(leaf_nodes_obj) if leaf_nodes_obj else 0
-            for node in leaf_nodes_obj:
-                node.word_limit = avg_words
-            logger.warning(f"使用平均分配策略，每个叶子节点: {avg_words} 字")
-
-        logger.info(f"outline_root:{outline_root}")
-        # exit()
-        return outline_root

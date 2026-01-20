@@ -21,7 +21,14 @@ from src.utils.statistics import global_statistics
 from src.utils.reference_utils import global_reference_map
 from ..graph.types import State
 # from .SubAgentConfig import get_sub_agents_by_global_type
+# from src.factstruct.llm_wrapper import FactStructLLMWrapper
+# from src.factstruct.batch_mab import BatchMAB
+# from src.factstruct.outline_node import OutlineNode
+from src.factstruct import FactStructLLMWrapper, BatchMAB, OutlineNode, create_search_engine_adapter,Embedder
 
+
+
+from src.utils.statistics import global_statistics, timed_step
 
 # -------------------------
 # 核心枚举定义
@@ -67,41 +74,137 @@ class OutlineToolDecision_Base(BaseModel):
 
 
 
+
+
 class OutlineAgent:
     """
-    中枢Agent核心类，负责系统整体决策与任务编排
-
-    采用基于记忆栈的决策机制，通过状态分析动态委派子Agent执行专项任务，
-    并最终整合结果生成完成报告
+    大纲Agent核心类，负责大纲决策与任务编排
     """
     
     def __init__(
         self,
         initial_query: str,
         central_guidance: str | None = None,
-        factstruct_outline: str | None = None,
         state: State | None = None,
+        llm=None,#这三个就是 None
+        search_engine=None,
+        embedder=None,
+        max_trys: int = 5,#这两个是默认参数
     ):
+        #处理上游输入信息
         # --- Core task signal ---
         self.initial_query = initial_query
         # --- High-level planning signals ---
         self.central_guidance = central_guidance
-        self.replan_result = replan_result
-
+        self.replan_result = state.get("replan_result")
+        self.total_word_limit = state.get("total_word_limit")
+        
+        
+        #处理当前状态，这玩意是不是应该放到 decision 里面也要啊
         # --- Current outline state ---
         self.factstruct_outline = state.get("factstruct_outline")
         self.factstruct_memory = state.get("factstruct_memory")
-        self.feedback = state.get("feedback")
-        self.total_word_limit = state.get("total_word_limit")
+        self.outline_feedback = state.get("outline_feedback")
+        self.max_trys = max_trys
 
-        # Outline 工具处理器映射表
+        
+        # === Search Engine ===
+        self.search_engine = (search_engine or create_search_engine_adapter())
+
+        # === Embedder（重资源，只初始化一次）===
+        self.embedder = (embedder or Embedder(model_name="../../Model/MiniLM/all-MiniLM-L6-v2"))
+
+
+        # === LLM ===
+        if llm is None:
+            llm_type = AGENT_LLM_MAP.get("outline", "basic")
+            self.llm = get_llm_by_type(llm_type)
+        else:
+            self.llm = llm
+            
+        self.llm_wrapper = FactStructLLMWrapper(self.llm)
+        
+        
+        # --- Batch MAB（核心）---
+        self.batch_mab = BatchMAB(
+            llm_wrapper=self.llm_wrapper,
+            embedder=self.embedder,
+            search_engine=self.search_engine,
+            max_iterations=4,
+            batch_size=2,
+        )
+
+        # --- Tool handlers ---
         self.tool_handlers = {
             "initialization": self._tool_initialization,
-            "expandation": self._tool_expandation,
-            "reduction": self._tool_reduction,
-            "reflect": self._tool_reflect,
+            "expandation": self._tool_expansion,
+            # "reduction": self._tool_reduction,#未实现，暂时注释
+            # "reflect": self._tool_reflect,#未实现，暂时注释
             "finish": self._tool_finish,
         }
+
+
+    async def execute(self, state: State, config: RunnableConfig) -> Command:
+        """
+        OutlineAgent 的主循环：
+        decision → tool → state update → until finish
+        """
+        logger.info("OutlineAgent 执行开始")
+        #万一有报错信息
+        last_decision = None
+        last_error = None
+
+        for step in range(self.max_trys):
+            logger.info(f"OutlineAgent Step {step + 1}/{self.max_trys}")#一共迭代了多少步
+
+            try:
+                # === 1. 决策 ===
+                decision = self.make_decision(state, config)
+                last_decision = decision
+
+                logger.info(f"OutlineAgent Decision: {decision.tool} | {decision.reasoning}")
+
+                # === 2. 执行工具 ===
+                command = await self.execute_tool(decision, state, config)
+            
+                # === 3. 合并 state ===
+                if command and command.update:
+                    state.update(command.update)
+                
+                # === 4. 是否完成 ===
+                if decision.tool == "finish":
+                    logger.info("OutlineAgent 收到 finish 指令，退出循环")
+                    break
+                
+            except Exception as e:
+                import traceback
+
+                logger.error("OutlineAgent 执行异常")
+                logger.error(traceback.format_exc())
+                last_error = str(e)
+                break
+
+        # =========================
+        # === 统一结果整理阶段 ===
+        # =========================
+        factstruct_outline = state.get("factstruct_outline")
+        factstruct_memory = state.get("factstruct_memory")
+        report_outline = state.get("report_outline")
+        if not report_outline: #没有大纲的情况下要反馈
+            report_outline = "大纲未完成生成（OutlineAgent 未正常 finish）"
+            state["report_outline"] = report_outline
+  
+            
+        return Command(
+            update={
+                "factstruct_outline": state.get("factstruct_outline"),
+                "factstruct_memory": state.get("factstruct_memory"),
+                "report_outline": state.get("report_outline"),
+            }
+        )
+
+
+
 
 
     def make_decision(
@@ -128,7 +231,7 @@ class OutlineAgent:
 
         try:
             llm = get_llm_by_type(
-                AGENT_LLM_MAP.get("outline_agent", "default")
+                AGENT_LLM_MAP.get("outline", "default")
             ).with_structured_output(
                 OutlineToolDecision_Base,   # ✅ 给 LLM 用的 schema
                 method="json_mode",
@@ -193,7 +296,7 @@ class OutlineAgent:
             "central_guidance": state.get("central_guidance"),
             "factstruct_outline": state.get("factstruct_outline"),
             "total_word_limit": state.get("total_word_limit"),
-            "feedback": state.get("feedback"),
+            "outline_feedback": state.get("outline_feedback"),
         }
 
         # 合并 config（如需要）
@@ -222,7 +325,7 @@ class OutlineAgent:
         if not handler:
             error_msg = f"未知 outline tool: {tool_name}"
             logger.error(error_msg)
-
+            #这个地方要不要这么跳，还不一定，还需要再看一看
             return Command(
                 update={
                     "messages": [
@@ -231,1389 +334,144 @@ class OutlineAgent:
                             name="outline_error",
                         )
                     ],
-                    "locale": state.get("locale"),
-                    "current_node": "outline_agent",
+                    "current_node": "central_agent",
                 },
-                goto="outline_agent",
+                goto="central_agent",
             )
+
 
         logger.info(
             f"Outline Agent 执行工具: {tool_name}, params={decision.params}"
         )
 
         return handler(
-            params=decision.params or {},
-            reasoning=decision.reasoning,
+            decision=decision,
             state=state,
             config=config,
         )
 
 
-    def _handle_think(
-        self, decision: CentralDecision, state: State, config: RunnableConfig
-    ) -> Command:
-        """处理思考动作，分析当前状态生成下一步计划"""
-        logger.info("中枢Agent正在思考...")
-        start_time = datetime.now()
-        context = {
-            "current_action": "think",
-            "current_progress": state.get("observations", []),
-            "decision_reasoning": decision.reasoning,
-            "instruction": decision.instruction,
-            "locale": state.get("locale", "zh-CN"),  # 确保locale被传递到模板
-        }
-
-        # 应用统一的决策提示模板
-        messages = apply_prompt_template("central_agent", state, extra_context=context)
-
-        llm = get_llm_by_type(AGENT_LLM_MAP.get("central_agent", "default"))
-        response = llm.invoke(messages)
-
-        # 记录思考过程到记忆栈
-        memory_entry = MemoryStackEntry(
-            timestamp=datetime.now().isoformat(),
-            action="think",
-            content=response.content,
-        )
-        self.memory_stack.push(memory_entry)
-
-        logger.info(f"central_think: {response.content}")
-        end_time = datetime.now()
-        time_entry = {
-            "step_name": "central_think" + start_time.isoformat(),
-            "start_time": start_time.isoformat(),
-            "end_time": end_time.isoformat(),
-            "duration": (end_time - start_time).total_seconds(),
-        }
-        global_statistics.add_time_entry(time_entry)
-        return Command(
-            update={
-                "messages": [AIMessage(content=response.content, name="central_think")],
-                "current_node": "central_agent",
-                "memory_stack": json.dumps(
-                    [entry.to_dict() for entry in self.memory_stack.get_all()]
-                ),
-                "locale": state.get("locale"),
-            },
-            goto="central_agent",
-        )
-
-    def _handle_reflect(
-        self, decision: CentralDecision, state: State, config: RunnableConfig
-    ) -> Command:
-        """处理反思动作，评估之前的步骤并清理记忆栈"""
-        logger.info("中枢Agent正在反思...")
-        start_time = datetime.now()
-
-        # 获取反思目标和上下文
-        # recent_memory = self.memory_stack.get_recent(5)  # 获取最近5条记忆
-
-        context = {
-            "current_action": "reflect",
-            "decision_reasoning": decision.reasoning,
-            "instruction": decision.instruction,
-            "locale": state.get("locale", "zh-CN"),  # 确保locale被传递到模板
-        }
-
-        # 应用反思提示模板
-        messages = apply_prompt_template("central_agent", state, extra_context=context)
-
-        llm = get_llm_by_type(AGENT_LLM_MAP.get("central_agent", "default"))
-        response = llm.invoke(messages)
-
-        # 解析反思结果的JSON
-        try:
-            reflection_data = json.loads(repair_json_output(response.content))
-            analysis = reflection_data.get("analysis", "反思分析")
-            pop_count = reflection_data.get("pop_count", 0)
-            reasoning = reflection_data.get("reasoning", "反思完成")
-
-            # 验证pop_count是有效数字
-            if not isinstance(pop_count, int) or pop_count < 0:
-                logger.warning(f"无效的pop_count: {pop_count}，设置为0")
-                pop_count = 0
-
-        except Exception as e:
-            logger.error(f"反思结果解析失败: {e}")
-            analysis = response.content
-            pop_count = 0
-            reasoning = "JSON解析失败，保持现有记忆栈"
-
-        logger.debug(f"reflect决定清理{pop_count}条消息")
-        # 执行记忆栈清理
-        removed_items = []
-        if pop_count > 0:
-            reflection_content = (
-                f"反思分析: {analysis}\n"
-                f"反思原因: {reasoning}\n"
-                f"清理了 {pop_count} 条记忆。"
-            )
-
-            memory_entry = MemoryStackEntry(
-                timestamp=datetime.now().isoformat(),
-                action="reflect",
-                content=reflection_content,
-            )
-
-            self.memory_stack.push_with_pop(memory_entry, pop_count)
-
-            removed_items = self.memory_stack.pop(pop_count)
-
-            logger.info(f"成功从记忆栈中移除了 {pop_count} 项记忆")
-            # logger.info(
-            #     f"从记忆栈中移除了 {len(removed_items)} 项: {[item.action for item in removed_items]}"
-            # )
-        else:
-            logger.info("不移除任何记忆栈项目")
-
-        logger.info(f"central_reflect: {analysis}")
-        end_time = datetime.now()
-        time_entry = {
-            "step_name": "central_reflect" + start_time.isoformat(),
-            "start_time": start_time.isoformat(),
-            "end_time": end_time.isoformat(),
-            "duration": (end_time - start_time).total_seconds(),
-        }
-        global_statistics.add_time_entry(time_entry)
-        return Command(
-            update={
-                "messages": [AIMessage(content=analysis, name="central_reflect")],
-                "reflection": {
-                    "analysis": analysis,
-                    "pop_count": len(removed_items),
-                    "reasoning": reasoning,
-                    "removed_items": removed_items,
-                },
-                "current_node": "central_agent",
-                "memory_stack": json.dumps(
-                    [entry.to_dict() for entry in self.memory_stack.get_all()]
-                ),
-                "locale": state.get("locale"),
-            },
-            goto="central_agent",
-        )
-
-    def _handle_summarize(
-        self, decision: CentralDecision, state: State, config: RunnableConfig
-    ) -> Command:
-        """处理总结动作，归纳当前已获得的信息"""
-        logger.info("中枢Agent正在总结...")
-        start_time = datetime.now()
-
-        context = {
-            "current_action": "summarize",
-            "summarization_focus": decision.reasoning,
-            "instruction": decision.instruction,
-            "locale": state.get("locale", "zh-CN"),  # 确保locale被传递到模板
-        }
-
-        # 打印上下文用于调试
-        logger.debug(
-            f"Summarize context: {json.dumps(context, ensure_ascii=False, indent=2)}"
-        )
-
-        # 应用统一的总结提示模板
-        messages = apply_prompt_template("central_agent", state, extra_context=context)
-
-        llm = get_llm_by_type(AGENT_LLM_MAP.get("central_agent", "default"))
-        response = llm.invoke(messages)
-
-        # 更新记忆栈，替换最新的总结结果
-        new_entry = MemoryStackEntry(
-            timestamp=datetime.now().isoformat(),
-            action="summarize",
-            content=context.get("summarization_focus", ""),
-            result={"summary_result": response.content},
-        )
-
-        # logger.info("NEW_ENTRY", new_entry)
-        # logger.info("*"*100)
-
-        self.memory_stack.push_with_pop(new_entry)
-
-        # logger.info(f"central_summarize: {response.content}")
-        end_time = datetime.now()
-        time_entry = {
-            "step_name": "central_summarize" + start_time.isoformat(),
-            "start_time": start_time.isoformat(),
-            "end_time": end_time.isoformat(),
-            "duration": (end_time - start_time).total_seconds(),
-        }
-        global_statistics.add_time_entry(time_entry)
-        return Command(
-            update={
-                "messages": [
-                    AIMessage(content=response.content, name="central_summarize")
-                ],
-                "summary": response.content,
-                "current_node": "central_agent",
-                "memory_stack": json.dumps(
-                    [entry.to_dict() for entry in self.memory_stack.get_all()]
-                ),
-                "locale": state.get("locale"),
-            },
-            goto="central_agent",
-        )
-
-    def _handle_delegate(
-        self, decision: CentralDecision, state: State, config: RunnableConfig
-    ) -> Command:
-        """处理委派动作，调度子Agent执行专项任务"""
-        agent_type = decision.params.agent_type
-        task_description = decision.params.task_description
-        # agent_type = decision.agent_type
-        # task_description = decision.task_description or "未指定任务"
-
-        # 验证子Agent类型有效性
-        if not agent_type or agent_type not in self.available_sub_agents:
-            error_msg = (
-                f"无效的子Agent类型: {agent_type}，可用类型: "
-                f"{self.available_sub_agents}"
-            )
-            logger.error(f"central_error: {error_msg}")
-            return Command(
-                update={
-                    "messages": [AIMessage(content=error_msg, name="central_error")],
-                    "current_node": "central_agent",
-                },
-                goto="central_agent",
-            )
-
-        logger.info(f"中枢Agent委派 {agent_type} 执行任务: {task_description}")
-
-        # 记录委派动作到记忆栈
-        memory_entry = MemoryStackEntry(
-            timestamp=datetime.now().isoformat(),
-            action="delegate",
-            agent_type=agent_type,
-            content=f"委派任务: {task_description}",
-        )
-        self.memory_stack.push(memory_entry)
-
-        # 构建子Agent执行上下文（包含记忆栈摘要）
-        delegation_context = {
-            "task_description": task_description,
-            "agent_type": agent_type,
-            "memory_context": self.memory_stack.get_summary(include_full_history=True),
-            "original_query": state.get("user_query", ""),
-        }
-
-        logger.info(f"central_delegate: 委派{agent_type}执行: {task_description}")
-        return Command(
-            update={
-                "messages": [
-                    AIMessage(
-                        content=f"委派{agent_type}执行: {task_description}",
-                        name="central_delegate",
-                    )
-                ],
-                "delegation_context": delegation_context,
-                "current_node": "central_agent",
-                "memory_stack": json.dumps(
-                    [entry.to_dict() for entry in self.memory_stack.get_all()]
-                ),
-                "locale": state.get("locale"),
-            },
-            goto=agent_type,
-        )
-
-    def _handle_finish(
-        self, decision: CentralDecision, state: State, config: RunnableConfig
-    ) -> Command:
-        """处理完成动作，生成最终报告并结束任务"""
-        logger.info("中枢Agent完成任务...")
-
-        final_report = state.get("final_report", None)
-        if not final_report:
-            logger.info("未找到最终报告，委派Reporter Agent生成报告...")
-
-            # 记录委派动作到记忆栈
-            memory_entry = MemoryStackEntry(
-                timestamp=datetime.now().isoformat(),
-                action="delegate",
-                agent_type="reporter",
-                content="未生成最终报告，委派Reporter Agent生成最终报告",
-            )
-            self.memory_stack.push(memory_entry)
-
-            # 构建Reporter执行上下文
-            delegation_context = {
-                "task_description": "根据所有收集到的信息生成完整的最终报告",
-                "agent_type": "reporter",
-                "memory_context": self.memory_stack.get_summary(
-                    include_full_history=True
-                ),
-                "original_query": state.get("user_query", ""),
-                "report_type": "final_report",
-                "execution_history": [
-                    entry.to_dict() for entry in self.memory_stack.get_all()
-                ],
-            }
-
-            logger.info("central_delegate_reporter: 委派Reporter Agent生成最终报告")
-            return Command(
-                update={
-                    "messages": [
-                        AIMessage(
-                            content="委派Reporter Agent生成最终报告",
-                            name="central_delegate_reporter",
-                        )
-                    ],
-                    "delegation_context": delegation_context,
-                    "current_node": "central_agent",
-                    "memory_stack": json.dumps(
-                        [entry.to_dict() for entry in self.memory_stack.get_all()]
-                    ),
-                    "pending_finish": True,  # 标记等待报告完成后再finish
-                },
-                goto="reporter",
-            )
-        logger.info(f"final_report: {final_report}")
-        
-        session_id = config["configurable"]["thread_id"]
-        # global_reference_map.save_session(session_id)
-        # 构建执行摘要（包含完整记忆栈历史）
-        execution_summary = {
-            "user_query": state.get("user_query", "未知查询"),
-            "execution_history": [
-                entry.to_dict() for entry in self.memory_stack.get_all()
-            ],
-            "final_report": final_report,
-            "research": global_reference_map.get_session_ref_map(session_id),#state.get("data_collections", []),
-            "completion_time": datetime.now().isoformat(),
-            "statistics": global_statistics.get_statistics(),
-        }
-
-        # 保存执行摘要到文件
-        os.makedirs("./reports", exist_ok=True)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"./reports/execution_report_{timestamp}.json"
-
-        try:
-            with open(filename, "w", encoding="utf-8") as f:
-                json.dump(execution_summary, f, ensure_ascii=False, indent=4)
-            report_msg = f"任务完成，报告已保存: {filename}"
-        except Exception as e:
-            logger.error(f"报告保存失败: {str(e)}")
-            report_msg = f"任务完成，但报告保存失败: {str(e)}"
-            execution_summary["error"] = str(e)
-
-        logger.info(report_msg)
-        logger.info(global_statistics.get_statistics())
-
-
-
-
-from src.llms.llm import get_llm_by_type
-from ..graph.types import State
-from langchain_core.runnables import RunnableConfig
-from datetime import datetime
-
-from langchain_core.messages import HumanMessage, AIMessage
-from langchain_core.runnables import RunnableConfig
-from langgraph.types import Command, interrupt
-from sentence_transformers import CrossEncoder
-
-from src.agents.CoderAgent import CoderAgent
-from src.agents.ResearcherAgent_SP import ResearcherAgentSP
-from src.tools import (
-    crawl_tool,
-    get_web_search_tool,
-    get_retriever_tool,
-    python_repl_tool,
-    search_docs_tool,
-)
-from src.utils.json_utils import repair_json_output
-from src.utils.logger import logger
-from src.config.agents import AGENT_LLM_MAP
-from src.llms.llm import get_llm_by_type
-from src.prompts.template import apply_prompt_template
-from src.memory import MemoryStack, MemoryStackEntry
-from src.agents.CentralAgent import CentralAgent
-from src.tools.get_docs_info import search_docs
-from src.tools.bocha_search.web_search_en import web_search
-from src.factstruct import (
-    run_factstruct_stage1,
-    outline_node_to_markdown,
-    outline_node_to_dict,
-    memory_to_dict,
-    filter_content_by_relevant_docs,
-    mark_content_with_support,
-    repair_unknown_citations
-)
-
-from src.factstruct import outline_node_to_dict, memory_to_dict
-from src.factstruct.outline_node import OutlineNode
-
-from ..graph.types import State
-from ..config import SELECTED_SEARCH_ENGINE, SearchEngine
-from src.utils.statistics import global_statistics, timed_step
-import re
-from typing import Dict, Any
-import json
-from src.utils.reference_utils import global_reference_map, process_final_report
-# -------------------------
-# 子Agent管理模块
-# TODO: check sub-agent bugs
-# TODO: 搜索太多时会超过输入限制或者缓冲区溢出，需要限制搜索到的内容长度或者做一个简单的摘要
-# TODO: 需要处理搜索敏感词（以“985大学最多的五个城市”为例，AI就无法处理信息，返回Error）
-# -------------------------
-class SubAgentManager:
-    """子Agent管理器，负责创建和执行各类专项子Agent"""
-
-    def __init__(self, central_agent: "CentralAgent"):
-        self.central_agent = central_agent
-
-    @timed_step("execute_researcher")
-    async def execute_researcher(self, state: State, config: RunnableConfig) -> Command:
-        """
-        执行研究Agent，负责信息检索与分析
-
-        Args:
-            state: 当前系统状态
-            config: 运行配置
-
-        Returns:
-            执行结果Command对象
-        """
-        logger.info("研究Agent开始执行...")
-        delegation_context = state.get("delegation_context", {})
-        task_description = delegation_context.get("task_description", "未知研究任务")
-
-        # 配置研究工具链
-        tools = [get_web_search_tool(10), crawl_tool, search_docs_tool]
-        retriever_tool = get_retriever_tool(state.get("resources", []))
-        if retriever_tool:
-            tools.insert(0, retriever_tool)
-
-        # 实例化研究Agent
-        research_agent = ResearcherAgentSP(
-            config=config, agent_type="researcher", default_tools=tools
-        )
-
-        # 执行研究任务并处理异常
-        try:
-            result_command = await research_agent.execute_agent_step(state)
-
-            # 从结果中提取数据用于记忆栈
-            result_observations = []
-            result_data_collections = []
-
-            if result_command and result_command.update:
-                result_observations = result_command.update.get("observations", [])
-                result_data_collections = result_command.update.get(
-                    "data_collections", []
-                )
-
-            logger.info(f"data_collections_in subagent:{result_data_collections}")
-
-        except Exception as e:
-            logger.error(f"Researcher Agent执行失败: {str(e)}")
-            return Command(
-                update={
-                    "messages": [
-                        HumanMessage(
-                            content=f"研究任务失败: {str(e)}", name="researcher"
-                        )
-                    ],
-                    "current_node": "central_agent",
-                    "memory_stack": self.central_agent.memory_stack.to_dict(),
-                },
-                goto="central_agent",
-            )
-
-        # 记录到中枢Agent记忆栈
-        memory_entry = MemoryStackEntry(
-            timestamp=datetime.now().isoformat(),
-            action="delegate",
-            agent_type="researcher",
-            content=f"研究任务: {task_description}",
-            result={
-                "observations": result_observations,
-                # "data_collections": result_data_collections,
-            },
-        )
-        self.central_agent.memory_stack.push(memory_entry)
-
-        logger.info("研究任务完成，返回中枢Agent")
-        return Command(
-            update={
-                "messages": [
-                    HumanMessage(
-                        content="研究任务完成，返回中枢Agent", name="researcher"
-                    )
-                ],
-                "current_node": "central_agent",
-                "memory_stack": self.central_agent.memory_stack.to_dict(),
-                "data_collections": result_data_collections,
-                "observations": result_observations,
-            },
-            goto="central_agent",
-        )
-
-    @timed_step("execute_xxqg_researcher")
-    async def execute_xxqg_researcher(
-        self, state: State, config: RunnableConfig
+    def _tool_initialization(
+        self,
+        decision: OutlineToolDecision,
+        state: State,
+        config: RunnableConfig,
     ) -> Command:
         """
-        执行研究Agent，负责信息检索与分析
-
-        Args:
-            state: 当前系统状态
-            config: 运行配置
-
-        Returns:
-            执行结果Command对象
+        初始化大纲结构（initialization tool）
         """
-        logger.info("研究Agent开始执行...")
-        delegation_context = state.get("delegation_context", {})
-        task_description = delegation_context.get("task_description", "未知研究任务")
+        logger.info("Outline Tool: initialization")
 
-        # 配置研究工具链
-        tools = [search_docs_tool]
-
-        # 实例化研究Agent
-        research_agent = ResearcherAgentSP(
-            config=config, agent_type="researcher_xxqg", default_tools=tools
-        )
-
-        # 执行研究任务并处理异常
-        try:
-            result_command = await research_agent.execute_agent_step(state)
-
-            # 从结果中提取数据用于记忆栈
-            result_observations = []
-            result_data_collections = []
-
-            if result_command and result_command.update:
-                result_observations = result_command.update.get("observations", [])
-                result_data_collections = result_command.update.get(
-                    "data_collections", []
-                )
-
-        except Exception as e:
-            logger.error(f"研究Agent执行失败: {str(e)}")
-            return Command(
-                update={
-                    "messages": [
-                        HumanMessage(
-                            content=f"研究任务失败: {str(e)}", name="researcher"
-                        )
-                    ],
-                    "current_node": "central_agent",
-                    "memory_stack": self.central_agent.memory_stack.to_dict(),
-                },
-                goto="central_agent",
-            )
-
-        # 记录到中枢Agent记忆栈
-        memory_entry = MemoryStackEntry(
-            timestamp=datetime.now().isoformat(),
-            action="delegate",
-            agent_type="researcher",
-            content=f"研究任务: {task_description}",
-            result={
-                "observations": result_observations,
-                # "data_collections": result_data_collections,
-            },
-        )
-        self.central_agent.memory_stack.push(memory_entry)
-
-        logger.info("研究任务完成，返回中枢Agent")
-        return Command(
-            update={
-                "messages": [
-                    HumanMessage(
-                        content="研究任务完成，返回中枢Agent", name="researcher"
-                    )
-                ],
-                "current_node": "central_agent",
-                "memory_stack": self.central_agent.memory_stack.to_dict(),
-                "data_collections": result_data_collections,
-                "observations": result_observations,
-            },
-            goto="central_agent",
-        )
-
-    @timed_step("execute_web_researcher")
-    async def execute_web_researcher(
-        self, state: State, config: RunnableConfig
-    ) -> Command:
-        """
-        执行研究Agent，负责信息检索与分析
-
-        Args:
-            state: 当前系统状态
-            config: 运行配置
-
-        Returns:
-            执行结果Command对象
-        """
-        logger.info("Web Agent开始执行...")
-        delegation_context = state.get("delegation_context", {})
-        task_description = delegation_context.get("task_description", "未知研究任务")
-
-        # 配置研究工具链
-        # tools = [search_docs_tool]
-        tools = [get_web_search_tool(10)]
-        
-        # 实例化研究Agent
-        research_agent = ResearcherAgentSP(
-            config=config, agent_type="researcher_web", default_tools=tools
-        )
-
-        # 执行研究任务并处理异常
-        try:
-            result_command = await research_agent.execute_agent_step(state)
-
-            # 从结果中提取数据用于记忆栈
-            result_observations = []
-            result_data_collections = []
-
-            if result_command and result_command.update:
-                result_observations = result_command.update.get("observations", [])
-                result_data_collections = result_command.update.get(
-                    "data_collections", []
-                )
-
-        except Exception as e:
-            logger.error(f"研究Agent执行失败: {str(e)}")
-            return Command(
-                update={
-                    "messages": [
-                        HumanMessage(
-                            content=f"研究任务失败: {str(e)}", name="researcher"
-                        )
-                    ],
-                    "current_node": "central_agent",
-                    "memory_stack": self.central_agent.memory_stack.to_dict(),
-                },
-                goto="central_agent",
-            )
-
-        # 记录到中枢Agent记忆栈
-        memory_entry = MemoryStackEntry(
-            timestamp=datetime.now().isoformat(),
-            action="delegate",
-            agent_type="researcher",
-            content=f"研究任务: {task_description}",
-            result={
-                "observations": result_observations,
-                # "data_collections": result_data_collections,
-            },
-        )
-        self.central_agent.memory_stack.push(memory_entry)
-
-        logger.info("研究任务完成，返回中枢Agent")
-        logger.info("Web研究任务完成，返回中枢Agent")
-        logger.info(f"state:{state}")
-        return Command(
-            update={
-                "messages": [
-                    HumanMessage(
-                        content="研究任务完成，返回中枢Agent", name="researcher"
-                    )
-                ],
-                "current_node": "central_agent",
-                "memory_stack": self.central_agent.memory_stack.to_dict(),
-                "data_collections": result_data_collections,
-                "observations": result_observations,
-            },
-            goto="central_agent",
-        )
-
-
-    @timed_step("execute_coder")
-    async def execute_coder(self, state: State, config: RunnableConfig) -> Command:
-        """
-        执行编码Agent，负责代码生成与执行
-
-        Args:
-            state: 当前系统状态
-            config: 运行配置
-
-        Returns:
-            执行结果Command对象
-        """
-        logger.info("编码Agent开始执行...")
-
-        delegation_context = state.get("delegation_context", {})
-        task_description = delegation_context.get("task_description", "未知编码任务")
-
-        # 实例化编码Agent
-        code_agent = CoderAgent(
-            config=config, agent_type="coder", default_tools=[python_repl_tool]
-        )
-
-        # 执行编码任务并处理异常
-        try:
-            result_command = await code_agent.execute_agent_step(state)
-            # 从结果中提取数据用于记忆栈
-            result_observations = []
-            if result_command and result_command.update:
-                result_observations = result_command.update.get("observations", [])
-        except Exception as e:
-            logger.error(f"编码Agent执行失败: {str(e)}")
-            return Command(
-                update={
-                    "messages": [
-                        HumanMessage(content=f"编码任务失败: {str(e)}", name="coder")
-                    ],
-                    "current_node": "central_agent",
-                    "memory_stack": self.central_agent.memory_stack.to_dict(),
-                },
-                goto="central_agent",
-            )
-
-        # 记录到中枢Agent记忆栈
-        memory_entry = MemoryStackEntry(
-            timestamp=datetime.now().isoformat(),
-            action="delegate",
-            agent_type="coder",
-            content=f"编码任务: {task_description}",
-            result={"observations": result_observations},
-        )
-        self.central_agent.memory_stack.push(memory_entry)
-
-        logger.info("编码任务完成，返回中枢Agent")
-        return Command(
-            update={
-                "messages": [
-                    HumanMessage(content="编码任务完成，返回中枢Agent", name="coder")
-                ],
-                "current_node": "central_agent",
-                "memory_stack": self.central_agent.memory_stack.to_dict(),
-            },
-            goto="central_agent",
-        )
-
-    @timed_step("execute_reporter")
-    def execute_reporter(self, state: State, config: RunnableConfig) -> Command:
-        """
-        执行报告Agent，负责结果整理与报告生成
-
-        Args:
-            state: 当前系统状态
-            config: 运行配置
-
-        Returns:
-            执行结果Command对象
-        """
-        logger.info("报告Agent开始执行...")
-
-        delegation_context = state.get("delegation_context", {})
-        task_description = delegation_context.get("task_description", "生成最终报告")
-
-        # 收集报告生成所需上下文
-        context = {
-            "user_query": state.get("user_query", ""),
-            "memory_history": self.central_agent.memory_stack.get_all(),
-            "task_description": task_description,
-        }
-
-        # 生成报告并处理异常
-        final_report = "报告生成失败: 未知错误"
-        try:
-            messages = apply_prompt_template(
-                "reporter", state, extra_context=context
-            )  # 修复：参数顺序
-            llm = get_llm_by_type(AGENT_LLM_MAP.get("reporter", "default"))
-            response = llm.invoke(messages)
-            final_report = response.content
-        except Exception as e:
-            logger.error(f"报告Agent执行失败: {str(e)}")
-            final_report = f"报告生成失败: {str(e)}"
-
-        # 记录到中枢Agent记忆栈
-        memory_entry = MemoryStackEntry(
-            timestamp=datetime.now().isoformat(),
-            action="delegate",
-            agent_type="reporter",
-            content=f"报告任务: {task_description}",
-            result={"final_report": final_report},
-        )
-        self.central_agent.memory_stack.push(memory_entry)
-
-        data_collections = state.get("data_collections", [])
-        logger.info(
-            f"report agent: data_collections:{data_collections}"
-        )  # NOTE: data_collections可以在这里取
-
-        logger.info("报告生成完成，返回中枢Agent")
-        return Command(
-            update={
-                "messages": [
-                    HumanMessage(content="报告生成完成，返回中枢Agent", name="reporter")
-                ],
-                "final_report": final_report,
-                "current_node": "central_agent",
-                "memory_stack": self.central_agent.memory_stack.to_dict(),
-            },
-            goto="central_agent",
-        )
-
-    @timed_step("execute_xxqg_reporter")
-    def execute_xxqg_reporter(self, state: State, config: RunnableConfig) -> Command:
-        """
-        执行报告Agent，负责结果整理与报告生成
-
-        Args:
-            state: 当前系统状态
-            config: 运行配置
-
-        Returns:
-            执行结果Command对象
-        """
-        logger.info("报告Agent开始执行...")
-        logger.info(f"state:{state}")
-        delegation_context = state.get("delegation_context", {})
-        task_description = delegation_context.get("task_description", "生成最终报告")
-
-        # 收集报告生成所需上下文
-        context = {
-            "user_query": state.get("user_query", ""),
-            "memory_history": self.central_agent.memory_stack.get_all(),
-            "task_description": task_description,
-        }
-
-        # 生成报告并处理异常
-        final_report = "报告生成失败: 未知错误"
-        try:
-            messages = apply_prompt_template(
-                "reporter_xxqg", state, extra_context=context
-            )  # 修复：参数顺序
-            data_collections = state.get("data_collections", [])
-            observations = state.get("observations", [])
-
-            messages.append(
-                HumanMessage(
-                    f"##User Query\n\n{state.get('user_query', '')}\n\n##用户约束\n\n{state.get("user_dst","")}\n\n##报告大纲{state.get('report_outline','用户未提供大纲')}\n\nBelow are information collected in previous tasks:\n\n{"\n\n".join(observations)}"
-                )
-            )        
-            # messages.append(
-            #     HumanMessage(
-            #         f"##User Query\n\n{state.get('user_query', '')}\n\n##用户约束\n\n{state.get("user_dst","")}\n\n##报告大纲{state.get('report_outline','用户未提供大纲')}\n\nBelow are information collected in previous tasks:\n\n{"\n\n".join(data_collections)}"
-            #     )
-            # )        
-            logger.debug(f"Reporter messages: {messages}")
-            llm = get_llm_by_type(AGENT_LLM_MAP.get("reporter", "default"))
-            response = llm.invoke(messages)
-            final_report = response.content
-            #可以在这个地方加一个对final_report的处理
-            
-
-            
-            
-            session_id = config["configurable"]["thread_id"]
-            reference_map=global_reference_map.get_session_ref_map(session_id)
-            # logger.info(f"before reference_map:{reference_map}")
-            # logger.info(f"before final_report :{final_report}")
-            final_report = process_final_report(final_report, reference_map)
-            # logger.info(f"after final_report :{final_report}")
-
-
-            #增加引用检查部分
-            logger.info(f"引用检查")
-            # logger.info(f"state:{state}")
-            logger.info(f"observations:{observations}")
-            # logger.info(f"data_collections:{data_collections}")
-            logger.info(f"final_report:{final_report}")
-            semantic_cls = CrossEncoder("/data1/Yangzb/Model/StructBert/cross-encoder/nli-deberta-v3-small")
-            #这个是判断引用和句子的关系
-            supported = filter_content_by_relevant_docs(
-                content=final_report,
-                relevant_docs=reference_map,
-                semantic_cls=semantic_cls
-            )
-            logger.info(f"supported :{supported}")
-            
-            #这个是把关系应用到生成文章上
-            new_content = mark_content_with_support(
-                content=final_report,
-                nli_results=supported
-            )
-            logger.info(f"new_content :{new_content}")
-            
-            #这个是把错误引用进行处理的
-            final_report=repair_unknown_citations(
-                content=new_content,
-                relevant_docs=reference_map,
-                semantic_cls=semantic_cls
-            )
-            logger.info(f"final_report :{final_report}")
-            
-        except Exception as e:
-            import traceback
-
-            logger.error(traceback.format_exc())
-            logger.error(f"报告Agent执行失败: {str(e)}")
-            final_report = f"报告生成失败: {str(e)}"
-
-        # 记录到中枢Agent记忆栈
-        memory_entry = MemoryStackEntry(
-            timestamp=datetime.now().isoformat(),
-            action="delegate",
-            agent_type="reporter",
-            content=f"报告任务: {task_description}",
-            result={"final_report": final_report},
-        )
-        self.central_agent.memory_stack.push(memory_entry)
-
-        logger.info("报告生成完成，返回中枢Agent")
-        return Command(
-            update={
-                "messages": [
-                    HumanMessage(content="报告生成完成，返回中枢Agent", name="reporter")
-                ],
-                "final_report": final_report,
-                "current_node": "central_agent",
-                "memory_stack": self.central_agent.memory_stack.to_dict(),
-            },
-            goto="central_agent",
-        )
-
-    @timed_step("execute_xxqg_reporter_factstruct")
-    def execute_xxqg_reporter_factstruct(
-        self, state: State, config: RunnableConfig
-    ) -> Command:
-        """
-        执行报告Agent（使用 FactStruct Stage 2）
-
-        基于 FactStruct Stage 1 生成的大纲和 Memory，为每个叶子节点
-        分别生成内容，最终合并为完整报告。
-
-        Args:
-            state: 当前系统状态
-            config: 运行配置
-
-        Returns:
-            执行结果Command对象
-        """
-        logger.info("报告Agent开始执行（FactStruct Stage 2）...")
-
+        initial_query = state["initial_query"]
+        central_guidance = state.get("central_guidance")
+        replan_result = state.get("replan_result")
         factstruct_outline = state.get("factstruct_outline")
-        factstruct_memory = state.get("factstruct_memory")
+        initial_docs = state.get("initial_docs")
+        
+        #提取decision当中的参数
+        params = decision.params or {}
+        instruction=params.get("instruction",None)
 
-        if not factstruct_outline or not factstruct_memory:
-            logger.warning(
-                "FactStruct 数据缺失，回退到传统 Reporter 方法"
-            )
-            return self.execute_xxqg_reporter(state, config)
-
-        user_query = state.get("user_query", "")
-
-        final_report = "报告生成失败: 未知错误"
-        try:
-            from src.factstruct import run_factstruct_stage2
-            from src.config.agents import AGENT_LLM_MAP
-
-            final_report = run_factstruct_stage2(
-                outline_dict=factstruct_outline,
-                memory_dict=factstruct_memory,
-                user_query=user_query,
-                llm_type=AGENT_LLM_MAP.get("reporter_factstruct", "basic"),
-                locale=state.get("locale", "zh-CN"),
-            )
-            
-            #可以在这个地方加一个对final_report的处理
-            session_id = config["configurable"]["thread_id"]
-            reference_map=global_reference_map.get_session_ref_map(session_id)
-            logger.info(f"before reference_map:{reference_map}")
-            logger.info(f"before final_report :{final_report}")
-            final_report = process_final_report(final_report, reference_map)
-            logger.info(f"after final_report :{final_report}")
-            
-            logger.info(
-                f"FactStruct Stage 2 报告生成完成: {len(final_report)} 个字符"
+        # 已有 outline，不应再次初始化
+        if factstruct_outline is not None:
+            logger.warning("Outline already exists, skip initialization.")
+            return Command(
+                update={
+                    "outline_feedback": "Initialization skipped: outline already exists."
+                },
             )
 
-        except Exception as e:
-            import traceback
+        # --- Step 1: 初始检索 ---
+        if initial_docs is None:
+            logger.info("开始预检索")
+            initial_docs = self.search_engine(initial_query, k=5, config=config)
 
-            logger.error(traceback.format_exc())
-            logger.error(f"FactStruct Stage 2 报告生成失败: {str(e)}")
-            final_report = f"报告生成失败: {str(e)}"
+        # --- Step 2: 向量化 ---
+        initial_docs_with_embed = self.embedder.embed_docs(initial_docs)
 
-        memory_entry = MemoryStackEntry(
-            timestamp=datetime.now().isoformat(),
-            action="delegate",
-            agent_type="reporter",
-            content="报告任务: 使用 FactStruct Stage 2 生成报告",
-            result={"final_report": final_report},
+        # --- Step 3: 存入 FactStruct Memory ---
+        self.factstruct_memory.store_docs(initial_docs_with_embed)
+
+        # --- Step 4: 生成初始大纲 ---
+        logger.info("Generating initial outline...")
+        self.outline_root = self.llm_wrapper.generate_initial_outline(
+            query=initial_query,
+            docs=initial_docs_with_embed,
+            central_guidance=central_guidance,
+            replan_result=replan_result,
+            instruction=instruction,
         )
-        self.central_agent.memory_stack.push(memory_entry)
 
-        logger.info("报告生成完成（FactStruct Stage 2），返回中枢Agent")
+        logger.info(f"Generated outline root id: {self.outline_root.id}")
+
+        # --- Step 5: 文档绑定 ---
+        self.factstruct_memory.map_node_to_docs(self.outline_root.id, initial_docs_with_embed)
+
+        # --- Step 6: 日志 ---
+        try:
+            from .integration import outline_node_to_markdown
+            logger.info("Initial Outline:\n"+ outline_node_to_markdown(self.outline_root, include_root=True))
+        except Exception:
+            logger.info(self.outline_root.to_text_tree())
+
+        # --- Step 7: 更新状态并回到 outline agent ---
         return Command(
             update={
-                "messages": [
-                    HumanMessage(
-                        content="报告生成完成（FactStruct Stage 2），返回中枢Agent",
-                        name="reporter",
-                    )
-                ],
-                "final_report": final_report,
-                "current_node": "central_agent",
-                "memory_stack": self.central_agent.memory_stack.to_dict(),
+                "factstruct_outline": self.outline_root,
+                "factstruct_memory":self.factstruct_memory,
+                "initial_docs": initial_docs,
+                "outline_tool_feedback": "Outline initialized successfully.",
             },
-            goto="central_agent",
         )
 
-    @timed_step("execute_sp_planner")
-    def execute_sp_planner(self, state: State, config: RunnableConfig) -> Command:
+    def _tool_expansion(
+        self,
+        decision: OutlineToolDecision,
+        state: State,
+        config: RunnableConfig,
+    ) -> Command:
         """
-        执行任务拆解Agent，负责将复杂任务拆解为可管理的子任务
-
-        Args:
-            state: 当前系统状态
-            config: 运行配置
-
-        Returns:
-            执行结果Command对象
+        扩展现有大纲（Batch-MAB 驱动）
         """
-        logger.info("任务拆解Agent开始执行...")
-
-        delegation_context = state.get("delegation_context", {})
-        task_description = delegation_context.get(
-            "task_description",
-            state.get("user_query", "") + "\n将用户的任务拆解成2-5个子任务",
-        )
-
-        # 收集任务拆解所需上下文
-        context = {
-            "user_query": state.get("user_query", ""),
-            "memory_history": [],  # self.central_agent.memory_stack.get_all(),
-            "task_description": task_description,
-        }
-
-        # 生成任务拆解并处理异常
-        replan_result = "任务拆解失败: 未知错误"
-        try:
-            messages = apply_prompt_template(
-                "replanner", state, extra_context=context
-            )  # 修复：参数顺序
-            llm = get_llm_by_type(AGENT_LLM_MAP.get("replanner", "default"))
-            response = llm.invoke(messages)
-            replan_result = response.content
-            replan_result = (
-                replan_result.replace("```json", "").replace("```", "").strip()
-            )
-
-            logger.debug(f"任务拆解结果: {replan_result}")
-
-            # 解析LLM返回的任务拆解结果
-            import json
-
-            try:
-                response_json = json.loads(replan_result)
-                if isinstance(response_json, list):
-                    response_json = {"DAG": response_json}
-            except json.JSONDecodeError as e:
-                logger.error(f"JSON decode error: {e}")
-                response_json = {"DAG": [(input, input)]}
-            if isinstance(response_json["DAG"], list):
-                new_dag = []
-                for item in response_json["DAG"]:
-                    if isinstance(item, dict):
-                        pairs = list(item.items())
-                        new_dag.append(
-                            (pairs[0][1], pairs[1][1])
-                            if len(pairs) > 1
-                            else (pairs[0][1], pairs[0][1])
-                        )
-                    elif isinstance(item, list) and len(item) > 1:
-                        new_dag.append((item[0], item[1]))
-                    else:
-                        new_dag.append((item, item))
-                response_json["DAG"] = new_dag
-
-            from src.utils.graph_utils import Graph
-
-            graph = Graph()
-            graph.load_dag_from_json(response_json)
-            sorted_nodes = graph.topological_sort()
-            # Generate a unique ID for each input using a hash
-            input_id = hash(input)
-            # replan_result = {"id":input_id,"plans":[{node_id: graph.nodes[node_id].question} for node_id in sorted_nodes],"status":["uncomplete" for node_id in sorted_nodes]}
-            replan_result = {
-                "id": input_id,
-                "plans": [
-                    {node_id: graph.nodes[node_id].question} for node_id in sorted_nodes
-                ],
-            }
-        except Exception as e:
-            logger.error(f"任务拆解Agent执行失败: {str(e)}")
-            replan_result = f"任务拆解失败: {str(e)}"
-
-        # 记录到中枢Agent记忆栈
-        memory_entry = MemoryStackEntry(
-            timestamp=datetime.now().isoformat(),
-            action="delegate",
-            agent_type="replanner",
-            content=f"任务拆解: {task_description}",
-            result={"replan_result": replan_result},
-        )
-        self.central_agent.memory_stack.push(memory_entry)
-
-        logger.info("任务拆解完成，返回中枢Agent")
-        return Command(
-            update={
-                "messages": [
-                    HumanMessage(content="任务拆解完成，返回中枢Agent", name="planner")
-                ],
-                "replan_result": replan_result,
-                "current_node": "central_agent",
-                "memory_stack": self.central_agent.memory_stack.to_dict(),
-            },
-            goto="central_agent",
-        )
+        logger.info(f"Outline Tool: expansion | reasoning={decision.reasoning}")
 
 
-
-    @timed_step("execute_human_feedback")
-    async def execute_human_feedback(self, state: State, config: RunnableConfig) -> Command:
-        stage = state.get("wait_stage", "perception")
-        if stage == "perception":
-            dst_question = state.get("dst_question", "")
-            feedback = interrupt(
-                    "Please Fill the Question.[DST]" + dst_question + "[/DST]"
-                )
-            logger.info(f"用户反馈的DST问题: {feedback}. goto perception node again.")
+        outline_root = state.get("factstruct_outline")
+        memory = state.get("factstruct_memory")
+        #错误排查，防止没初始化
+        if outline_root is None or memory is None:
+            logger.warning("Expansion skipped: outline or memory missing")
             return Command(
                 update={
-                    "hitl_feedback": feedback,
-                    "current_node": "human_feedback",
-                },
-                goto="perception",
-            )
-        elif stage == "outline":
-            outline = state.get("report_outline", "")
-            feedback = interrupt(
-                    "Please Confirm or Edit the Outline.[OUTLINE]"
-                    + outline
-                    + "[/OUTLINE]"
-                )
-            logger.info(f"用户反馈的大纲: {feedback}. goto outline node again.")
-            return Command(
-                update={
-                    "hitl_feedback": feedback,
-                    "current_node": "human_feedback",
-                },
-                goto="outline",
+                    "outline_feedback": "Expansion skipped: outline or memory missing."
+                }
             )
 
-    @timed_step("execute_perception")
-    async def execute_perception(self, state: State, config: RunnableConfig) -> Command:
-        user_query = state.get("user_query", "")
-        # check if the plan is auto accepted
-        perception_llm = get_llm_by_type(AGENT_LLM_MAP.get("perception", "default"))
-        auto_accepted_plan = state.get("auto_accepted_plan", False)
-        skip_perception = state.get("skip_perception", False)
+
+
+        #提取 decision 参数
+        params = decision.params or {}
+        max_iterations = params.get("max_iterations",state.get("factstruct_max_iterations", 4),)
+        batch_size = params.get("batch_size",state.get("factstruct_batch_size", 2),)
+        logger.info(f"Expansion params resolved: max_iterations={max_iterations}, batch_size={batch_size}")
         
-        if skip_perception:
-            logger.info("跳过感知层，直接进入大纲生成")
-            return Command(
-                update={
-                    "messages": [
-                        HumanMessage(
-                            content="感知层已跳过",
-                            name="perception",
-                        )
-                    ],
-                    "user_dst": "",
-                    "current_node": "perception",
-                    "wait_for_user": False,
-                },
-                goto="outline",
-            )
-
-        if auto_accepted_plan:
-            try:
-                # messages = apply_prompt_template("perception", state) + [
-                #     HumanMessage(f"##User Query\n\n{user_query}\n\n")
-                # ]
-                messages = apply_prompt_template("perception", state)
-
-                # logger.debug("messages"+str(messages))
-                response = perception_llm.invoke(messages)
-                dst_question = response.content
-                # logger.debug("dst_question"+str(dst_question))
-                dst_question = repair_json_output(dst_question)
-                logger.info(f"感知层完成，生成DST问题: {dst_question}")
-                return Command(
-                    update={
-                        "dst_question": dst_question,
-                        "wait_stage": "perception",
-                        "current_node": "perception",
-                    },
-                    goto="human_feedback",
-                )
-            except Exception as e:
-                logger.error(f"感知层执行失败: {str(e)}")
-
-        if wait_stage == "perception":
-            feedback = state.get("hitl_feedback", "")
-            dst_question = state.get("dst_question", "")
-            # if the feedback is not accepted, return the planner node
-            if feedback and str(feedback).upper().startswith("[FILLED_QUESTION]"):
-                messages = apply_prompt_template("perception", state) + [
-                    HumanMessage(
-                        f"##User Query\n\n{user_query}\n\n##希望用户回答的问题\n\n{dst_question}\n\n##用户回答的结果\n\n{feedback}\n\n"
-                    )
-                ]
-                # logger.debug("messages"+str(messages))
-                # exit()
-                response = perception_llm.invoke(messages)
-                summary = response.content
-                logger.info(f"感知层完成，收集用户反馈: {summary}")
-
-                return Command(
-                    update={
-                        "messages": [
-                            HumanMessage(
-                                content=f"感知层完成，收集用户反馈: {summary}",
-                                name="perception",
-                            )
-                        ],
-                        "user_dst": summary,
-                        "current_node": "perception",
-                        "wait_stage": "",
-                    },
-                    goto="outline",
-                )
-            elif feedback and str(feedback).upper().startswith("[SKIP]"):
-                logger.info("DST question is skipped by user.")
-                messages.append(
-                    AIMessage(content=f"##LLM DST Question\n\n{dst_question}\n\n")
-                )
-                messages.append(
-                    HumanMessage(
-                        content=f"用户跳过了回答，你可以根据自己的理解进行总结\n\n"
-                    )
-                )
-                response = perception_llm.invoke(messages)
-                summary = response.content
-                return Command(
-                    update={
-                        "messages": [
-                            HumanMessage(
-                                content="DST question is skipped by user.",
-                                name="perception",
-                            )
-                        ],
-                        "user_dst": summary,
-                        "current_node": "perception",
-                        "wait_stage": "",
-                    },
-                    goto="outline",
-                )
-            else:
-                raise TypeError(f"Interrupt value of {feedback} is not supported.")
-
-    @timed_step("execute_outline")
-    async def execute_outline(self, state: State, config: RunnableConfig) -> Command:
-        user_query = state.get("user_query", "")
-        # check if the plan is auto accepted
-        outline_llm = get_llm_by_type(AGENT_LLM_MAP.get("outline", "default"))
-        wait_stage = state.get("wait_stage", "")
-        if wait_stage != "outline":
-            #bg_investigation = search_docs(user_query, top_k=5)
-            bg_investigation = web_search(user_query, top_k=5)
-            user_dst = state.get("user_dst", "")
-            try:
-                messages = [
-                    HumanMessage(
-                        f"##用户原始问题\n\n{user_query}\n\n##用户补充需求\n\n{user_dst}\n\n##可能用到的相关数据\n\n{bg_investigation}\n\n"
-                    )
-                ] + apply_prompt_template("outline", state)
-                response = outline_llm.invoke(messages)
-                outline_response = response.content
-                outline_response = repair_json_output(outline_response)
-                logger.info(f"大纲生成完成: {outline_response}")
-
-            except Exception as e:
-                logger.error(f"大纲生成执行失败: {str(e)}")
-                # 返回最简单的默认大纲
-                import json
-
-                outline_response = json.dumps(
-                    {"title": user_query, "children": []}, ensure_ascii=False
-                )
-
-
-            outline_confirmed = outline_response.strip()
-            logger.info(f"大纲自动确认: {outline_confirmed}")
-
-            return Command(
-                update={
-                    "messages": [
-                        HumanMessage(content=f"大纲确认: {outline_confirmed}", name="outline")
-                    ],
-                    "report_outline": outline_confirmed,
-                    "current_node": "outline",
-                },
-                goto="central_agent",
-            )
-
-
-    @timed_step("execute_outline_factstruct")
-    async def execute_outline_factstruct(self, state: State, config: RunnableConfig) -> Command:
-        """
-        执行大纲子Agent（FactStruct Stage 1）
-
-        基于用户问题和已确认的任务规划，生成或调整报告的大纲结构，
-        并为后续 FactStruct Stage 2 提供结构化 Outline 与 Memory。
-        """
-        logger.info("大纲Agent开始执行（FactStruct Stage 1）...")
-
-        user_query = state.get("user_query", "")
-        user_dst = state.get("user_dst", "")
-        factstruct_outline_dict = state.get("factstruct_outline", None)#如果有的话，后续更改到时候再修
-        factstruct_memory_dict = state.get("factstruct_memory",None)
-        #提取的是 guideline
-        delegation_context = state.get("delegation_context", {})
-        task_description = delegation_context.get("task_description", "未知研究任务")
-        outline_response = "大纲生成失败: 未知错误"
         
-        #这玩意是人工确认 human node的，感觉没啥用，FactStruct 如果配上 Human feedback 才需要这个
-        # auto_accepted_plan = state.get("auto_accepted_plan", False)
-        # if not auto_accepted_plan:
-        #     logger.warning("任务规划未确认，Outline Agent 不执行")
-        #     return Command(
-        #         update={
-        #             "messages": [
-        #                 HumanMessage(
-        #                     content="任务规划尚未确认，跳过大纲生成",
-        #                     name="outline",
-        #                 )
-        #             ],
-        #             "current_node": "central_agent",
-        #         },
-        #         goto="central_agent",
-        #     )
 
         try:
-            replan_result= state.get("replan_result", None)
-            full_query = user_query
-            if user_dst:
-                full_query = f"{user_query}\n\n用户补充需求：{user_dst}"
-
-            # 创建大纲
-            # 扩展大纲
-            # 删减大纲
-            # 字数控制反馈
-            # 使用FactStruct自己的 LLM 来做这个事情。
-            
-            outline_root, memory = run_factstruct_stage1(
-                query=full_query,
-                max_iterations=state.get("factstruct_max_iterations", 4),
-                batch_size=state.get("factstruct_batch_size", 2),
-                task_description=task_description,
-                replan_result=replan_result,
+            # === 调用算法层 ===
+            outline_root, memory = self.batch_mab.run_expansion(
+                outline_root=outline_root,
+                memory=memory,
+                max_iterations=max_iterations,
+                batch_size=batch_size,
                 config=config,
             )
 
-            # 大纲的字数匹配
+            logger.info(
+                f"Outline expanded: {len(outline_root.get_all_nodes())} nodes total"
+            )
+            
+            #暂时在这里放一个大纲字数匹配吧
             total_word_limit = state.get("total_word_limit", 5000)
             if total_word_limit > 0:
                 logger.info(f"检测到字数限制 {total_word_limit}，执行字数规划...")
@@ -1631,51 +489,131 @@ class SubAgentManager:
             factstruct_outline_dict = outline_node_to_dict(outline_root)
             factstruct_memory_dict = memory_to_dict(memory)
 
-            logger.info(
-                f"FactStruct Stage 1 完成: "
-                f"{len(outline_root.get_all_nodes())} 个节点"
+            logger.info(f"FactStruct Stage 1 完成: "f"{len(outline_root.get_all_nodes())} 个节点")
+
+            return Command(
+                update={
+                    "factstruct_outline": outline_root,
+                    "factstruct_memory": memory,
+                    "outline_feedback": "Outline expansion completed successfully.",
+                }
             )
 
         except Exception as e:
             import traceback
-
+            logger.error("Outline expansion failed")
             logger.error(traceback.format_exc())
-            logger.error(f"FactStruct Stage 1 执行失败: {str(e)}")
 
-            outline_response = f"大纲生成失败（FactStruct Stage 1）: {str(e)}"
+            return Command(
+                update={
+                    "outline_feedback": f"Outline expansion failed: {str(e)}"
+                }
+            )
 
-        # === 写入 central agent memory stack ===
-        memory_entry = MemoryStackEntry(
-            timestamp=datetime.now().isoformat(),
-            action="delegate",
-            agent_type="outline",
-            content="大纲任务: 使用 FactStruct Stage 1 生成或调整报告大纲",
-            result={
-                "outline": outline_response,
-                "factstruct_outline": factstruct_outline_dict,
-            },
-        )
-        self.central_agent.memory_stack.push(memory_entry)
 
-        logger.info("大纲生成完成（FactStruct Stage 1），返回中枢Agent")
 
+    def _tool_finish(
+        self,
+        decision: OutlineToolDecision,
+        state: State,
+        config: RunnableConfig,
+    ) -> Command:
+        """
+        完成 OutlineAgent 执行，生成总结性反馈返回给 CentralAgent
+        """
+        logger.info(f"Outline Tool: finish | reasoning={decision.reasoning}")
+
+        outline_root = state.get("factstruct_outline")
+        memory = state.get("factstruct_memory")
+        total_word_limit = state.get("total_word_limit")
+
+        # === 兜底处理 ===
+        if outline_root is None:
+            logger.warning("Finish called but outline is missing")
+
+            return Command(
+                update={
+                    "report_outline": "大纲未成功生成（OutlineAgent 在 finish 前缺失 outline）",
+                    "outline_feedback": "Finish reached without valid outline.",
+                }
+            )
+
+        # === 基本结构信息 ===
+        node_count = len(outline_root.get_all_nodes())
+        leaf_count = len(outline_root.get_leaf_nodes())
+
+        # === 可读大纲输出（给 Central / Reporter 用）===
+        try:
+            outline_text = outline_root.to_text_tree(
+                include_word_limit=bool(total_word_limit)
+            )
+        except Exception:
+            outline_text = outline_root.to_text_tree()
+
+        # === 构建给 LLM 的总结 prompt（可选，但很有价值）===
+        try:
+            llm = get_llm_by_type(
+                AGENT_LLM_MAP.get("outline", "default")
+            )
+
+            context_lines = []
+
+            if state.get("initial_query"):
+                context_lines.append(f"用户原始问题：{state.get('initial_query')}")
+
+            if state.get("central_guidance"):
+                context_lines.append(f"中枢策略指导：{state.get('central_guidance')}")
+
+            if total_word_limit:
+                context_lines.append(f"目标总字数限制：{total_word_limit}")
+
+            context_block = "\n".join(context_lines) if context_lines else "（无额外上下文）"
+
+            summary_prompt = [
+                {
+                    "role": "system",
+                    "content": (
+                        "你是一个研究大纲评估助手，"
+                        "你的任务不是生成内容，而是判断当前大纲是否已经达到"
+                        "可以进入正式内容生成阶段的结构成熟度。"
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": (
+                        f"{context_block}\n\n"
+                        f"=== 当前大纲结构指标 ===\n"
+                        f"- 节点总数: {node_count}\n"
+                        f"- 叶子节点数: {leaf_count}\n\n"
+                        f"=== 当前大纲 ===\n"
+                        f"{outline_text}\n\n"
+                        "请基于【用户问题】和【中枢策略指导】，判断该大纲：\n"
+                        "1. 是否覆盖了用户问题的主要方面\n"
+                        "2. 结构层级是否清晰、粒度是否合适\n"
+                        "3. 是否适合在当前字数限制下展开正文\n\n"
+                        "请给出一句简洁的总结性判断（不超过 2 句话），"
+                        "用于上游 Agent 的决策参考。"
+                    ),
+                },
+            ]
+
+
+            llm_response = llm.invoke(summary_prompt)
+            finish_summary = llm_response.content.strip()
+
+        except Exception as e:
+            logger.warning(f"Finish summary LLM failed: {e}")
+            finish_summary = (
+                "大纲结构已生成，节点层级完整，可进入内容生成阶段。"
+            )
+
+        # === 写回 state（这是 CentralAgent 最关心的部分）===
         return Command(
             update={
-                "messages": [
-                    HumanMessage(
-                        content="大纲生成完成（FactStruct Stage 1），返回中枢Agent",
-                        name="outline",
-                    )
-                ],
-                "report_outline": outline_response,
-                "factstruct_outline": factstruct_outline_dict,
-                "factstruct_memory": factstruct_memory_dict,
-                "current_node": "central_agent",
-                "memory_stack": self.central_agent.memory_stack.to_dict(),
-            },
-            goto="central_agent",
+                "report_outline": outline_text,              # ✅ 给 reporter / central
+                "outline_feedback": finish_summary,           # ✅ 决策级总结
+            }
         )
-
 
 
 

@@ -44,6 +44,7 @@ class FactStructLLMWrapper:
         docs: List[FactStructDocument],
         central_guidance=None,
         replan_result=None,
+        instruction=None,
     ) -> OutlineNode:
         """
         生成初始大纲
@@ -83,6 +84,9 @@ class FactStructLLMWrapper:
                 "当前的计划，或大纲为\n"
             )
             parts.append( replan_result + "\n")
+        if instruction:
+            parts.append("## 大纲智能体指导为\n")
+            parts.append( instruction + "\n")
         output_format="""
         ## 要求
         1. 生成一个层次化的研究大纲（建议 2-3 层）
