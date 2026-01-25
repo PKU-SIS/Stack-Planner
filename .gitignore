@@ -1,4 +1,5 @@
 
+
 test_llm.py
 ./*.txt
 CHANGELOG.md
@@ -55,3 +56,4 @@ FINAL_FIX_REPORT.md
 fix_execution.log
 
 test_llm.py
+graceful-mapping-gizmo.md

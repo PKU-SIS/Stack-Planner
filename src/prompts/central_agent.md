@@ -135,6 +135,54 @@ If the **current action** is **Decision**, determine the next step as follows.
 }
 ```
 
+### 🔴 CRITICAL: Human Agent Delegation Rule
+
+**When any agent returns with `need_human_interaction: true`, you MUST immediately delegate to the Human Agent.**
+
+Check the `human_interaction_type` field and delegate accordingly:
+
+| Interaction Type | When to Use | Example |
+|-----------------|-------------|----------|
+| `form_filling` | After perception agent returns with form | Collecting user requirements |
+| `outline_confirmation` | After outline agent returns with outline | Getting user approval on structure |
+| `report_feedback` | After reporter agent returns with report | Collecting feedback on final content |
+| `proactive_question` | When you need more information | Asking clarifying questions |
+
+**DELEGATE to Human Agent Example:**
+
+```json
+{
+  "action": "delegate",
+  "reasoning": "Perception agent 已生成表单，需要人类填写后才能继续",
+  "params": {
+    "agent_type": "human",
+    "task_description": "请人类填写表单",
+    "interaction_type": "form_filling"
+  },
+  "instruction": "委派给 Human Agent 收集人类输入",
+  "locale": "zh-CN"
+}
+```
+
+**Proactive Questioning Example:**
+
+```json
+{
+  "action": "delegate",
+  "reasoning": "当前信息不足，需要向用户询问具体问题",
+  "params": {
+    "agent_type": "human",
+    "task_description": "向用户询问关于XXX的具体信息",
+    "interaction_type": "proactive_question",
+    "question": "请问您希望报告重点关注哪些方面？"
+  },
+  "instruction": "委派给 Human Agent 进行主动提问",
+  "locale": "zh-CN"
+}
+```
+
+---
+
 ### Decision Requirements
 
 While the step is **decision**, you must follow these requirements and return results in JSON format with the following fields:
@@ -143,17 +191,17 @@ While the step is **decision**, you must follow these requirements and return re
 1. Analyze the current state and select the most appropriate action from available options.
 2. Provide a clear reasoning for the decision, justifying why the action is optimal.
 3. If choosing DELEGATE, specify the sub-Agent type and task instructions.
-
-4. Please remember to check if report is generated before you decide to FINISH the task.
-5. **You must carefully check if the current information is sufficient to support the current decision-making requirements**. Regardless of whether the information is sufficient or not, you must provide detailed reasoning. If the information is insufficient, you must take appropriate actions to supplement it (for example, by delegating to a sub-agent capable of information gathering); if the information is sufficient, you must provide detailed reasoning explaining why the current information supports the decision.
-6. **[CRITICAL - MANDATORY STEP] After outline confirmation, you MUST delegate to researcher agent**:
+4. **🔴 CRITICAL: Check `need_human_interaction` field**: If it is `true`, you MUST delegate to the Human Agent with the correct `interaction_type`. Do NOT skip this step.
+5. Please remember to check if report is generated before you decide to FINISH the task.
+6. **You must carefully check if the current information is sufficient to support the current decision-making requirements**. Regardless of whether the information is sufficient or not, you must provide detailed reasoning. If the information is insufficient, you must take appropriate actions to supplement it (for example, by delegating to a sub-agent capable of information gathering); if the information is sufficient, you must provide detailed reasoning explaining why the current information supports the decision.
+7. **[CRITICAL - MANDATORY STEP] After outline confirmation, you MUST delegate to researcher agent**:
    * **This is NOT optional** - confirming the outline does NOT mean you have sufficient information for content generation.
    * **Outline ≠ Content**: An outline only defines structure; you still need substantial research data to fill each section.
    * **ALWAYS delegate to researcher agent immediately after outline is confirmed** to gather comprehensive information for each outline section.
    * **DO NOT skip this step** - proceeding directly to report generation without research will result in shallow, low-quality content.
    * **Checklist before proceeding past outline**: Ask yourself - "Do I have detailed research data for EVERY section in the outline?" If the answer is NO, you MUST delegate to researcher agent first.
-7. **When handling user modification feedback (e.g., [CONTENT_MODIFY])**: Any modification request is ultimately aimed at improving the final document. After completing intermediate steps (such as gathering more information via researcher), you MUST delegate to the reporter agent to regenerate the document. Do not consider the task complete until the document has been regenerated with the new information or changes incorporated.
-8. Return results in JSON format with the following fields:
+8. **When handling user modification feedback (e.g., [CONTENT_MODIFY])**: Any modification request is ultimately aimed at improving the final document. After completing intermediate steps (such as gathering more information via researcher), you MUST delegate to the reporter agent to regenerate the document. Do not consider the task complete until the document has been regenerated with the new information or changes incorporated.
+9. Return results in JSON format with the following fields:
 
    * action: Type of action (required)
    * reasoning: Justification for the decision (required)

@@ -10,7 +10,7 @@ class SubAgentType(Enum):
     PLANNER = "replanner"  # 负责复杂任务分解和规划
     OUTLINE = "outline"  # 负责大纲生成
     PERCEPTION = "perception"  # 负责表单生成
-    # HUMAN="human" #负责人类节点生成，这个暂时还没实现
+    HUMAN = "human"  # 负责与人类的交互（表单填写、大纲确认、报告反馈、主动提问）
 
 
 from src.graph.sp_nodes import (
@@ -23,6 +23,7 @@ from src.graph.sp_nodes import (
     outline_node,
     perception_node,
     human_feedback_node,
+    human_agent_node,
 )
 
 # 定义可用的子Agent列表，绑定名称与节点函数
@@ -76,6 +77,11 @@ sub_agents_sp_xxqg = [
         "name": SubAgentType.REPORTER.value,
         "description": "Result organization and report generation",
         "node": reporter_xxqg_node,
+    },
+    {
+        "name": SubAgentType.HUMAN.value,
+        "description": "Handle all human interactions including form filling, outline confirmation, report feedback, and proactive questioning. This agent manages the interrupt mechanism, ensures human feedback is properly collected, and ALWAYS prioritizes human input above all other considerations. 🔴 Human feedback has the HIGHEST priority.",
+        "node": human_agent_node,
     },
 ]
 

@@ -40,6 +40,33 @@ async def central_agent_node(state: State, config: RunnableConfig) -> Command:
     _check_agents_initialized()
     logger.info("中枢Agent节点激活")
 
+    # 🔴 强制检查：如果需要人类交互，直接委派给 human agent，绕过 LLM 决策
+    need_human_interaction = state.get("need_human_interaction", False)
+    human_interaction_type = state.get("human_interaction_type", "")
+    if need_human_interaction and human_interaction_type:
+        logger.info(
+            f"🔴 强制委派给 human agent: interaction_type={human_interaction_type}"
+        )
+        from langchain_core.messages import AIMessage
+
+        return Command(
+            update={
+                "messages": [
+                    AIMessage(
+                        content=f"强制委派给 human agent 进行 {human_interaction_type}",
+                        name="central_delegate",
+                    )
+                ],
+                "delegation_context": {
+                    "task_description": "收集人类反馈",
+                    "agent_type": "human",
+                    "interaction_type": human_interaction_type,
+                },
+                "current_node": "central_agent",
+            },
+            goto="human",
+        )
+
     # 执行决策流程
     decision = global_central_agent.make_decision(state, config)
     return global_central_agent.execute_action(decision, state, config)
@@ -94,6 +121,23 @@ async def outline_node(state: State, config: RunnableConfig) -> Command:
 
 
 async def human_feedback_node(state: State, config: RunnableConfig) -> Command:
-    """人工反馈节点处理函数"""
+    """人工反馈节点处理函数（已废弃，保留用于兼容）"""
     _check_agents_initialized()
     return await sub_agent_manager.execute_human_feedback(state, config)
+
+
+async def human_agent_node(state: State, config: RunnableConfig) -> Command:
+    """
+    Human Agent 节点处理函数
+
+    专门负责与人类的交互，包括：
+    - form_filling: 表单填写（perception 阶段）
+    - outline_confirmation: 大纲确认（outline 阶段）
+    - report_feedback: 报告反馈（reporter 阶段）
+    - proactive_question: 主动提问（central agent 发起）
+
+    🔴 核心原则：人类反馈优先级最高
+    """
+    _check_agents_initialized()
+    logger.info("Human Agent 节点激活")
+    return await sub_agent_manager.execute_human(state, config)

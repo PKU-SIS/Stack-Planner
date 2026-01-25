@@ -416,26 +416,25 @@ class SubAgentManager:
 
     # 风格约束定义（类级别常量，供 reporter 相关方法共用）
     ROLE_CONSTRAINTS = {
-#         "鲁迅": """我希望生成的文字具备鲁迅式风格，语言尖锐、冷峻、带讽刺，但保持自然白话表达，可以使用少量文言。
-# 标题要求：文章必须包含一个标题，标题应简短有力、富隐喻或冷讽意味，可为一句或两句并列句。标题风格应与正文一致，具有鲁迅式的锋芒与余味，不得中性或平淡。标题必须使用 Markdown 一级标题格式呈现（即 # 标题），不得使用书名号、引号、括号等符号。
-# 重要禁止项：文中不要有"鲁迅"这个词，严禁在生成的文本中出现任何提及或引用"鲁迅"、"鲁迅先生"、"鲁迅笔下"、"他的作品"、"他的笔下的人物"等字眼的语句。文本风格应是直接的、沉浸式的鲁迅式表达，而非对鲁迅风格的引用或评论。此禁令在任何标题或正文中均适用，绝不可出现任何直接或间接的提及。
-# 风格应用强制要求：请确保文章的每一个自然段，乃至每一句的行文，都贯彻鲁迅式用词、句式和节奏。特别是在文章的中间部分，必须维持并强化这种尖锐、冷峻的语感。全篇保持一致的鲁迅式节奏与语气，特别在中段保持最高的语言张力与思想锋芒。
-# 正文开头必须紧接标题生成一个呼语（如'诸君！'），用于称呼听众。
-
-# 句式与节奏：
-# 采用短句、并列句和重复句（如"不是为了……，而是为了……"，"我们不能……再……"，"然而……"）；
-# 逻辑紧凑，节奏鲜明，读来有推力；
-# 可以用反问、讽刺、比喻、小见大，表达社会或人性的荒谬；
-# 偶尔自嘲或旁观者冷笑，保持"孤独知识分子"的视角。
-# 可出现明显的鲁迅式呼喊与强调，如"我要说的是……"，"我们不能……"，或"人类的悲欢并不相通"式的冷峻洞察。
-# 情感与气质：
-# 理性中带愤怒与冷漠，情感压抑而清醒；
-# 既有悲悯，也有讽刺与愤世嫉俗感；
-# 文字有"铁屋呐喊"的张力，让读者感受到现实的紧迫与不容回避。
-# 目标效果：
-# 生成文字中，应多出现类似"我今日站在这里，不是为了说些空话，而是为了……"、"我们不能让那些已经站起来的人，再倒下去"这种短句反复、强调现实责任与道德选择的表达；
-# 用词可带有鲁迅的语感，如"诸君""呐喊""罢了""然而""我想"之类。
-# 保证整体风格既现代白话，又显鲁迅式锋利、冷峻、理性批判。""",
+        #         "鲁迅": """我希望生成的文字具备鲁迅式风格，语言尖锐、冷峻、带讽刺，但保持自然白话表达，可以使用少量文言。
+        # 标题要求：文章必须包含一个标题，标题应简短有力、富隐喻或冷讽意味，可为一句或两句并列句。标题风格应与正文一致，具有鲁迅式的锋芒与余味，不得中性或平淡。标题必须使用 Markdown 一级标题格式呈现（即 # 标题），不得使用书名号、引号、括号等符号。
+        # 重要禁止项：文中不要有"鲁迅"这个词，严禁在生成的文本中出现任何提及或引用"鲁迅"、"鲁迅先生"、"鲁迅笔下"、"他的作品"、"他的笔下的人物"等字眼的语句。文本风格应是直接的、沉浸式的鲁迅式表达，而非对鲁迅风格的引用或评论。此禁令在任何标题或正文中均适用，绝不可出现任何直接或间接的提及。
+        # 风格应用强制要求：请确保文章的每一个自然段，乃至每一句的行文，都贯彻鲁迅式用词、句式和节奏。特别是在文章的中间部分，必须维持并强化这种尖锐、冷峻的语感。全篇保持一致的鲁迅式节奏与语气，特别在中段保持最高的语言张力与思想锋芒。
+        # 正文开头必须紧接标题生成一个呼语（如'诸君！'），用于称呼听众。
+        # 句式与节奏：
+        # 采用短句、并列句和重复句（如"不是为了……，而是为了……"，"我们不能……再……"，"然而……"）；
+        # 逻辑紧凑，节奏鲜明，读来有推力；
+        # 可以用反问、讽刺、比喻、小见大，表达社会或人性的荒谬；
+        # 偶尔自嘲或旁观者冷笑，保持"孤独知识分子"的视角。
+        # 可出现明显的鲁迅式呼喊与强调，如"我要说的是……"，"我们不能……"，或"人类的悲欢并不相通"式的冷峻洞察。
+        # 情感与气质：
+        # 理性中带愤怒与冷漠，情感压抑而清醒；
+        # 既有悲悯，也有讽刺与愤世嫉俗感；
+        # 文字有"铁屋呐喊"的张力，让读者感受到现实的紧迫与不容回避。
+        # 目标效果：
+        # 生成文字中，应多出现类似"我今日站在这里，不是为了说些空话，而是为了……"、"我们不能让那些已经站起来的人，再倒下去"这种短句反复、强调现实责任与道德选择的表达；
+        # 用词可带有鲁迅的语感，如"诸君""呐喊""罢了""然而""我想"之类。
+        # 保证整体风格既现代白话，又显鲁迅式锋利、冷峻、理性批判。""",
         "鲁迅": """我希望生成的文字具备鲁迅式语言风格，但精神气质必须是清醒、克制、面向行动与建设的，而非愤世嫉俗或情绪宣泄，但保持自然白话表达，可以使用少量文言。
 标题要求：文章必须包含一个标题，标题应简短有力、富隐喻或冷讽意味，可为一句或两句并列句。标题风格应与正文一致，具有鲁迅式的锋芒与余味，不得中性或平淡。标题必须使用 Markdown 一级标题格式呈现（即 # 标题），不得使用书名号、引号、括号等符号。
 重要禁止项：文中不要有"鲁迅"这个词，严禁在生成的文本中出现任何提及或引用"鲁迅"、"鲁迅先生"、"鲁迅笔下"、"他的作品"、"他的笔下的人物"等字眼的语句。文本风格应是直接的、沉浸式的鲁迅式表达，而非对鲁迅风格的引用或评论。此禁令在任何标题或正文中均适用，绝不可出现任何直接或间接的提及。
@@ -596,8 +595,11 @@ class SubAgentManager:
     def execute_xxqg_reporter(self, state: State, config: RunnableConfig) -> Command:
         """
         执行报告Agent，负责结果整理与报告生成。
-        使用 wait_stage 模式：首次进入生成报告后跳转到 human_feedback，
-        从 human_feedback 返回后处理用户反馈。
+
+        新工作流（Human Agent 设计）：
+        1. 生成报告后返回 central_agent
+        2. 设置 need_human_interaction=True，让 central_agent 委派给 human agent
+        3. human agent 收集人类反馈后，central_agent 继续处理
 
         Args:
             state: 当前系统状态
@@ -614,87 +616,166 @@ class SubAgentManager:
         # 直接从 state 获取风格（已在入口处提取并存储）
         current_style = state.get("current_style", "")
 
-        wait_stage = state.get("wait_stage", "")
-        if wait_stage != "reporter":
-            # 首次进入：生成报告
-            logger.info(f"使用风格 '{current_style}' 生成报告...")
-            final_report = self._generate_report_with_style(state, current_style)
+        # 检查是否已有人类反馈（用于处理风格切换等）
+        # 只处理与报告相关的反馈：[CHANGED_STYLE], [SKIP], [END], [FINISH], [CONTENT_MODIFY]
+        hitl_feedback = state.get("hitl_feedback", "")
+        feedback_content = str(hitl_feedback).upper() if hitl_feedback else ""
+        is_report_feedback = feedback_content.startswith(
+            ("[CHANGED_STYLE]", "[SKIP]", "[END]", "[FINISH]", "[CONTENT_MODIFY]")
+        )
 
-            # 记录到中枢Agent记忆栈
-            memory_entry = MemoryStackEntry(
-                timestamp=datetime.now().isoformat(),
-                action="delegate",
-                agent_type="reporter",
-                content=f"报告任务: {task_description}，风格: {current_style}",
-                result={"final_report": final_report},
-            )
-            self.central_agent.memory_stack.push(memory_entry)
-
-            # 跳转到 human_feedback 节点等待用户反馈
-            logger.info("报告生成完成，跳转到 human_feedback 节点等待用户反馈")
-            return Command(
-                update={
-                    "final_report": final_report,
-                    "original_report": final_report,  # 保存首次生成的报告作为参考
-                    "current_style": current_style,
-                    "wait_stage": "reporter",
-                    "current_node": "reporter",
-                },
-                goto="human_feedback",
-            )
-
-        # 从 human_feedback 返回：处理用户反馈
-        if wait_stage == "reporter":
-            feedback = state.get("hitl_feedback", "")
+        if (
+            hitl_feedback
+            and state.get("human_interaction_type") == ""
+            and is_report_feedback
+        ):
+            feedback_content = str(hitl_feedback)  # 恢复原始大小写
             final_report = state.get("final_report", "")
-            current_style = state.get("current_style", "")
 
-            if feedback and str(feedback).upper().startswith("[CHANGED_STYLE]"):
-                # 解析新风格，清空 wait_stage 后重新进入 reporter 节点生成报告
-                # 提取风格名称：取第一个空格或换行之前的内容，避免客户端附带多余内容
-                raw_style = str(feedback)[len("[CHANGED_STYLE]") :].strip()
-                # 风格名称只取第一部分（空格、换行、[STYLE_ROLE] 之前的内容）
+            if feedback_content.upper().startswith("[CHANGED_STYLE]"):
+                # 解析新风格，重新生成报告
+                raw_style = feedback_content[len("[CHANGED_STYLE]") :].strip()
                 new_style = raw_style.split()[0] if raw_style.split() else raw_style
-                # 如果风格名称中包含 [STYLE_ROLE]，截断它
                 if "[STYLE_ROLE]" in new_style:
                     new_style = new_style.split("[STYLE_ROLE]")[0]
                 new_style = new_style.strip()
                 logger.info(f"用户请求切换风格: {current_style} -> {new_style}")
 
-                # 只更新 current_style，不再修改 user_query
+                # 使用新风格重新生成报告
+                state_copy = dict(state)
+                state_copy["current_style"] = new_style
+                new_report = self._generate_report_with_style(state_copy, new_style)
+
+                # 返回 central_agent，让其再次委派给 human agent
                 return Command(
                     update={
+                        "messages": [
+                            HumanMessage(
+                                content=f"报告已使用 {new_style} 风格重新生成",
+                                name="reporter",
+                            )
+                        ],
+                        "final_report": new_report,
                         "current_style": new_style,
-                        "wait_stage": "",  # 清空 wait_stage，下次进入时重新生成报告
-                        "current_node": "reporter",
+                        "current_node": "central_agent",
+                        "need_human_interaction": True,  # 继续需要人类交互
+                        "human_interaction_type": "report_feedback",
+                        "hitl_feedback": "",  # 清空反馈
                     },
-                    goto="reporter",
+                    goto="central_agent",
                 )
-            elif feedback and str(feedback).upper().startswith("[SKIP]"):
-                # 用户跳过，正常结束
-                logger.info("用户跳过风格切换，报告生成完成")
-            elif feedback and str(feedback).upper().startswith("[END]"):
-                # 用户跳过，正常结束
-                logger.info("用户跳过风格切换，报告生成完成")
+            elif (
+                feedback_content.upper().startswith("[SKIP]")
+                or feedback_content.upper().startswith("[END]")
+                or feedback_content.upper().startswith("[FINISH]")
+            ):
+                # 用户确认完成
+                logger.info("用户确认报告，报告生成完成")
+                return Command(
+                    update={
+                        "messages": [
+                            HumanMessage(
+                                content="报告生成完成，返回中枢Agent", name="reporter"
+                            )
+                        ],
+                        "final_report": final_report,
+                        "current_node": "central_agent",
+                        "need_human_interaction": False,
+                        "human_interaction_type": "",
+                        "memory_stack": self.central_agent.memory_stack.to_dict(),
+                    },
+                    goto="central_agent",
+                )
+            elif feedback_content.upper().startswith("[CONTENT_MODIFY]"):
+                # 内容修改请求，交由 central_agent 处理
+                modify_request = feedback_content[len("[CONTENT_MODIFY]") :].strip()
+                logger.info(f"用户请求内容修改: {modify_request}")
+
+                # 从 state 中恢复 memory_stack
+                state_memory_stack = state.get("memory_stack")
+                if state_memory_stack:
+                    self.central_agent.memory_stack.load_from_dict(state_memory_stack)
+
+                memory_entry = MemoryStackEntry(
+                    timestamp=datetime.now().isoformat(),
+                    action="human_feedback",
+                    content=f"用户对报告的修改意见: {modify_request}",
+                    result={
+                        "feedback_type": "content_modify",
+                        "request": modify_request,
+                    },
+                )
+                self.central_agent.memory_stack.push(memory_entry)
+
+                return Command(
+                    update={
+                        "messages": [
+                            HumanMessage(
+                                content=f"用户对报告的修改意见: {modify_request}",
+                                name="human_feedback",
+                            )
+                        ],
+                        "hitl_feedback": feedback_content,
+                        "current_node": "central_agent",
+                        "memory_stack": self.central_agent.memory_stack.to_dict(),
+                        "need_human_interaction": False,
+                        "human_interaction_type": "",
+                    },
+                    goto="central_agent",
+                )
             else:
                 # 其他反馈，正常结束
-                logger.info(f"收到其他反馈: {feedback}，报告生成完成")
+                logger.info(f"收到其他反馈: {feedback_content}，报告生成完成")
+                return Command(
+                    update={
+                        "messages": [
+                            HumanMessage(
+                                content="报告生成完成，返回中枢Agent", name="reporter"
+                            )
+                        ],
+                        "final_report": final_report,
+                        "current_node": "central_agent",
+                        "need_human_interaction": False,
+                        "human_interaction_type": "",
+                        "memory_stack": self.central_agent.memory_stack.to_dict(),
+                    },
+                    goto="central_agent",
+                )
 
-            logger.info("报告生成完成，返回中枢Agent")
-            return Command(
-                update={
-                    "messages": [
-                        HumanMessage(
-                            content="报告生成完成，返回中枢Agent", name="reporter"
-                        )
-                    ],
-                    "final_report": final_report,
-                    "current_node": "central_agent",
-                    "wait_stage": "",
-                    "memory_stack": self.central_agent.memory_stack.to_dict(),
-                },
-                goto="central_agent",
-            )
+        # 第一次调用：生成报告
+        logger.info(f"使用风格 '{current_style}' 生成报告...")
+        final_report = self._generate_report_with_style(state, current_style)
+
+        # 记录到中枢Agent记忆栈
+        memory_entry = MemoryStackEntry(
+            timestamp=datetime.now().isoformat(),
+            action="delegate",
+            agent_type="reporter",
+            content=f"报告任务: {task_description}，风格: {current_style}",
+            result={"final_report": final_report},
+        )
+        self.central_agent.memory_stack.push(memory_entry)
+
+        # 返回 central_agent，设置标记让其委派给 human agent
+        logger.info("报告生成完成，返回 central_agent 等待委派给 human agent")
+        return Command(
+            update={
+                "messages": [
+                    HumanMessage(
+                        content=f"报告已生成，需要人类确认",
+                        name="reporter",
+                    )
+                ],
+                "final_report": final_report,
+                "original_report": final_report,  # 保存首次生成的报告作为参考
+                "current_style": current_style,
+                "current_node": "central_agent",
+                "need_human_interaction": True,  # 🔴 标记需要人类交互
+                "human_interaction_type": "report_feedback",  # 交互类型：报告反馈
+                "memory_stack": self.central_agent.memory_stack.to_dict(),
+            },
+            goto="central_agent",  # 返回 central_agent，由其委派给 human agent
+        )
 
     @timed_step("execute_sp_planner")
     def execute_sp_planner(self, state: State, config: RunnableConfig) -> Command:
@@ -891,51 +972,163 @@ class SubAgentManager:
                     goto="reporter",
                 )
 
+    @timed_step("execute_human")
+    async def execute_human(self, state: State, config: RunnableConfig) -> Command:
+        """
+        执行 Human Agent，负责与人类的交互
+
+        🔴 核心原则：人类反馈优先级最高
+
+        根据 delegation_context 中的 interaction_type 决定交互方式：
+        - form_filling: 展示表单，等待人类填写（perception 阶段）
+        - outline_confirmation: 展示大纲，等待人类确认/修改（outline 阶段）
+        - report_feedback: 展示报告，等待人类反馈（reporter 阶段）
+        - proactive_question: 主动向人类提问（central agent 发起）
+
+        Args:
+            state: 当前系统状态
+            config: 运行配置
+
+        Returns:
+            执行结果Command对象
+        """
+        logger.info("Human Agent 开始执行...")
+
+        # 从 state 中恢复 memory_stack
+        state_memory_stack = state.get("memory_stack")
+        if state_memory_stack:
+            self.central_agent.memory_stack.load_from_dict(state_memory_stack)
+
+        delegation_context = state.get("delegation_context", {})
+        interaction_type = delegation_context.get("interaction_type", "")
+
+        # 根据交互类型获取需要展示给人类的内容
+        if interaction_type == "form_filling":
+            # 表单填写：从 state 获取 dst_question
+            # 使用 [DST] 标签以兼容 server 层的解析逻辑 (app.py:438)
+            content_to_show = state.get("dst_question", "")
+            feedback = interrupt(
+                f"Please Fill the Question.[DST]{content_to_show}[/DST]"
+            )
+            logger.info(f"用户填写的表单: {feedback}")
+
+        elif interaction_type == "outline_confirmation":
+            # 大纲确认：从 state 获取 report_outline
+            content_to_show = state.get("report_outline", "")
+            feedback = interrupt(
+                f"Please Confirm or Edit the Outline.[OUTLINE]{content_to_show}[/OUTLINE]"
+            )
+            logger.info(f"用户确认的大纲: {feedback}")
+
+        elif interaction_type == "report_feedback":
+            # 报告反馈：从 state 获取 final_report
+            content_to_show = state.get("final_report", "")
+            feedback = interrupt(
+                f"Report generated. You can change style or finish.[REPORT]{content_to_show}[/REPORT]"
+            )
+            logger.info(f"用户对报告的反馈: {feedback}")
+
+        elif interaction_type == "proactive_question":
+            # 主动提问：从 delegation_context 获取问题
+            question = delegation_context.get(
+                "question", delegation_context.get("task_description", "")
+            )
+            feedback = interrupt(
+                f"Additional information needed.[QUESTION]{question}[/QUESTION]"
+            )
+            logger.info(f"用户回答的问题: {feedback}")
+
+        else:
+            # 默认处理：使用 task_description 作为提示
+            content_to_show = delegation_context.get("task_description", "")
+            feedback = interrupt(
+                f"Please provide feedback.[CONTENT]{content_to_show}[/CONTENT]"
+            )
+            logger.info(f"用户反馈: {feedback}")
+
+        # 🔴 人类反馈优先级最高：将反馈记录到记忆栈并标记为高优先级
+        memory_entry = MemoryStackEntry(
+            timestamp=datetime.now().isoformat(),
+            action="human_feedback",
+            agent_type="human",
+            content=f"🔴 CRITICAL HUMAN FEEDBACK [{interaction_type}]: {feedback}",
+            result={
+                "feedback_type": interaction_type,
+                "feedback_content": str(feedback),
+                "priority": "HIGHEST",  # 标记为最高优先级
+            },
+        )
+        self.central_agent.memory_stack.push(memory_entry)
+
+        # 根据交互类型更新相应的 state 字段
+        update_dict = {
+            "messages": [
+                HumanMessage(
+                    content=f"🔴 Human feedback received [{interaction_type}]: {feedback}",
+                    name="human",
+                )
+            ],
+            "hitl_feedback": feedback,
+            "current_node": "central_agent",
+            "memory_stack": self.central_agent.memory_stack.to_dict(),
+            "need_human_interaction": False,  # 重置标记
+            "human_interaction_type": "",  # 重置交互类型
+        }
+
+        # 根据交互类型，将反馈内容存入对应的 state 字段
+        if interaction_type == "form_filling":
+            update_dict["user_dst"] = str(feedback)
+        elif interaction_type == "outline_confirmation":
+            # 如果用户确认了大纲，保持 report_outline 不变
+            # 如果用户修改了大纲，更新 report_outline
+            if feedback and not str(feedback).upper().startswith("[CONFIRMED"):
+                update_dict["report_outline"] = str(feedback)
+
+        logger.info("Human Agent 完成，返回中枢Agent")
+        return Command(
+            update=update_dict,
+            goto="central_agent",
+        )
+
     @timed_step("execute_perception")
     async def execute_perception(self, state: State, config: RunnableConfig) -> Command:
+        """
+        执行感知层Agent，负责生成表单供人类填写
+
+        新工作流（Human Agent 设计）：
+        1. 生成表单后返回 central_agent
+        2. 设置 need_human_interaction=True，让 central_agent 委派给 human agent
+        3. human agent 收集人类反馈后，central_agent 继续 SOP
+
+        Args:
+            state: 当前系统状态
+            config: 运行配置
+
+        Returns:
+            执行结果Command对象
+        """
         user_query = state.get("user_query", "")
-        # check if the plan is auto accepted
         perception_llm = get_llm_by_type(AGENT_LLM_MAP.get("perception", "default"))
-        wait_stage = state.get("wait_stage", "")
-        if wait_stage != "perception":
-            try:
-                # messages = apply_prompt_template("perception", state) + [
-                #     HumanMessage(f"##User Query\n\n{user_query}\n\n")
-                # ]
-                messages = apply_prompt_template("perception", state)
 
-                # logger.debug("messages"+str(messages))
-                response = perception_llm.invoke(messages)
-                dst_question = response.content
-                # logger.debug("dst_question"+str(dst_question))
-                dst_question = repair_json_output(dst_question)
-                logger.info(f"感知层完成，生成DST问题: {dst_question}")
-                return Command(
-                    update={
-                        "dst_question": dst_question,
-                        "wait_stage": "perception",
-                        "current_node": "perception",
-                    },
-                    goto="human_feedback",
-                )
-            except Exception as e:
-                logger.error(f"感知层执行失败: {str(e)}")
-
-        if wait_stage == "perception":
-            feedback = state.get("hitl_feedback", "")
+        # 检查是否已有人类反馈（第二次调用，用于处理反馈）
+        hitl_feedback = state.get("hitl_feedback", "")
+        if hitl_feedback and state.get("human_interaction_type") == "":
+            # 已收到人类反馈，进行总结处理
             dst_question = state.get("dst_question", "")
-            # if the feedback is not accepted, return the planner node
-            if feedback and str(feedback).upper().startswith("[FILLED_QUESTION]"):
+            feedback_content = str(hitl_feedback)
+
+            if feedback_content.upper().startswith(
+                "[FILLED_QUESTION]"
+            ) or feedback_content.upper().startswith("[FORM]"):
+                # 人类已填写表单，进行总结
                 messages = apply_prompt_template("perception", state) + [
                     HumanMessage(
-                        f"##User Query\n\n{user_query}\n\n##希望用户回答的问题\n\n{dst_question}\n\n##用户回答的结果\n\n{feedback}\n\n"
+                        f"##User Query\n\n{user_query}\n\n##希望用户回答的问题\n\n{dst_question}\n\n##用户回答的结果\n\n{feedback_content}\n\n"
                     )
                 ]
-                # logger.debug("messages"+str(messages))
-                # exit()
                 response = perception_llm.invoke(messages)
                 summary = response.content
-                logger.info(f"感知层完成，收集用户反馈: {summary}")
+                logger.info(f"感知层完成，收集用户反馈并总结: {summary}")
 
                 return Command(
                     update={
@@ -946,12 +1139,15 @@ class SubAgentManager:
                             )
                         ],
                         "user_dst": summary,
-                        "current_node": "perception",
+                        "current_node": "central_agent",
                         "wait_stage": "",
+                        "need_human_interaction": False,
+                        "human_interaction_type": "",
                     },
-                    goto="central_agent",#goto="outline",#SOP情况下应该是 goto 的中枢智能体
+                    goto="central_agent",
                 )
-            elif feedback and str(feedback).upper().startswith("[SKIP]"):
+            elif feedback_content.upper().startswith("[SKIP]"):
+                # 人类跳过了填写
                 logger.info("DST question is skipped by user.")
                 messages = apply_prompt_template("perception", state) + [
                     HumanMessage(
@@ -969,105 +1165,129 @@ class SubAgentManager:
                             )
                         ],
                         "user_dst": summary,
-                        "current_node": "perception",
+                        "current_node": "central_agent",
                         "wait_stage": "",
+                        "need_human_interaction": False,
+                        "human_interaction_type": "",
                     },
-                    goto="central_agent",#goto="outline",#SOP情况下应该是 goto 的中枢智能体
+                    goto="central_agent",
                 )
-            else:
-                raise TypeError(f"Interrupt value of {feedback} is not supported.")
+
+        # 第一次调用：生成表单
+        try:
+            messages = apply_prompt_template("perception", state)
+            response = perception_llm.invoke(messages)
+            dst_question = response.content
+            dst_question = repair_json_output(dst_question)
+            logger.info(f"感知层完成，生成DST问题: {dst_question}")
+
+            # 返回 central_agent，设置标记让其委派给 human agent
+            return Command(
+                update={
+                    "messages": [
+                        HumanMessage(
+                            content=f"感知层已生成表单，需要人类填写",
+                            name="perception",
+                        )
+                    ],
+                    "dst_question": dst_question,
+                    "current_node": "central_agent",
+                    "need_human_interaction": True,  # 🔴 标记需要人类交互
+                    "human_interaction_type": "form_filling",  # 交互类型：表单填写
+                },
+                goto="central_agent",  # 返回 central_agent，由其委派给 human agent
+            )
+        except Exception as e:
+            import traceback
+
+            logger.error(f"感知层执行失败: {str(e)}")
+            logger.error(traceback.format_exc())
+            return Command(
+                update={
+                    "messages": [
+                        HumanMessage(
+                            content=f"感知层执行失败: {str(e)}",
+                            name="perception",
+                        )
+                    ],
+                    "current_node": "central_agent",
+                },
+                goto="central_agent",
+            )
 
     @timed_step("execute_outline")
     async def execute_outline(self, state: State, config: RunnableConfig) -> Command:
-        user_query = state.get("user_query", "")
-        # check if the plan is auto accepted
-        outline_llm = get_llm_by_type(AGENT_LLM_MAP.get("outline", "default"))
-        wait_stage = state.get("wait_stage", "")
-        if wait_stage != "outline":
-            bg_investigation = search_docs_with_ref(
-                user_query, top_k=5, config=config
-            ).get("docs", [])
-            user_dst = state.get("user_dst", "")
-            try:
-                messages = [
-                    HumanMessage(
-                        f"##用户原始问题\n\n{user_query}\n\n##用户补充需求\n\n{user_dst}\n\n##可能用到的相关数据\n\n{bg_investigation}\n\n"
-                    )
-                ] + apply_prompt_template("outline", state)
-                response = outline_llm.invoke(messages)
-                outline_response = response.content
-                outline_response = repair_json_output(outline_response)
-                if "[STYLE_ROLE]" in outline_response:
-                    outline_response = outline_response.split("[STYLE_ROLE]")[0]
-                logger.info(f"大纲生成完成: {outline_response}")
-                return Command(
-                    update={
-                        "report_outline": outline_response,
-                        "wait_stage": "outline",
-                        "current_node": "outline",
-                    },
-                    goto="human_feedback",
-                )
-            except Exception as e:
-                logger.error(f"大纲生成执行失败: {str(e)}")
-        if wait_stage == "outline":
-            feedback = state.get("hitl_feedback", "")
-            # if the feedback is not accepted, return the planner node
-            if feedback and str(feedback).upper().startswith("[CONFIRMED_OUTLINE]"):
-                previous_outline = state.get("report_outline", "")
-                outline_confirmed = feedback[len("[CONFIRMED_OUTLINE]") :].strip()
+        """
+        执行大纲生成Agent，负责生成大纲供人类确认
 
-                #原先的outline中有形如【id】的引用标志，而确认后的outline不仅删除了所有引用标志，还修改了文字部分。我需要把原先的引用标志补全回来：如果原先这个位置有引用标志而现在这个位置附近的文字也没被修改，那么补充回来；如果被修改了就不用补充了
+        新工作流（Human Agent 设计）：
+        1. 生成大纲后返回 central_agent
+        2. 设置 need_human_interaction=True，让 central_agent 委派给 human agent
+        3. human agent 收集人类反馈后，central_agent 继续 SOP
+
+        Args:
+            state: 当前系统状态
+            config: 运行配置
+
+        Returns:
+            执行结果Command对象
+        """
+        user_query = state.get("user_query", "")
+        outline_llm = get_llm_by_type(AGENT_LLM_MAP.get("outline", "default"))
+
+        # 检查是否已有人类反馈（第二次调用，用于处理反馈）
+        hitl_feedback = state.get("hitl_feedback", "")
+        if hitl_feedback and state.get("human_interaction_type") == "":
+            feedback_content = str(hitl_feedback)
+
+            # 处理确认的大纲
+            if feedback_content.upper().startswith(
+                "[CONFIRMED_OUTLINE]"
+            ) or feedback_content.upper().startswith("[CONFIRMED]"):
+                previous_outline = state.get("report_outline", "")
+                if feedback_content.upper().startswith("[CONFIRMED_OUTLINE]"):
+                    outline_confirmed = feedback_content[
+                        len("[CONFIRMED_OUTLINE]") :
+                    ].strip()
+                else:
+                    outline_confirmed = feedback_content[len("[CONFIRMED]") :].strip()
+
+                # 回补引用标志的函数
                 def repair_outline_citations(previous_outline, outline_confirmed):
                     """
                     把 previous_outline 中的【id】引用标志，尽可能无损地回补到 outline_confirmed 中。
-                    规则：
-                    1. 如果原文附近文字未被改动，则把【id】补回；
-                    2. 若文字被改写，则不再补回；
-                    3. 若 confirmed 中已自带引用，则保留其引用，不再叠加。
                     """
-                    # 提取 previous 中的引用映射：{纯文本: 【id】}
                     prev_map = {}
-                    for m in re.finditer(r'(.*?)(【\d+】)', previous_outline):
+                    for m in re.finditer(r"(.*?)(【\d+】)", previous_outline):
                         text_snippet = m.group(1).strip()
                         citation = m.group(2)
                         if text_snippet:
                             prev_map[text_snippet] = citation
                     logger.debug(f"Previous outline citation map: {prev_map}")
-                    # 按段落逐句扫描 confirmed，尝试回补
+
                     def replace_func(match):
                         sentence = match.group(1)
-                        # 若句子已含引用，跳过
-                        if re.search(r'【\d+】', sentence):
+                        if re.search(r"【\d+】", sentence):
                             return match.group(0)
-                        # 寻找最近似原文片段
                         best_key = None
-                        best_ratio = 0.6   # 阈值，可微调
                         for key in prev_map:
-                            # 简单相似：包含关系即可
                             if key in sentence or sentence in key:
                                 best_key = key
-                                best_ratio = 1.0
                                 break
                         if best_key:
                             return sentence + prev_map[best_key]
                         return match.group(0)
 
-                    # 以句号为界，逐句处理
                     confirmed_repaired = re.sub(
-                        r'([^。！？\n]+[。！？])',
-                        replace_func,
-                        outline_confirmed
+                        r"([^。！？\n]+[。！？])", replace_func, outline_confirmed
                     )
                     return confirmed_repaired
 
-                if re.search(r'【\d+】', outline_confirmed):
-                    # 如果确认后的大纲中已经有引用标志，就不需要回补了
-                    logger.debug("确认后的大纲中已有引用标志，无需回补")
-                    pass
-                else:
-                    outline_confirmed = repair_outline_citations(previous_outline, outline_confirmed)
-                    
+                if not re.search(r"【\d+】", outline_confirmed):
+                    outline_confirmed = repair_outline_citations(
+                        previous_outline, outline_confirmed
+                    )
+
                 logger.info(f"大纲确认: {outline_confirmed}")
 
                 return Command(
@@ -1078,27 +1298,83 @@ class SubAgentManager:
                             )
                         ],
                         "report_outline": outline_confirmed,
-                        "current_node": "outline",
+                        "current_node": "central_agent",
                         "wait_stage": "",
+                        "need_human_interaction": False,
+                        "human_interaction_type": "",
                     },
                     goto="central_agent",
                 )
-            elif feedback and str(feedback).upper().startswith("[SKIP]"):
-                outline_confirmed = feedback[len("[SKIP]") :].strip()
-                logger.info(f"大纲确认: {outline_confirmed}")
+            elif feedback_content.upper().startswith("[SKIP]"):
+                outline_confirmed = state.get("report_outline", "")
+                logger.info(f"大纲跳过确认，使用原始大纲: {outline_confirmed}")
 
                 return Command(
                     update={
                         "messages": [
                             HumanMessage(
-                                content=f"大纲确认: {outline_confirmed}", name="outline"
+                                content=f"大纲跳过确认: {outline_confirmed}",
+                                name="outline",
                             )
                         ],
                         "report_outline": outline_confirmed,
-                        "current_node": "outline",
+                        "current_node": "central_agent",
                         "wait_stage": "",
+                        "need_human_interaction": False,
+                        "human_interaction_type": "",
                     },
                     goto="central_agent",
                 )
-            else:
-                raise TypeError(f"Interrupt value of {feedback} is not supported.")
+
+        # 第一次调用：生成大纲
+        bg_investigation = search_docs_with_ref(user_query, top_k=5, config=config).get(
+            "docs", []
+        )
+        user_dst = state.get("user_dst", "")
+
+        try:
+            messages = [
+                HumanMessage(
+                    f"##用户原始问题\n\n{user_query}\n\n##用户补充需求\n\n{user_dst}\n\n##可能用到的相关数据\n\n{bg_investigation}\n\n"
+                )
+            ] + apply_prompt_template("outline", state)
+            response = outline_llm.invoke(messages)
+            outline_response = response.content
+            outline_response = repair_json_output(outline_response)
+            if "[STYLE_ROLE]" in outline_response:
+                outline_response = outline_response.split("[STYLE_ROLE]")[0]
+            logger.info(f"大纲生成完成: {outline_response}")
+
+            # 返回 central_agent，设置标记让其委派给 human agent
+            return Command(
+                update={
+                    "messages": [
+                        HumanMessage(
+                            content=f"大纲已生成，需要人类确认",
+                            name="outline",
+                        )
+                    ],
+                    "report_outline": outline_response,
+                    "current_node": "central_agent",
+                    "need_human_interaction": True,  # 🔴 标记需要人类交互
+                    "human_interaction_type": "outline_confirmation",  # 交互类型：大纲确认
+                },
+                goto="central_agent",  # 返回 central_agent，由其委派给 human agent
+            )
+        except Exception as e:
+            import traceback
+
+            logger.error(f"大纲生成执行失败: {str(e)}")
+            logger.error(traceback.format_exc())
+            return Command(
+                update={
+                    "messages": [
+                        HumanMessage(
+                            content=f"大纲生成执行失败: {str(e)}",
+                            name="outline",
+                        )
+                    ],
+                    "current_node": "central_agent",
+                },
+                goto="central_agent",
+            )

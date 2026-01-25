@@ -36,5 +36,11 @@ class State(MessagesState):
     current_style: str = ""  # 当前报告风格，用于风格切换功能
     original_report: str = ""  # 首次生成的报告，用于风格切换时保持引用一致性
 
-    #ZB V1.1相关字段
-    sop: str =None
+    # Human Agent 相关字段
+    need_human_interaction: bool = False  # 是否需要人类交互
+    human_interaction_type: str = (
+        ""  # 人类交互类型: form_filling, outline_confirmation, report_feedback, proactive_question
+    )
+
+    # ZB V1.1相关字段
+    sop: str = None

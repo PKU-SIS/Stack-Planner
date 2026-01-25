@@ -5,7 +5,16 @@ from pydantic import BaseModel
 class DelegateParams(BaseModel):
     agent_type: str
     task_description: Optional[str] = None
+    # Human Agent 相关字段
+    interaction_type: Optional[str] = (
+        None  # form_filling, outline_confirmation, report_feedback, proactive_question
+    )
+    question: Optional[str] = None  # 用于主动提问时的问题内容
     extra: Optional[Dict[str, Any]] = None
+
+    class Config:
+        # 允许额外字段，防止 Pydantic 忽略未知字段
+        extra = "allow"
 
 
 class Decision(BaseModel):
