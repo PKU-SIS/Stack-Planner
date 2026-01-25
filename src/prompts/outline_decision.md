@@ -10,7 +10,29 @@
 - 如果 **大纲冗余、重复或过于臃肿**，应进行删减（reduction）
 - 如果 **大纲结构稳定且字数规划合理**，应结束（finish）
 
-因为现在是测试阶段，你只需要按顺序执行 1,2,5 即可
+决策优先级（从高到低，必须严格遵守）：
+
+1. 如果 factstruct_outline 不存在（即 null、undefined 或空对象 {}）：
+   → 选择 initialization
+   （注意：只要大纲字段存在，无论内容是否为空，都不再初始化）
+
+2. 如果 factstruct_outline 已存在，且 **尚未执行过任何 expandation 操作**（可通过 history_decision 判断）：
+   → 选择 expandation（即使字数看似足够，也必须扩展一次以确保结构细化）
+   （例外：仅当 total_word_limit ≤ 500 时可跳过）
+
+3. 如果 factstruct_outline 已存在，且满足以下 **全部条件**：
+   - 已执行过至少一次 expandation（或 total_word_limit ≤ 500）
+   - 大纲最大深度 ≥ 2（即至少有章→节两级）
+   - 预估可支撑字数 ≥ total_word_limit × 0.8
+     （预估方式：叶子节点数 × 300 ≥ total_word_limit × 0.8）
+   → 选择 finish
+
+4. 其他情况（大纲存在但未达标）：
+   → 选择 expandation
+
+
+
+你只需要按顺序执行 initialization,expandation,finish 即可
 
 在每一步中，你必须：
 
@@ -42,7 +64,7 @@
 {% endif %}
 
 {% if factstruct_outline %}
-### 当前大纲（FactStruct）
+### 当前大纲（factstruct_outline）
 - **已有的大纲结构**：
 {{ factstruct_outline }}
 {% endif %}
@@ -60,11 +82,17 @@
 ### 当前反馈（Feedback）
 - **最新的系统或人工反馈**：
 {{ feedback }}
-
 你需要考虑：
 - 反馈是否指出结构性问题、冗余或内容缺失
 - 在继续结构操作前是否需要进行反思（reflect）
 {% endif %}
+
+
+{% if history_decision %}
+### 大纲智能体执行历史记录
+{{ history_decision }}
+{% endif %}
+
 
 ---
 
@@ -76,10 +104,10 @@
 
 ### 1. initialization
 
-使用场景：
+使用场景（必须全部满足）：
 
-- 当前 **不存在大纲**
-- 或大纲 **缺乏清晰、连贯的整体结构**
+- factstruct_outline 不存在或为空
+- 当前任务尚未生成任何结构化章节
 
 **Params 格式**
 ```json

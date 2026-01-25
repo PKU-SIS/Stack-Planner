@@ -73,17 +73,23 @@ class FactStructLLMWrapper:
             parts.append(docs_text + "\n")
 
         if central_guidance:
-            parts.append("## 初始指导\n")
+            parts.append("## 中枢智能体总体指导\n")
             parts.append(
                 "请在生成修改大纲时参考以下内容：\n"
             )
             parts.append(central_guidance + "\n")
+
+
         if replan_result:
-            parts.append("## 初始计划\n")
-            parts.append(
-                "当前的计划，或大纲为\n"
-            )
-            parts.append( replan_result + "\n")
+            if isinstance(replan_result, dict):
+                parts.append("Replan Result:\n")
+                for k, v in replan_result.items():
+                    parts.append(f"- {k}: {v}\n")
+            else:
+                parts.append(str(replan_result) + "\n")
+
+
+
         if instruction:
             parts.append("## 大纲智能体指导为\n")
             parts.append( instruction + "\n")
@@ -116,7 +122,7 @@ class FactStructLLMWrapper:
         parts.append(output_format)
 
         prompt = "\n".join(parts)
-        logger.info(f"prompt:{prompt}")
+        logger.info(f"大纲初始输入 prompt:{prompt}")
         try:
             messages = [HumanMessage(content=prompt)]
             logger.info(f"initial outline prompt:{messages}")

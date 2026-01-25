@@ -116,20 +116,20 @@ def run_factstruct_stage1(
     search_engine: Optional[Callable] = None,
     config: RunnableConfig=None,
 ) -> Tuple[OutlineNode, Memory]:
-    """
-    运行 FactStruct Stage 1（便捷接口）
+    # """
+    # 运行 FactStruct Stage 1（便捷接口）
 
-    参数:
-        query: 用户查询
-        llm: LLM 实例（可选，默认使用 "outline" 类型的 LLM）
-        max_iterations: 最大迭代次数（默认 20）
-        batch_size: 批量大小（默认 5）
-        initial_docs: 初始文档列表（可选）
-        search_engine: 搜索引擎函数（可选，默认使用 search_docs）
+    # 参数:
+    #     query: 用户查询
+    #     llm: LLM 实例（可选，默认使用 "outline" 类型的 LLM）
+    #     max_iterations: 最大迭代次数（默认 20）
+    #     batch_size: 批量大小（默认 5）
+    #     initial_docs: 初始文档列表（可选）
+    #     search_engine: 搜索引擎函数（可选，默认使用 search_docs）
 
-    返回:
-        (outline_root, memory): 最终大纲根节点和记忆模块
-    """
+    # 返回:
+    #     (outline_root, memory): 最终大纲根节点和记忆模块
+    # """
     # 初始化组件
     if llm is None:
         # 使用 AGENT_LLM_MAP 获取 outline 对应的 LLM 类型（映射到 "basic"）

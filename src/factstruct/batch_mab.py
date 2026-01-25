@@ -341,6 +341,51 @@ class BatchMAB:
         return outline_root, self.memory
 
 
+    def run_initialization(
+        self,
+        query: str,
+        central_guidance=None,
+        replan_result=None,
+        instruction=None,
+        initial_docs=None,
+        k: int = 5,
+        config: RunnableConfig=None,
+    ):
+        """
+        初始化 FactStruct：检索 → 向量化 → 存储 → 生成初始大纲
+        """
+        logger.info(f"Starting Batch-MAB initialization with query: {query}")
+
+        # --- Step 1: 检索 ---
+        if initial_docs is None:
+            logger.info("Performing initial search...")
+            initial_docs = self.search_engine(query, k=k, config=config)
+
+        # --- Step 2: 向量化 ---
+        initial_docs_with_embed = self.embedder.embed_docs(initial_docs)
+
+        # --- Step 3: 存入 memory ---
+        self.memory.store_docs(initial_docs_with_embed)
+
+        # --- Step 4: 生成初始大纲 ---
+        logger.info("Generating initial outline...")
+        outline_root = self.llm_wrapper.generate_initial_outline(
+            query=query,
+            docs=initial_docs_with_embed,
+            central_guidance=central_guidance,
+            replan_result=replan_result,
+            instruction=instruction,
+        )
+
+        logger.info(f"Generated outline root id: {outline_root.id}")
+
+        # --- Step 5: 文档绑定 ---
+        self.memory.map_node_to_docs(outline_root.id, initial_docs_with_embed)
+        logger.info(f"self.memory.node_to_docs{self.memory.node_to_docs}")
+        return outline_root, self.memory, initial_docs
+
+
+
     def run_expansion(
         self,
         outline_root,
@@ -439,8 +484,8 @@ class BatchMAB:
                 node.pull_count += 1
 
                 # 准备用于 LLM 修订的数据
-                logger.info(f"node{node}")
-                logger.info(f"new_docs{new_docs}")
+                # logger.info(f"node{node}")
+                # logger.info(f"new_docs{new_docs}")
                 node_doc_pairs_for_refine.append((node, new_docs))
 
                 # 5. 更新记忆库
@@ -449,9 +494,9 @@ class BatchMAB:
 
             # 6. (关键) LLM 批量更新大纲
             # (LLM Call #Round*2 + 1)
-            logger.info(f"node_doc_pairs_for_refine{node_doc_pairs_for_refine}")
+            # logger.info(f"node_doc_pairs_for_refine{node_doc_pairs_for_refine}")
             logger.info(f"outline_root{outline_root}")
-            logger.info(f"self.memory{self.memory}")
+            logger.info(f"self.memory.node_to_docs{self.memory.node_to_docs}")
             if node_doc_pairs_for_refine:
                 logger.info("Batch refining outline...")
                 outline_root, expanded_nodes_list, new_node_doc_mapping = (

@@ -24,9 +24,9 @@ from ..graph.types import State
 # from src.factstruct.llm_wrapper import FactStructLLMWrapper
 # from src.factstruct.batch_mab import BatchMAB
 # from src.factstruct.outline_node import OutlineNode
-from src.factstruct import FactStructLLMWrapper, BatchMAB, OutlineNode, create_search_engine_adapter,Embedder
-
-
+from src.factstruct import FactStructLLMWrapper, BatchMAB, OutlineNode, create_search_engine_adapter,Embedder,outline_node_to_dict,memory_to_dict,Memory,outline_node_to_markdown
+import re
+from src.memory import MemoryStack, MemoryStackEntry#加一个 Memory 吧，要不 decision 做不了
 
 from src.utils.statistics import global_statistics, timed_step
 
@@ -96,14 +96,18 @@ class OutlineAgent:
         self.initial_query = initial_query
         # --- High-level planning signals ---
         self.central_guidance = central_guidance
+        logger.info(f"self.central_guidance是否正确存储{self.central_guidance}")
         self.replan_result = state.get("replan_result")
-        self.total_word_limit = state.get("total_word_limit")
+        self.total_word_limit = state.get("total_word_limit",5000)
         
         
         #处理当前状态，这玩意是不是应该放到 decision 里面也要啊
         # --- Current outline state ---
         self.factstruct_outline = state.get("factstruct_outline")
         self.factstruct_memory = state.get("factstruct_memory")
+        # if self.factstruct_memory==None:#初始化一下，后面再考虑重复调用，先跑起来再说,把 init 改为调用 batchmabMemroy 封装到里面
+        #     self.factstruct_memory = Memory(embedding_dim=embedder.get_embedding_dim())
+            
         self.outline_feedback = state.get("outline_feedback")
         self.max_trys = max_trys
 
@@ -131,9 +135,13 @@ class OutlineAgent:
             embedder=self.embedder,
             search_engine=self.search_engine,
             max_iterations=4,
+            memory=self.factstruct_memory,
             batch_size=2,
         )
 
+        #记录做了啥的 Memroy stack,memory stack只能给中枢智能体用，感觉不太行。
+        self.memory_stack = []
+        
         # --- Tool handlers ---
         self.tool_handlers = {
             "initialization": self._tool_initialization,
@@ -161,12 +169,13 @@ class OutlineAgent:
                 # === 1. 决策 ===
                 decision = self.make_decision(state, config)
                 last_decision = decision
-
+                self.memory_stack.append(decision)
                 logger.info(f"OutlineAgent Decision: {decision.tool} | {decision.reasoning}")
 
                 # === 2. 执行工具 ===
-                command = await self.execute_tool(decision, state, config)
-            
+                # command = await self.execute_tool(decision, state, config)
+                command = self.execute_tool(decision, state, config)
+
                 # === 3. 合并 state ===
                 if command and command.update:
                     state.update(command.update)
@@ -288,19 +297,38 @@ class OutlineAgent:
         构建 Outline Agent 的决策 prompt
         """
 
+        history_decision = [
+            f"工具：{e.tool.value if hasattr(e.tool, 'value') else e.tool} | 推理：{e.reasoning} | 参数：{None if isinstance(e.params, list) and len(e.params) == 0 else e.params}"
+            for e in self.memory_stack
+        ] if self.memory_stack else None
+
+        logger.info(f"history_decision记录{history_decision}")
+        
+        #改一下大纲的格式吧
+        factstruct_outline=state.get("factstruct_outline",None)
+        if factstruct_outline:
+            outline_response = factstruct_outline.to_text_tree(
+                include_word_limit=True
+            )
+            logger.info(f"是否可以做成功格式转化outline_response{outline_response}")
+        else:
+            outline_response=None
         context = {
             # 必须项
             "user_query": state.get("initial_query"),
 
             # 可选项（prompt 里有 if 判断）
-            "central_guidance": state.get("central_guidance"),
-            "factstruct_outline": state.get("factstruct_outline"),
-            "total_word_limit": state.get("total_word_limit"),
+            "central_guidance": self.central_guidance,
+            "factstruct_outline": outline_response,
+            "total_word_limit": state.get("total_word_limit",5000),
             "outline_feedback": state.get("outline_feedback"),
+            "history_decision": history_decision,
         }
 
         # 合并 config（如需要）
         context = {**context, **config}
+        logger.info(f"Context:\n{context}")
+
 
         return apply_prompt_template(
             "outline_decision",   # ✅ 对应 src/prompts/outline_decision.md
@@ -363,10 +391,11 @@ class OutlineAgent:
         logger.info("Outline Tool: initialization")
 
         initial_query = state["initial_query"]
-        central_guidance = state.get("central_guidance")
+        central_guidance = self.central_guidance#state.get("central_guidance")
         replan_result = state.get("replan_result")
         factstruct_outline = state.get("factstruct_outline")
-        initial_docs = state.get("initial_docs")
+        # initial_docs = state.get("initial_docs") #暂时不要
+        initial_docs = None
         
         #提取decision当中的参数
         params = decision.params or {}
@@ -381,48 +410,36 @@ class OutlineAgent:
                 },
             )
 
-        # --- Step 1: 初始检索 ---
-        if initial_docs is None:
-            logger.info("开始预检索")
-            initial_docs = self.search_engine(initial_query, k=5, config=config)
-
-        # --- Step 2: 向量化 ---
-        initial_docs_with_embed = self.embedder.embed_docs(initial_docs)
-
-        # --- Step 3: 存入 FactStruct Memory ---
-        self.factstruct_memory.store_docs(initial_docs_with_embed)
-
-        # --- Step 4: 生成初始大纲 ---
-        logger.info("Generating initial outline...")
-        self.outline_root = self.llm_wrapper.generate_initial_outline(
-            query=initial_query,
-            docs=initial_docs_with_embed,
-            central_guidance=central_guidance,
-            replan_result=replan_result,
-            instruction=instruction,
-        )
-
-        logger.info(f"Generated outline root id: {self.outline_root.id}")
-
-        # --- Step 5: 文档绑定 ---
-        self.factstruct_memory.map_node_to_docs(self.outline_root.id, initial_docs_with_embed)
-
-        # --- Step 6: 日志 ---
         try:
-            from .integration import outline_node_to_markdown
-            logger.info("Initial Outline:\n"+ outline_node_to_markdown(self.outline_root, include_root=True))
-        except Exception:
-            logger.info(self.outline_root.to_text_tree())
+            outline_root, memory,initial_docs= self.batch_mab.run_initialization(
+                query=initial_query,
+                central_guidance=central_guidance,
+                replan_result=replan_result,
+                instruction=instruction,
+                initial_docs=initial_docs,
+                config=config,
+            )
 
-        # --- Step 7: 更新状态并回到 outline agent ---
-        return Command(
-            update={
-                "factstruct_outline": self.outline_root,
-                "factstruct_memory":self.factstruct_memory,
-                "initial_docs": initial_docs,
-                "outline_tool_feedback": "Outline initialized successfully.",
-            },
-        )
+
+            # --- Step 7: 更新状态并回到 outline agent ---
+            return Command(
+                update={
+                    "factstruct_outline": outline_root,
+                    "factstruct_memory": memory,
+                    "initial_docs": initial_docs,
+                    "outline_feedback": "Outline initialized successfully.",
+                },
+            )
+        except Exception as e:
+            import traceback
+            logger.error("Outline initialization failed")
+            logger.error(traceback.format_exc())
+
+            return Command(
+                update={
+                    "outline_feedback": f"Outline initialization failed: {str(e)}"
+                }
+            )
 
     def _tool_expansion(
         self,
@@ -525,7 +542,7 @@ class OutlineAgent:
 
         outline_root = state.get("factstruct_outline")
         memory = state.get("factstruct_memory")
-        total_word_limit = state.get("total_word_limit")
+        total_word_limit = state.get("total_word_limit",5000)
 
         # === 兜底处理 ===
         if outline_root is None:
@@ -561,8 +578,8 @@ class OutlineAgent:
             if state.get("initial_query"):
                 context_lines.append(f"用户原始问题：{state.get('initial_query')}")
 
-            if state.get("central_guidance"):
-                context_lines.append(f"中枢策略指导：{state.get('central_guidance')}")
+            if self.central_guidance:
+                context_lines.append(f"中枢策略指导：{self.central_guidance}")
 
             if total_word_limit:
                 context_lines.append(f"目标总字数限制：{total_word_limit}")
@@ -597,7 +614,7 @@ class OutlineAgent:
                 },
             ]
 
-
+            logger.info(f"outline agent 的 finish 的 prompt:{summary_prompt}")
             llm_response = llm.invoke(summary_prompt)
             finish_summary = llm_response.content.strip()
 
