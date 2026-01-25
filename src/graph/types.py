@@ -35,3 +35,6 @@ class State(MessagesState):
     memory_stack: str = None
     current_style: str = ""  # 当前报告风格，用于风格切换功能
     original_report: str = ""  # 首次生成的报告，用于风格切换时保持引用一致性
+
+    #ZB V1.1相关字段
+    sop: str =None

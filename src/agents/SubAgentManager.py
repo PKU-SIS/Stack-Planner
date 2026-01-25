@@ -949,7 +949,7 @@ class SubAgentManager:
                         "current_node": "perception",
                         "wait_stage": "",
                     },
-                    goto="outline",
+                    goto="central_agent",#goto="outline",#SOP情况下应该是 goto 的中枢智能体
                 )
             elif feedback and str(feedback).upper().startswith("[SKIP]"):
                 logger.info("DST question is skipped by user.")
@@ -972,7 +972,7 @@ class SubAgentManager:
                         "current_node": "perception",
                         "wait_stage": "",
                     },
-                    goto="outline",
+                    goto="central_agent",#goto="outline",#SOP情况下应该是 goto 的中枢智能体
                 )
             else:
                 raise TypeError(f"Interrupt value of {feedback} is not supported.")

@@ -113,9 +113,115 @@ class CentralAgent:
         logger.info("中枢Agent正在进行决策...")
         start_time = datetime.now()
 
+        #增加 SOP 部分，用于加入 decision 模块
+        #SOP改成中文，SOP应该要的是抽象的。不能写是outline，replanner，具体谁来生成是让 CentralAgent 自己找
+        DECISION_SOP_SP = '''### 执行流程指南（Execution Workflow Guidelines）
+
+        你正在一个具有**严格阶段约束与不可回退节点**的多智能体系统中运行。
+        你的职责是**严格按照以下流程推进任务直至完成**，并遵守每个阶段的进入与退出规则。
+        任何违反阶段约束的行为都被视为执行错误。
+
+        ---
+
+        #### 强制性的高层执行流程（Mandatory High-Level Workflow）
+
+        ### 1. 感知与澄清阶段（Perception Phase，强制，第一步，且仅此一次）
+
+        - 你 **必须** 在任务开始时首先委派给 **perception agent**。
+        - perception 阶段是一个 **一次性、不可重入（non-reentrant）、不可回退（irreversible）的阶段**。
+        - 该阶段的唯一目标是进行任务的前置感知与需求澄清，而**不是**推理、规划或内容生成。
+        - perception agent 负责：
+        - 识别用户请求中的不确定性、信息缺失或歧义；
+        - 生成一个结构化的表单或问题集合，用于向人类用户收集必要的补充信息。
+        - perception agent 的输出 **必须** 被返回给人类用户以完成信息补充或确认。
+        - **一旦 perception 阶段完成并退出：**
+        - 在整个任务生命周期中，**绝对禁止再次调用 perception agent**；
+        - 即使后续阶段发现信息不足、歧义或不确定性，**也不得通过 perception 阶段重新向用户提问**；
+        - 所有后续处理必须在既有输入和系统能力范围内完成。
+
+        ---
+
+        ### 2. 大纲构建阶段（Outline Construction Phase，强制，感知完成之后，仅一次）
+
+        - 在 perception 阶段完成，且人类用户已确认或补充相关信息后，你 **必须** 委派给 **outline agent**。
+        - outline 阶段同样是一个 **不可重入阶段**，在整个任务中 **必须且只能执行一次**。
+        - outline agent 负责基于：
+        - 原始用户 query；
+        - 已确认的人类输入（表单或补充信息）；
+        - 现有上下文（如有），
+        生成一个结构化的大纲。
+        - 该大纲用于定义任务或内容的整体结构、层级关系与覆盖范围。
+        - outline agent 的输出 **必须** 被提交给人类用户进行确认。
+        - 一旦大纲被确认，该结构被视为 **冻结（structure frozen）**，后续阶段不得对其进行重新生成或根本性重构。
+
+        ---
+
+        ### 3. 推理与研究阶段（Reasoning & Research Phase，强制，大纲确认之后）
+
+        - 在大纲被确认之后，你 **必须** 执行一个集中式的推理与研究阶段。
+        - 在该阶段，中枢智能体（central agent）**必须**：
+        - 至少调用 **Researcher agent** 一次；
+        - 使用可用工具、文档或外部信息源，对已确认的大纲进行验证、补充或质疑。
+        - 若在该阶段发现信息不足或不确定性：
+        - **必须通过研究、假设检验或显式说明不确定性来处理**；
+        - **不得通过再次向用户提问或重新进入 perception 阶段来解决**。
+        - **无论当前信息是否看似充分，该阶段都必须为每一个任务执行一次**。
+
+        ---
+
+        ### 4. 内容生成阶段（Content Generation Phase，强制，最终阶段）
+
+        - 在推理与研究阶段完成后，你 **必须** 委派给 **reporter agent**。
+        - reporter agent 必须 **严格依据已确认的大纲结构与研究结论** 生成最终内容。
+        - 在 reporter agent 尚未生成最终内容之前，**不得进入 FINISH 状态**。
+        - 该阶段是任务完成的 **必要且终结性条件**。
+
+        ---
+
+        #### 执行约束与禁止行为（Hard Constraints & Prohibited Actions）
+
+        - 执行顺序 **必须严格遵循**：  
+        **感知与澄清 → 大纲构建 → 推理与研究 → 内容生成**
+        - perception 阶段与 outline 阶段：
+        - **均为一次性阶段**
+        - **均不可重复、不可回退、不可重新进入**
+        - 在任何情况下：
+        - **都不得在 perception 阶段完成后再次向用户发起澄清性交互**
+        - **都不得以任何理由重新调用 perception agent**
+        - 若后续阶段暴露出信息不足，只能通过：
+        - 研究补充；
+        - 合理假设并明确标注；
+        - 或在最终内容中显式说明限制条件，
+        来进行处理。
+
+        ---
+
+        #### 强制研究调用规则（Mandatory Research Invocation）
+
+        - 在 **每一次任务执行中**，Researcher agent **必须** 作为「推理与研究阶段」的一部分被真实调用。
+        - **不得跳过、伪造或模拟该阶段**。
+        - 在未真实调用 Researcher agent 的情况下继续执行，是被明确禁止的。
+
+        ---
+
+        你的目标是：  
+        在严格遵循上述不可回退执行流程的前提下，确保任务在结构上稳定、在人机交互上可控，并实现多智能体系统的可靠协同。
+        '''
+
+        #这个似乎要改其他地方，反正后面用不上，不要了
+        # graph_format=config["configurable"]["graph_format"]
+        # if graph_format=="sp_xxqg":
+        #     state["sop"] = DECISION_SOP_SP
+        #     logger.info(f"使用 SP 的 SOP")
+        # else:
+        #     state["sop"] = None
+        #     logger.info(f"不使用 SOP")
+        state["sop"] = DECISION_SOP_SP
+        logger.info(f"使用 SP 的 SOP")
+        
         # 构建决策prompt
         messages = self._build_decision_prompt(state, config)
-        # logger.debug(f"决策prompt: {messages}")
+        logger.debug(f"决策prompt: {messages}")
 
         # 获取LLM决策并处理异常
         try:
@@ -198,6 +304,7 @@ class CentralAgent:
             格式化的提示词消息列表
         """
         messages_history = state.get("messages", [])
+        SOP=state.get("sop",None)
         converted_messages = []
         for msg in messages_history:
             if isinstance(msg, (HumanMessage, AIMessage)):
@@ -247,6 +354,7 @@ class CentralAgent:
             "messages_history": converted_messages,
             "locale": state.get("locale", "zh-CN"),  # 确保locale被传递到模板
             "user_feedback": user_feedback_text,  # 添加用户反馈到上下文
+            "SOP":SOP,
         }
         action_options = list(CentralAgentAction)
         # 加载正确的模板名称并合并动作选项

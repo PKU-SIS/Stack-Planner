@@ -173,13 +173,14 @@ def _build_graph_sp_xxqg():
     builder = StateGraph(State)
 
     # 添加center planner agent
-    builder.add_node("perception", perception_node)
+    #修改成动态 workflow，所有的节点都变成中枢智能体子节点
+    # builder.add_node("perception", perception_node)
     builder.add_node("central_agent", central_agent_node)
-    builder.add_node("outline", outline_node)
-    builder.add_node("human_feedback", sp_human_feedback_node)
+    # builder.add_node("outline", outline_node)
+    builder.add_node("human_feedback", sp_human_feedback_node)#这玩意似乎是在 outline和perception内部跳的，感觉后面要改，但是YZB 写的 SOP 这里就不改了
 
     # 添加sub agent
-    sub_agents = get_sub_agents_by_global_type("sp_xxqg")
+    sub_agents = get_sub_agents_by_global_type("sp_xxqg")#outline和perception先放到里面了
 
     for sub_agent in sub_agents:
         builder.add_node(sub_agent["name"], sub_agent["node"])
@@ -191,7 +192,8 @@ def _build_graph_sp_xxqg():
     builder.add_node("zip_data", zip_data)
 
     # 感知层，包括search before plan、human in the loop
-    builder.add_edge(START, "perception")
+    builder.add_edge(START, "central_agent")#这个多轮对话的SOP 我还没看咋实现，看起来估计是 Human Node 去跳 finish？
+    # builder.add_edge(START, "perception")
     # builder.add_conditional_edge(
     #     "perception",
     #     get_next_perception

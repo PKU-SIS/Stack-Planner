@@ -18,6 +18,11 @@ You are an intelligent central agent responsible for managing a multi-agent syst
 {% endif %}
 
 {% if current_action == "decision" %}
+
+{% if SOP %}
+{{ SOP }}
+{% endif %}
+
 - **Available Actions**: {{available_actions}}  
   (Description:  
     THINK = Reason about the current situation, analyze it, and clarify what should be done next  
