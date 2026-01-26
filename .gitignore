@@ -44,6 +44,7 @@ shells/*
 Stack Planner流式接口文档.md
 startup.sh
 test_hitl_*
+!test_hitl_v8.py
 
 # Temporary fix scripts and backups
 fix_validation_error.sh
