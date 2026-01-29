@@ -829,7 +829,7 @@ def speech_node(state: State):
     return {"final_report": response_content}
 
 
-def zip_data(state: State,config: RunnableConfig):
+def zip_data(state: State, config: RunnableConfig):
     final_report = state.get("final_report")
     user_query = state.get("user_query")
     plan = state.get("current_plan")
@@ -854,7 +854,5 @@ def zip_data(state: State,config: RunnableConfig):
     session_id = config["configurable"]["thread_id"]
     global_reference_map.save_session(session_id)
     return Command(
-        update={
-            "ref_map": global_reference_map.get_session_ref_map(session_id)
-        }
+        update={"ref_map": global_reference_map.get_session_ref_map(session_id)}
     )

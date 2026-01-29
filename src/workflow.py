@@ -5,6 +5,7 @@ import asyncio
 import os
 from datetime import datetime
 from src.utils.logger import logger
+from src.utils.lmemuploader import get_sys_name
 
 
 def enable_debug_logging():
@@ -60,12 +61,25 @@ async def run_agent_workflow_async(
         from src.graph.builder import base_graph as graph
 
     logger.info(f"Starting async workflow with user input: {user_input}")
+
+    # 读取长期记忆
+    lmem_path = os.path.join("lmems", "lmem.json")
+    long_memory_content = ""
+    if os.path.exists(lmem_path):
+        with open(lmem_path, "r", encoding="utf-8") as f:
+            long_memory_content = f.read()
+        logger.info("Loaded long-term memory from lmems/lmem.json")
+    else:
+        logger.info("No existing long-term memory found. Starting fresh.")
+
     initial_state = {
         # Runtime Variables
         "messages": [{"role": "user", "content": user_input}],
+        "lmem_old": long_memory_content,
         "auto_accepted_plan": True,
         "enable_background_investigation": enable_background_investigation,
         "user_query": user_input,
+        "systeminfo": get_sys_name(),
     }
     config = {
         "configurable": {
@@ -98,11 +112,13 @@ async def run_agent_workflow_async(
                 message = s["messages"][-1]
                 if isinstance(message, tuple):
                     logger.info(message)
+                    logger.store(message)
                 else:
                     message.pretty_print()
             else:
                 # For any other output format
                 logger.info(f"Output: {s}")
+                logger.store(f"Output: {s}")
         except Exception as e:
             logger.error(f"Error processing stream output: {e}")
             logger.error(f"Error processing output: {str(e)}")
@@ -112,3 +128,4 @@ async def run_agent_workflow_async(
 
 if __name__ == "__main__":
     logger.info(graph.get_graph(xray=True).draw_mermaid())
+    logger.store(graph.get_graph(xray=True).draw_mermaid())
