@@ -455,6 +455,8 @@ class OutlineAgent:
 
         outline_root = state.get("factstruct_outline")
         memory = state.get("factstruct_memory")
+        logger.info(f"用于写代码的case outline_root{outline_root}")
+        logger.info(f"用于写代码的case memory{memory}")
         #错误排查，防止没初始化
         if outline_root is None or memory is None:
             logger.warning("Expansion skipped: outline or memory missing")
