@@ -19,6 +19,8 @@ from .reward_calculator import RewardCalculator
 from .llm_wrapper import FactStructLLMWrapper
 from langchain_core.runnables import RunnableConfig
 from ..graph.types import State
+import re
+import json
 class BatchMAB:
     """
     批量-信息觅食多臂老虎机（Batch-IF-MAB）算法
@@ -357,9 +359,17 @@ class BatchMAB:
         logger.info(f"Starting Batch-MAB initialization with query: {query}")
 
         # --- Step 1: 检索 ---
-        if initial_docs is None:
+        if not initial_docs:
             logger.info("Performing initial search...")
             initial_docs = self.search_engine(query, k=k, config=config)
+        else:
+            logger.info("Use existing")
+            if not all(isinstance(doc, FactStructDocument) for doc in initial_docs):
+                logger.info(f"initial_docs before:{initial_docs}")
+                logger.info(f"Type of initial_docs: {type(initial_docs)}")
+                initial_docs = self.wrap_raw_docs_to_factstruct(initial_docs)
+                logger.info(f"initial_docs after:{initial_docs}")
+
 
         # --- Step 2: 向量化 ---
         initial_docs_with_embed = self.embedder.embed_docs(initial_docs)
@@ -676,3 +686,71 @@ class BatchMAB:
                     results[index] = []  # 失败时返回空列表
 
         return results
+
+    def wrap_raw_docs_to_factstruct(
+        self,
+        raw_docs,
+        source_type="web",
+    ):
+        wrapped = []
+
+        if (
+            isinstance(raw_docs, list)
+            and len(raw_docs) == 1
+            and isinstance(raw_docs[0], str)
+            and "tool_name" in raw_docs[0]
+            and "web_search" in raw_docs[0]
+        ):
+            s = raw_docs[0]
+            try:
+                # 1️⃣ 提取 content='[...]' 部分（非贪婪匹配）
+                content_match = re.search(r"content='(.*?)' name=", s, re.DOTALL)
+                if content_match:
+                    content_str = content_match.group(1)
+                    # 2️⃣ 替换转义双引号
+                    content_str = content_str.replace('\\"', '"')
+                    # 3️⃣ 转成 list（异常捕获）
+                    try:
+                        content_list = json.loads(content_str)
+                    except json.JSONDecodeError:
+                        # 如果 JSONDecodeError，尝试解析到最后一个 JSON 对象
+                        # 这里简单方法：用 eval 安全子集
+                        import ast
+                        content_list = ast.literal_eval(content_str)
+
+                    # 4️⃣ 找到 raw_results
+                    raw_docs = []
+                    for item in content_list:
+                        if isinstance(item, dict) and "raw_results" in item:
+                            raw_docs = item["raw_results"]
+                            break
+                else:
+                    raw_docs = []
+
+            except Exception as e:
+                # 改用单参数输出，避免 logger 报错
+                logger.error(f"文档转换失败: {e}")
+                raw_docs = []
+
+        # 封装 FactStructDocument
+        for i, d in enumerate(raw_docs):
+            if not isinstance(d, dict):
+                continue
+
+            text = d.get("snippet", "")
+            text = re.sub(r"[。.]{2,}", "", text).strip()
+            if not text:
+                continue
+
+            doc = FactStructDocument(
+                id=f"doc_{hash(text)}_{i}",
+                cite_id=i + 1,
+                text=text,
+                source_type=source_type,
+                timestamp=datetime.now(),
+                url=d.get("link"),
+                title=d.get("title"),
+            )
+            wrapped.append(doc)
+
+        return wrapped

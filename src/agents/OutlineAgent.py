@@ -493,7 +493,9 @@ class OutlineAgent:
         replan_result=None
         factstruct_outline = state.get("factstruct_outline")
         # initial_docs = state.get("initial_docs") #暂时不要
-        initial_docs = None
+        initial_docs = state.get("data_collections", None)
+        # initial_docs = None
+        
         
         #提取decision当中的参数
         params = decision.params or {}

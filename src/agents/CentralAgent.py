@@ -124,10 +124,22 @@ class CentralAgent:
 
         #### 强制性的高层执行流程（Mandatory High-Level Workflow）
 
+        ### 0. 研究准备阶段（Research Preparation Phase，条件允许）
 
-        ### 1. 大纲构建阶段（Outline Construction Phase，强制，规划之后）
+        - 在进入正式大纲构建之前，**允许**调用 Researcher agent 作为研究准备步骤。
+        - 该阶段的目的仅限于：
+        - 补充结构性或基础性背景信息
+        - 提供关键概念、分类维度或方案类型
+        - Researcher agent **不得**：
+        - 生成完整内容
+        - 给出结论性观点
+        - 直接生成或修改大纲结构
+        - Researcher 的输出仅作为 **Outline Agent 的辅助上下文**，不具有结构决策权。
+        - 是否执行该阶段，由你基于任务复杂度自行判断。
 
-        - 你 **必须** 先委派给 **outline agent**。
+        ### 1. 大纲构建阶段（Outline Construction Phase，强制，检索之后）
+
+        - 你 **必须** 委派给 **outline agent**。
         - outline agent 负责基于内容规划或已有上下文：
         - 生成新的结构化大纲，或
         - 对现有大纲进行结构性优化
@@ -147,9 +159,9 @@ class CentralAgent:
         #### 执行约束与规则（Execution Constraints and Rules）
 
         - 执行顺序 **必须严格遵循**：  
-        **大纲构建 → 内容生成**
+        **研究准备（可选） → 大纲构建 → 内容生成**
+        - 在任何情况下，**都不得跳过大纲构建阶段**。
         - 仅当后续阶段暴露出结构性问题或章节规划问题时，才允许回退到早期阶段。
-        - 在任何情况下，**都不得跳过大纲阶段**。
         - **在 reporter agent 尚未生成最终内容之前，不得进入 FINISH 状态**。
         - 如果在任何阶段发现信息不足，应在继续之前插入适当的补充步骤。
 
@@ -160,16 +172,7 @@ class CentralAgent:
         - 你 **必须假设**：
         - 已提供的文档和现有上下文信息
         - 足以支持大纲构建与内容生成
-        - **默认情况下，不得调用 Researcher 或任何外部信息收集类智能体**。
-
-        ---
-
-        #### 研究智能体调用的严格条件（Strict Conditions for Research Invocation）
-
-        只有在 **同时满足以下两个条件时**，才允许调用 Researcher agent：
-
-        1. 在大纲构建过程中，发现**大量大纲章节无法基于已有材料合理构建**，并且  
-        2. 缺失的信息属于 **结构性或基础性信息**（而非文风、解释性或扩展性内容）
+        - **仅允许在大纲构建前调用 Researcher agent 作为补充准备步骤**。
 
         ---
 

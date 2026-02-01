@@ -103,6 +103,8 @@ def create_search_engine_adapter(
     return adapter
 
 
+
+
 def run_factstruct_stage1(
     query: str,
     llm: Optional[BaseChatModel] = None,
