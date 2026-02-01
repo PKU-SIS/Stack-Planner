@@ -232,9 +232,12 @@ class OutlineAgent:
         max_retries = 3
         logger.info("Outline Agent进行决策...")
         start_time = datetime.now()
-
+        #整理当前状态
+        decision_state = self._compute_decision_state(state)
+        
         # 构建决策prompt
-        messages = self._build_decision_prompt(state, config)
+        messages = self._build_decision_prompt(state,config,decision_state)
+        # messages = self._build_decision_prompt(state, config)
         logger.debug(f"outline 决策prompt: {messages}")
 
 
@@ -288,10 +291,102 @@ class OutlineAgent:
             )
 
 
+    def _compute_decision_state(self, state: State) -> Dict[str, Any]:
+        outline = state.get("factstruct_outline")
+        outline_exists = outline is not None
+
+        # ---------- 基础结构信息 ----------
+        if outline_exists:
+            leaf_nodes = outline.get_leaf_nodes()
+            leaf_count = len(leaf_nodes)
+            max_depth = max(node.get_depth() for node in outline.get_all_nodes())
+            total_planned_words = getattr(outline, "word_limit", 0)
+        else:
+            leaf_nodes = []
+            leaf_count = 0
+            max_depth = 0
+            total_planned_words = 0
+
+
+        total_word_limit = state.get("total_word_limit", 5000)
+
+        has_expandation = False
+        for e in self.memory_stack or []:
+            tool_name = e.tool.value if hasattr(e.tool, "value") else e.tool
+            if tool_name == "expandation":
+                has_expandation = True
+                break
+
+        # ---------- 字数分布分析 ----------
+        small_nodes = []
+        large_nodes = []
+        logger.info(f"leaf_nodes:{leaf_nodes}")
+        for node in leaf_nodes:
+            wc = getattr(node, "word_limit", 0)
+            logger.info(f"node{node}")
+            logger.info(f"wc,{wc}")
+            if wc < 300:
+                small_nodes.append(node)
+            elif wc > 600:
+                large_nodes.append(node)
+        small_ratio = len(small_nodes) / leaf_count if leaf_count > 0 else 0
+
+
+        # ----------- 决策建议，根据 prompt 规则生成下一步建议 -------------
+        if not outline_exists:
+            suggestion = (
+                f"当前 outline_exists={outline_exists}，尚未生成任何大纲结构，"
+                "无法进行字数与结构评估，需要先初始化大纲，应调用 initialization 工具。"
+            )
+
+        elif small_ratio >= 1 / 3:
+            suggestion = (
+                f"当前 outline_exists={outline_exists}，leaf_node_count={leaf_count}，"
+                f"其中有 {len(small_nodes)} 个叶子节点字数小于 300（占比约 {small_ratio:.0%}），"
+                "说明当前大纲结构过于零散、内容承载不足，整体规划不合理，"
+                "需要重新构建大纲结构，应调用 initialization 工具。"
+            )
+
+        elif len(large_nodes) > 1:
+            suggestion = (
+                f"当前 outline_exists={outline_exists}，存在 {len(large_nodes)} 个叶子节点字数超过 600，"
+                "说明部分章节负担过重，需要进一步拆分细化章节结构，"
+                "应调用 expandation 工具。"
+            )
+
+        elif (
+            total_planned_words >= 0.8 * total_word_limit
+            and total_planned_words <= 1.2 * total_word_limit
+        ):
+            suggestion = (
+                f"当前 outline_exists={outline_exists}，叶子节点字数均落在合理区间（300–600），"
+                f"且大纲规划总字数为 {total_planned_words}，与目标字数 {total_word_limit} 基本一致，"
+                "说明大纲结构和字数规划合理，可以结束大纲构建，应调用 finish 工具。"
+            )
+
+        else:
+            suggestion = (
+                f"当前 outline_exists={outline_exists}，大纲结构已存在，但字数或结构尚未达到最优状态，"
+                "需要通过小幅扩展进一步平衡章节粒度与内容覆盖，应调用 expandation 工具。"
+            )
+
+        return {
+            "outline_exists": outline_exists,
+            "max_depth": max_depth,
+            "leaf_node_count": leaf_count,
+            "estimated_words": total_planned_words,  # ← 真实字数
+            "total_word_limit": total_word_limit,
+            "has_expandation_history": has_expandation,
+            "next_step_suggestion": suggestion,
+        }
+
+
+
     def _build_decision_prompt(
         self,
         state: State,
         config: RunnableConfig,
+        decision_state: dict,
     ) -> List[Union[AIMessage, HumanMessage]]:
         """
         构建 Outline Agent 的决策 prompt
@@ -319,6 +414,8 @@ class OutlineAgent:
 
             # 可选项（prompt 里有 if 判断）
             "central_guidance": self.central_guidance,
+            "decision_state": decision_state,#这个是直接传给了 Prompt
+            
             "factstruct_outline": outline_response,
             "total_word_limit": state.get("total_word_limit",5000),
             "outline_feedback": state.get("outline_feedback"),
@@ -392,7 +489,8 @@ class OutlineAgent:
 
         initial_query = state["initial_query"]
         central_guidance = self.central_guidance#state.get("central_guidance")
-        replan_result = state.get("replan_result")
+        # replan_result = state.get("replan_result",None)
+        replan_result=None
         factstruct_outline = state.get("factstruct_outline")
         # initial_docs = state.get("initial_docs") #暂时不要
         initial_docs = None
@@ -420,6 +518,22 @@ class OutlineAgent:
                 config=config,
             )
 
+            #字数规划
+            total_word_limit = state.get("total_word_limit", 5000)
+            if total_word_limit > 0:
+                logger.info(f"检测到字数限制 {total_word_limit}，执行字数规划...")
+                outline_root = self.execute_word_planning(
+                    outline_root, total_word_limit
+                )
+                # outline_response = outline_root.to_text_tree(
+                #     include_word_limit=True
+                # )
+            # else:
+            #     outline_response = outline_node_to_markdown(
+            #         outline_root, max_depth=None, include_root=True
+            #     )
+            # factstruct_outline_dict = outline_node_to_dict(outline_root)
+            # factstruct_memory_dict = memory_to_dict(memory)
 
             # --- Step 7: 更新状态并回到 outline agent ---
             return Command(
@@ -490,24 +604,24 @@ class OutlineAgent:
                 f"Outline expanded: {len(outline_root.get_all_nodes())} nodes total"
             )
             
-            #暂时在这里放一个大纲字数匹配吧
+            #字数规划
             total_word_limit = state.get("total_word_limit", 5000)
             if total_word_limit > 0:
                 logger.info(f"检测到字数限制 {total_word_limit}，执行字数规划...")
                 outline_root = self.execute_word_planning(
                     outline_root, total_word_limit
                 )
-                outline_response = outline_root.to_text_tree(
-                    include_word_limit=True
-                )
-            else:
-                outline_response = outline_node_to_markdown(
-                    outline_root, max_depth=None, include_root=True
-                )
+                # outline_response = outline_root.to_text_tree(
+                #     include_word_limit=True
+                # )
+            # else:
+            #     outline_response = outline_node_to_markdown(
+            #         outline_root, max_depth=None, include_root=True
+            #     )
+            # factstruct_outline_dict = outline_node_to_dict(outline_root)
+            # factstruct_memory_dict = memory_to_dict(memory)
 
-            factstruct_outline_dict = outline_node_to_dict(outline_root)
-            factstruct_memory_dict = memory_to_dict(memory)
-
+            #最后返回
             logger.info(f"FactStruct Stage 1 完成: "f"{len(outline_root.get_all_nodes())} 个节点")
 
             return Command(

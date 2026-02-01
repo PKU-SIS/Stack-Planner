@@ -124,21 +124,10 @@ class CentralAgent:
 
         #### 强制性的高层执行流程（Mandatory High-Level Workflow）
 
-        ### 1. 规划阶段（Planning Phase，强制，第一步）
 
-        - 你 **必须** 首先委派给 **replanner agent**。
-        - 在该阶段，replanner agent 产出的是 **内容规划（content plan）**，而不是系统执行流程。
-        - 内容规划需要明确：
-        - 目标文档应如何拆分为主要章节或部分
-        - 各章节之间的逻辑顺序与覆盖范围
-        - 该阶段 **不负责** 决定系统执行逻辑或多智能体编排方式。
-        - 该阶段 **只能在任务开始时执行一次，且仅一次**。
+        ### 1. 大纲构建阶段（Outline Construction Phase，强制，规划之后）
 
-        ---
-
-        ### 2. 大纲构建阶段（Outline Construction Phase，强制，规划之后）
-
-        - 在内容规划完成后，你 **必须** 委派给 **outline agent**。
+        - 你 **必须** 先委派给 **outline agent**。
         - outline agent 负责基于内容规划或已有上下文：
         - 生成新的结构化大纲，或
         - 对现有大纲进行结构性优化
@@ -147,7 +136,7 @@ class CentralAgent:
 
         ---
 
-        ### 3. 内容生成阶段（Content Generation Phase，大纲确认之后，强制）
+        ### 2. 内容生成阶段（Content Generation Phase，大纲确认之后，强制）
 
         - 一旦大纲生成并被确认，你 **必须** 委派给 **reporter agent**。
         - reporter agent 必须 **严格按照已确认的大纲结构** 生成最终内容。
@@ -158,7 +147,7 @@ class CentralAgent:
         #### 执行约束与规则（Execution Constraints and Rules）
 
         - 执行顺序 **必须严格遵循**：  
-        **内容规划 → 大纲构建 → 内容生成**
+        **大纲构建 → 内容生成**
         - 仅当后续阶段暴露出结构性问题或章节规划问题时，才允许回退到早期阶段。
         - 在任何情况下，**都不得跳过大纲阶段**。
         - **在 reporter agent 尚未生成最终内容之前，不得进入 FINISH 状态**。
@@ -197,22 +186,10 @@ class CentralAgent:
 
         #### 强制性的高层执行流程（Mandatory High-Level Workflow）
 
-        ### 1. 规划阶段（Planning Phase，强制，第一步）
+        ### 1. 大纲构建阶段（Outline Construction Phase，强制，规划之后）
 
-        - 你 **必须** 首先委派给 **replanner agent**。
-        - 在该阶段，replanner agent 产出的是 **内容规划（content plan）**，而不是系统执行流程。
-        - 内容规划需要明确：
-        - 目标文档应如何拆分为主要章节或部分
-        - 各章节之间的逻辑顺序与覆盖范围
-        - 该阶段 **不负责** 决定系统执行逻辑或多智能体编排。
-        - 该阶段 **只能在任务开始时执行一次，且仅一次**。
-
-        ---
-
-        ### 2. 大纲构建阶段（Outline Construction Phase，强制，规划之后）
-
-        - 在内容规划完成后，你 **必须** 委派给 **outline agent**。
-        - outline agent 负责基于内容规划或已有上下文：
+        - 你 **必须** 先委派给 **outline agent**。
+        - outline agent 负责基于已有上下文：
         - 生成新的结构化大纲，或
         - 对现有大纲进行结构性优化与修正。
         - 该阶段 **至少必须执行一次**。
@@ -220,7 +197,7 @@ class CentralAgent:
 
         ---
 
-        ### 3. 推理与研究阶段（Reasoning & Research Phase，强制，位于大纲与内容生成之间）
+        ### 2. 推理与研究阶段（Reasoning & Research Phase，强制，位于大纲与内容生成之间）
 
         - 在大纲生成之后，你 **必须** 执行一个集中式的推理阶段。
         - 在该阶段，中枢智能体（central agent）**必须**：
@@ -233,7 +210,7 @@ class CentralAgent:
 
         ---
 
-        ### 4. 内容生成阶段（Content Generation Phase，强制，大纲确认之后）
+        ### 3. 内容生成阶段（Content Generation Phase，强制，大纲确认之后）
 
         - 一旦大纲生成并被确认，你 **必须** 委派给 **reporter agent**。
         - reporter agent 必须 **严格依据已确认的大纲结构** 生成最终内容。
@@ -244,7 +221,7 @@ class CentralAgent:
         #### 执行约束与规则（Execution Constraints and Rules）
 
         - 执行顺序 **必须严格遵循**：  
-        **内容规划 → 大纲构建 → 推理与研究 → 内容生成**
+        **大纲构建 → 推理与研究 → 内容生成**
         - 仅当后续阶段暴露出内容结构或章节规划问题时，才允许回退至早期阶段。
         - 在任何情况下，**都不得跳过大纲构建阶段**。
         - **在 reporter agent 尚未生成最终内容之前，不得进入 FINISH 状态**。

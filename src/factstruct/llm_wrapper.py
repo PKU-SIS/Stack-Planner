@@ -63,63 +63,112 @@ class FactStructLLMWrapper:
 
         parts = []
 
-        parts.append("你是一个研究助手。请根据用户查询和提供的初始文档，生成一个结构化的研究大纲。\n")
+        # parts.append("你是一个研究助手。请根据用户查询和提供的初始文档，生成一个结构化的研究大纲。\n")
+        # parts.append("## 用户查询\n")
+        # parts.append(query + "\n")
+        # if docs_text:
+        #     parts.append("## 初始文档\n")
+        #     parts.append(docs_text + "\n")
+        # if central_guidance:
+        #     parts.append("## 中枢智能体总体指导\n")
+        #     parts.append(
+        #         "请在生成修改大纲时参考以下内容：\n"
+        #     )
+        #     parts.append(central_guidance + "\n")
+        # if replan_result:
+        #     if isinstance(replan_result, dict):
+        #         parts.append("Replan Result:\n")
+        #         for k, v in replan_result.items():
+        #             parts.append(f"- {k}: {v}\n")
+        #     else:
+        #         parts.append(str(replan_result) + "\n")
+        # if instruction:
+        #     parts.append("## 大纲智能体指导为\n")
+        #     parts.append( instruction + "\n")
+        # output_format="""
+        # ## 要求
+        # 1. 生成一个层次化的研究大纲（建议 2-3 层）
+        # 2. 大纲应该覆盖查询的主要方面
+        # 3. 每个节点应该有一个清晰的标题
+        # 4. 输出格式必须是 JSON，结构如下：
+        # {
+        #     "title": "根节点标题",
+        #     "children": [
+        #         {
+        #             "title": "子节点1标题",
+        #             "children": []
+        #         },
+        #         {
+        #             "title": "子节点2标题",
+        #             "children": [
+        #                 {
+        #                     "title": "子节点2.1标题",
+        #                     "children": []
+        #                 }
+        #             ]
+        #         }
+        #     ]
+        # }
+
+        # 请只输出 JSON，不要包含其他解释性文字。"""
+        # parts.append(output_format)
+        parts.append(
+            "你是一个研究助手。你的任务是**生成一个初始研究大纲骨架**，"
+            "用于后续逐步扩展，而不是一次性完成最终大纲。\n"
+        )
 
         parts.append("## 用户查询\n")
         parts.append(query + "\n")
 
         if docs_text:
-            parts.append("## 初始文档\n")
+            parts.append("## 初始文档（仅供参考，不要求完全覆盖）\n")
             parts.append(docs_text + "\n")
 
         if central_guidance:
             parts.append("## 中枢智能体总体指导\n")
-            parts.append(
-                "请在生成修改大纲时参考以下内容：\n"
-            )
+            parts.append("请在构建初始大纲时参考以下方向性建议：\n")
             parts.append(central_guidance + "\n")
 
-
         if replan_result:
+            parts.append("## Replan Result\n")
             if isinstance(replan_result, dict):
-                parts.append("Replan Result:\n")
                 for k, v in replan_result.items():
                     parts.append(f"- {k}: {v}\n")
             else:
                 parts.append(str(replan_result) + "\n")
 
-
-
         if instruction:
-            parts.append("## 大纲智能体指导为\n")
-            parts.append( instruction + "\n")
-        output_format="""
-        ## 要求
-        1. 生成一个层次化的研究大纲（建议 2-3 层）
-        2. 大纲应该覆盖查询的主要方面
-        3. 每个节点应该有一个清晰的标题
-        4. 输出格式必须是 JSON，结构如下：
-        {
-            "title": "根节点标题",
-            "children": [
-                {
-                    "title": "子节点1标题",
-                    "children": []
-                },
-                {
-                    "title": "子节点2标题",
-                    "children": [
-                        {
-                            "title": "子节点2.1标题",
-                            "children": []
-                        }
-                    ]
-                }
-            ]
-        }
+            parts.append("## 大纲智能体指导\n")
+            parts.append(instruction + "\n")
 
-        请只输出 JSON，不要包含其他解释性文字。"""
-        parts.append(output_format)
+        parts.append(
+            """
+        ## 生成要求（非常重要）
+
+        1. **这是初始化阶段，只生成最小可用的大纲骨架**
+        2. 一级节点数量建议 **3–5 个**
+        3. 仅在必要时为一级节点添加二级节点，**避免展开过细**
+        4. 不要求覆盖所有细节，允许后续通过 expandation 工具补充
+        5. 每个节点只需提供清晰、概括性的标题
+        6. 避免“穷举式”或“百科全书式”结构
+
+        ## 输出格式要求
+        - 仅输出 JSON
+        - 不要输出任何解释性文字
+        - JSON 结构如下：
+
+        {
+        "title": "根节点标题",
+        "children": [
+            {
+            "title": "一级节点标题",
+            "children": []
+            }
+        ]
+        }
+        """
+        )
+
 
         prompt = "\n".join(parts)
         logger.info(f"大纲初始输入 prompt:{prompt}")

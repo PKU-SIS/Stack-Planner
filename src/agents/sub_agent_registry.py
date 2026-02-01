@@ -7,7 +7,7 @@ class SubAgentType(Enum):
     RESEARCHER = "researcher"  # 负责信息检索与研究
     CODER = "coder"  # 负责代码生成与执行
     REPORTER = "reporter"  # 负责结果整理与报告生成
-    PLANNER = "replanner"  # 负责复杂任务分解和规划
+    # PLANNER = "replanner"  # 负责复杂任务分解和规划
     OUTLINE = "outline"  # 负责复杂任务分解和规划
 
 
@@ -45,12 +45,12 @@ sub_agents_sp = [
 
 
 sub_agents_sp_xxqg = [
-    {
-        "name": SubAgentType.PLANNER.value,
-        # 将问题拆解成方便处理的子任务，来更好的指导任务规划
-        "description": "Decompose search problems into manageable subtasks to better guide research step. Don't contain any requirements about report writing in task description, this agent can only handle **search steps planning**. You MUST and Only use it at the beginning of the task.",
-        "node": sp_planner_node,
-    },
+    # {
+    #     "name": SubAgentType.PLANNER.value,
+    #     # 将问题拆解成方便处理的子任务，来更好的指导任务规划
+    #     "description": "Decompose search problems into manageable subtasks to better guide research step. Don't contain any requirements about report writing in task description, this agent can only handle **search steps planning**. You MUST and Only use it at the beginning of the task.",
+    #     "node": sp_planner_node,
+    # },
     {
         "name": SubAgentType.OUTLINE.value,
         "description": "Generate a structured content outline after the overall plan is finalized. This agent designs and adjusts the hierarchical structure of the report, including section titles and logical organization. It does NOT generate full text content or conduct research, and should be used only after task planning is complete.",
@@ -70,12 +70,12 @@ sub_agents_sp_xxqg = [
 
 
 sub_agents_factstruct = [
-    {
-        "name": SubAgentType.PLANNER.value,
-        # 将问题拆解成方便处理的子任务，来更好的指导任务规划
-        "description": "Decompose search problems into manageable subtasks to better guide research step. Don't contain any requirements about report writing in task description, this agent can only handle **search steps planning**. You MUST and Only use it at the beginning of the task.",
-        "node": sp_planner_node,
-    },
+    # {
+    #     "name": SubAgentType.PLANNER.value,
+    #     # 将问题拆解成方便处理的子任务，来更好的指导任务规划
+    #     "description": "Decompose search problems into manageable subtasks to better guide research step. Don't contain any requirements about report writing in task description, this agent can only handle **search steps planning**. You MUST and Only use it at the beginning of the task.",
+    #     "node": sp_planner_node,
+    # },
     {
         "name": SubAgentType.OUTLINE.value,
         "description": "Generate or refine a structured content outline after the overall plan is finalized. This agent designs and adjusts the hierarchical structure of the report, including section titles, logical organization, and approximate word allocation. It does NOT generate full text content or conduct research, and should be used only after task planning is complete.",

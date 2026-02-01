@@ -114,16 +114,6 @@ If the **current action** is **Decision**, determine the next step as follows.
 }
 ```
 
-```json
-{
-  "action": "delegate",
-  "reasoning": "To further increase retrieval depth and ensure comprehensiveness and diversity, I need to use the replanner agent to formulate a specialized plan.",
-  "params": {
-    "agent_type": "replanner",
-    "task_description": "Decompose this question into multi steps: Global AI investment trends in 2025, focusing on ethical considerations"
-  } 
-}
-```
 
 ```json
 {
@@ -160,7 +150,6 @@ While the step is **decision**, you must follow these requirements and return re
 2. Provide a clear reasoning for the decision, justifying why the action is optimal.
 3. If choosing DELEGATE, specify the sub-Agent type and task instructions.
 
-   * If choosing replanner agent: This agent can only handle **search steps planning** and is limited to decomposing retrieval tasks into actionable steps. Do not include any requirements about report writing in the task description. You MUST and ONLY use it at the beginning of the task.
 4. Please remember to check if report is generated before you decide to FINISH the task.
 5. **You must carefully check if the current information is sufficient to support the current decision-making requirements**. Regardless of whether the information is sufficient or not, you must provide detailed reasoning. If the information is insufficient, you must take appropriate actions to supplement it (for example, by delegating to a sub-agent capable of information gathering); if the information is sufficient, you must provide detailed reasoning explaining why the current information supports the decision.
 6. **Typically, after confirming the outline, it does not mean that the current information is sufficient to cover the generation requirements**. After the outline is confirmed, you usually need to delegate a **researcher agent** to gather sufficient information to support the task fully.
