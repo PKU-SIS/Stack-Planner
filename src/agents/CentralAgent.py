@@ -188,13 +188,18 @@ class CentralAgent:
 
         ---
 
-        ### 4.1 风格切换与报告反馈循环（Style Switch & Report Feedback Loop，关键补充）
+        ### 4.1 用户反馈处理循环（User Feedback Loop，关键补充）
 
-        - 当用户通过 human agent 请求风格切换后，reporter agent 会使用新风格重新生成报告
+        - 用户反馈分为两类：
+          - **风格切换**（[CHANGED_STYLE]）：直接委派 reporter agent 使用新风格重新生成报告
+          - **其他修改意见**（[CONTENT_MODIFY] 等）：你需要根据修改意见的具体内容和当前上下文，自行判断应该委派哪些 agent、以什么顺序执行。例如：
+            - 如果修改意见涉及补充信息或搜索更多资料，可以先委派 researcher，再委派 reporter
+            - 如果修改意见仅涉及措辞或结构调整，可以直接委派 reporter
+            - 无论经过多少中间步骤，最终都必须由 reporter 重新生成报告
         - **reporter agent 每次重新生成报告后，都会返回并标记 `need_human_interaction: true`、`human_interaction_type: "report_feedback"`**
         - 🔴 **此时你必须再次委派给 human agent**，让用户查看新报告并决定下一步操作
         - 🔴 **绝对禁止在 `need_human_interaction: true` 时选择 FINISH**——这会导致用户永远看不到重新生成的报告
-        - 这个循环可能重复多次（用户可能多次切换风格），每次都必须经过 human agent
+        - 这个循环可能重复多次，每次都必须经过 human agent
         - **只有当用户明确发送 [SKIP]、[END] 或 [FINISH] 反馈后，才可以进入 FINISH 状态**
 
         ---
@@ -241,7 +246,7 @@ class CentralAgent:
         #### 执行约束与禁止行为（Hard Constraints & Prohibited Actions）
 
         - 执行顺序 **必须严格遵循**：
-          **感知 → [Human] → 大纲 → [Human] → 研究 → 报告 → [Human] → (可能多次风格切换/修改循环: 报告 → [Human] →) → 完成**
+          **感知 → [Human] → 大纲 → [Human] → 研究 → 报告 → [Human] → (反馈循环: [根据反馈内容自行决定中间步骤] → 报告 → [Human] →) → 完成**
         - 🔴 当 `need_human_interaction: true` 时，**必须** 委派给 human agent，**不得跳过**，**不得选择 FINISH 或其他任何动作**
         - 🔴 **FINISH 的前置条件**：只有当 `need_human_interaction` 为 `false` 且用户已明确确认（发送 [SKIP]/[END]/[FINISH]）后，才允许进入 FINISH 状态
         - perception 阶段与 outline 阶段：
@@ -372,65 +377,10 @@ class CentralAgent:
             else:
                 converted_messages.append(msg)
 
-        # 提取用户反馈并格式化为强调文本
-        user_feedback_text = ""
-        hitl_feedback = state.get("hitl_feedback", "")
-        if hitl_feedback:
-            user_feedback_text = f"\n\n🔴 **CRITICAL USER FEEDBACK**: {hitl_feedback}\n\nThis feedback MUST be considered in your decision-making process."
-
-        # 从记忆栈中提取所有用户反馈
-        user_feedbacks_from_memory = []
-        for entry in self.memory_stack.get_all():
-            if entry.action == "human_feedback":
-                feedback_content = entry.content
-                if entry.result:
-                    feedback_type = entry.result.get("feedback_type", "")
-                    if feedback_type == "content_modify":
-                        request = entry.result.get("request", "")
-                        user_feedbacks_from_memory.append(f"- {request}")
-                    else:
-                        user_feedbacks_from_memory.append(f"- {feedback_content}")
-                else:
-                    user_feedbacks_from_memory.append(f"- {feedback_content}")
-
-        if user_feedbacks_from_memory:
-            user_feedback_text += (
-                "\n\n🔴 **USER FEEDBACK HISTORY**:\n"
-                + "\n".join(user_feedbacks_from_memory)
-                + "\n\n⚠️ All feedback above MUST be addressed. When delegating to reporter, ensure these requirements are fulfilled."
-            )
-
-        # 🔴 关键：检测是否需要人类交互
+        # 提取用户反馈相关的 state 变量（具体渲染逻辑已迁移到 central_agent.md 模板）
         need_human_interaction = state.get("need_human_interaction", False)
         human_interaction_type = state.get("human_interaction_type", "")
-        human_interaction_alert = ""
-        if need_human_interaction:
-            human_interaction_alert = f"""
-
-🔴🔴🔴 **MANDATORY: HUMAN INTERACTION REQUIRED** 🔴🔴🔴
-
-**The previous agent has returned with `need_human_interaction: true`**
-**Interaction Type: `{human_interaction_type}`**
-
-**YOU MUST IMMEDIATELY delegate to the Human Agent with the following parameters:**
-```json
-{{
-  "action": "delegate",
-  "params": {{
-    "agent_type": "human",
-    "task_description": "收集人类反馈",
-    "interaction_type": "{human_interaction_type}"
-  }}
-}}
-```
-
-**⛔ ABSOLUTE PROHIBITION: You MUST NOT choose FINISH, THINK, REFLECT, SUMMARIZE, or delegate to any other agent when `need_human_interaction` is `true`.**
-**⛔ Choosing FINISH now would be a CRITICAL ERROR — the user has not yet seen the latest generated content and cannot provide feedback.**
-**⛔ This rule applies EVERY TIME `need_human_interaction` is `true`, including after style switches and report regeneration.**
-
-**DO NOT skip this step. DO NOT proceed to the next phase without human confirmation.**
-
-"""
+        hitl_feedback = state.get("hitl_feedback", "")
 
         context = {
             "available_actions": [action.value for action in CentralAgentAction],
@@ -439,8 +389,7 @@ class CentralAgent:
             "current_action": "decision",
             "messages_history": converted_messages,
             "locale": state.get("locale", "zh-CN"),  # 确保locale被传递到模板
-            "user_feedback": user_feedback_text
-            + human_interaction_alert,  # 添加用户反馈和人类交互提醒到上下文
+            "hitl_feedback": hitl_feedback,
             "SOP": SOP,
             "need_human_interaction": need_human_interaction,
             "human_interaction_type": human_interaction_type,
