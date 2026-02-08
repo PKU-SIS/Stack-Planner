@@ -619,6 +619,8 @@ class SubAgentManager:
         # 检查是否已有人类反馈（用于处理风格切换等）
         # 只处理与报告相关的反馈：[CHANGED_STYLE], [SKIP], [END], [FINISH], [CONTENT_MODIFY]
         hitl_feedback = state.get("hitl_feedback", "")
+        if delegation_context.get("skip_hitl_feedback"):
+            hitl_feedback = ""
         feedback_content = str(hitl_feedback).upper() if hitl_feedback else ""
         is_report_feedback = feedback_content.startswith(
             ("[CHANGED_STYLE]", "[SKIP]", "[END]", "[FINISH]", "[CONTENT_MODIFY]")

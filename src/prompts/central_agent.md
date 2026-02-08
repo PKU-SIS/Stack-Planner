@@ -135,9 +135,14 @@ If the **current action** is **Decision**, determine the next step as follows.
 }
 ```
 
-### 🔴 CRITICAL: Human Agent Delegation Rule
+### 🔴 CRITICAL: Human Agent Delegation Guidance
 
-**When any agent returns with `need_human_interaction: true`, you MUST immediately delegate to the Human Agent.**
+Human Agent is a **sub-agent** responsible for collecting human input (form filling, outline confirmation, report feedback, etc.).
+
+**🔴 MANDATORY RULE: When `need_human_interaction` is `true`, you MUST delegate to Human Agent. This is NOT optional.**
+- You MUST NOT choose FINISH, THINK, REFLECT, SUMMARIZE, or delegate to any other agent when `need_human_interaction` is `true`.
+- This rule applies in ALL scenarios, including after style switches, content modifications, and initial report generation.
+- Violating this rule means the user will never see the generated content and cannot provide feedback — this is a critical system error.
 
 Check the `human_interaction_type` field and delegate accordingly:
 
@@ -148,7 +153,7 @@ Check the `human_interaction_type` field and delegate accordingly:
 | `report_feedback` | After reporter agent returns with report | Collecting feedback on final content |
 | `proactive_question` | When you need more information | Asking clarifying questions |
 
-**DELEGATE to Human Agent Example:**
+**DELEGATE to Human Agent Example (signal present):**
 
 ```json
 {
@@ -191,7 +196,7 @@ While the step is **decision**, you must follow these requirements and return re
 1. Analyze the current state and select the most appropriate action from available options.
 2. Provide a clear reasoning for the decision, justifying why the action is optimal.
 3. If choosing DELEGATE, specify the sub-Agent type and task instructions.
-4. **🔴 CRITICAL: Check `need_human_interaction` field**: If it is `true`, you MUST delegate to the Human Agent with the correct `interaction_type`. Do NOT skip this step.
+4. **🔴 CRITICAL: Check `need_human_interaction` field**: If it is `true`, you **MUST** delegate to the Human Agent with the correct `interaction_type`. Do NOT choose any other action (FINISH, THINK, REFLECT, SUMMARIZE) when this field is `true`. This applies every time — including after style switches and report regeneration.
 5. Please remember to check if report is generated before you decide to FINISH the task.
 6. **You must carefully check if the current information is sufficient to support the current decision-making requirements**. Regardless of whether the information is sufficient or not, you must provide detailed reasoning. If the information is insufficient, you must take appropriate actions to supplement it (for example, by delegating to a sub-agent capable of information gathering); if the information is sufficient, you must provide detailed reasoning explaining why the current information supports the decision.
 7. **[CRITICAL - MANDATORY STEP] After outline confirmation, you MUST delegate to researcher agent**:

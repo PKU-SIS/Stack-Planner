@@ -188,6 +188,17 @@ class CentralAgent:
 
         ---
 
+        ### 4.1 风格切换与报告反馈循环（Style Switch & Report Feedback Loop，关键补充）
+
+        - 当用户通过 human agent 请求风格切换后，reporter agent 会使用新风格重新生成报告
+        - **reporter agent 每次重新生成报告后，都会返回并标记 `need_human_interaction: true`、`human_interaction_type: "report_feedback"`**
+        - 🔴 **此时你必须再次委派给 human agent**，让用户查看新报告并决定下一步操作
+        - 🔴 **绝对禁止在 `need_human_interaction: true` 时选择 FINISH**——这会导致用户永远看不到重新生成的报告
+        - 这个循环可能重复多次（用户可能多次切换风格），每次都必须经过 human agent
+        - **只有当用户明确发送 [SKIP]、[END] 或 [FINISH] 反馈后，才可以进入 FINISH 状态**
+
+        ---
+
         #### 主动提问机制（Proactive Questioning）
 
         在任何阶段，如果你判断当前信息不足以继续执行任务，可以委派给 **human agent** 进行主动提问：
@@ -230,8 +241,9 @@ class CentralAgent:
         #### 执行约束与禁止行为（Hard Constraints & Prohibited Actions）
 
         - 执行顺序 **必须严格遵循**：
-          **感知 → [Human] → 大纲 → [Human] → 研究 → 报告 → [Human] → 完成**
-        - 当 `need_human_interaction: true` 时，**必须** 委派给 human agent，**不得跳过**
+          **感知 → [Human] → 大纲 → [Human] → 研究 → 报告 → [Human] → (可能多次风格切换/修改循环: 报告 → [Human] →) → 完成**
+        - 🔴 当 `need_human_interaction: true` 时，**必须** 委派给 human agent，**不得跳过**，**不得选择 FINISH 或其他任何动作**
+        - 🔴 **FINISH 的前置条件**：只有当 `need_human_interaction` 为 `false` 且用户已明确确认（发送 [SKIP]/[END]/[FINISH]）后，才允许进入 FINISH 状态
         - perception 阶段与 outline 阶段：
           - **均为一次性阶段**
           - **均不可重复、不可回退、不可重新进入**
@@ -411,6 +423,10 @@ class CentralAgent:
   }}
 }}
 ```
+
+**⛔ ABSOLUTE PROHIBITION: You MUST NOT choose FINISH, THINK, REFLECT, SUMMARIZE, or delegate to any other agent when `need_human_interaction` is `true`.**
+**⛔ Choosing FINISH now would be a CRITICAL ERROR — the user has not yet seen the latest generated content and cannot provide feedback.**
+**⛔ This rule applies EVERY TIME `need_human_interaction` is `true`, including after style switches and report regeneration.**
 
 **DO NOT skip this step. DO NOT proceed to the next phase without human confirmation.**
 
@@ -723,6 +739,19 @@ class CentralAgent:
             "memory_context": self.memory_stack.get_summary(include_full_history=True),
             "original_query": state.get("user_query", ""),
         }
+        # 若为内容修改导致的 reporter 委派，清理 hitl_feedback 以避免 reporter 反复处理同一条反馈
+        hitl_feedback = state.get("hitl_feedback", "")
+        clear_hitl_feedback = False
+        if (
+            agent_type == "reporter"
+            and isinstance(hitl_feedback, str)
+            and hitl_feedback.upper().startswith("[CONTENT_MODIFY]")
+        ):
+            clear_hitl_feedback = True
+            modify_request = hitl_feedback[len("[CONTENT_MODIFY]") :].strip()
+            if modify_request:
+                delegation_context["content_modify_request"] = modify_request
+            delegation_context["skip_hitl_feedback"] = True
 
         # 传递 decision.params 中的额外字段（如 interaction_type, question 等）
         # 这对于 Human Agent 来说是必需的
@@ -756,6 +785,7 @@ class CentralAgent:
                     [entry.to_dict() for entry in self.memory_stack.get_all()]
                 ),
                 "locale": state.get("locale"),
+                **({"hitl_feedback": ""} if clear_hitl_feedback else {}),
             },
             goto=agent_type,
         )

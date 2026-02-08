@@ -64,6 +64,26 @@ in_memory_store = InMemoryStore()
 graph = build_graph_with_memory()
 
 
+def _resolve_recursion_limit(max_step_num: int) -> int:
+    default_limit = 25
+    if isinstance(max_step_num, int) and max_step_num > 0:
+        default_limit = max(default_limit, max_step_num * 2 + 10)
+    env_value = os.getenv("GRAPH_RECURSION_LIMIT") or os.getenv("AGENT_RECURSION_LIMIT")
+    if env_value is not None:
+        try:
+            parsed = int(env_value)
+            if parsed > 0:
+                return parsed
+            logger.warning(
+                f"GRAPH_RECURSION_LIMIT/AGENT_RECURSION_LIMIT={env_value} is not positive; using {default_limit}."
+            )
+        except ValueError:
+            logger.warning(
+                f"Invalid GRAPH_RECURSION_LIMIT/AGENT_RECURSION_LIMIT='{env_value}'; using {default_limit}."
+            )
+    return default_limit
+
+
 @app.post("/api/chat/stream")
 async def chat_stream(request: ChatRequest):
     thread_id = request.thread_id
@@ -116,6 +136,7 @@ async def _astream_workflow_generator(
         if messages:
             resume_msg += f" {messages[-1]['content']}"
         input_ = Command(resume=resume_msg)
+    recursion_limit = _resolve_recursion_limit(max_step_num)
     async for agent, _, event_data in graph.astream(
         input_,
         config={
@@ -126,6 +147,7 @@ async def _astream_workflow_generator(
             "max_search_results": max_search_results,
             "mcp_settings": mcp_settings,
             "knowledge_base_name": knowledge_base_name,
+            "recursion_limit": recursion_limit,
         },
         stream_mode=["messages", "updates"],
         subgraphs=True,
@@ -238,6 +260,7 @@ async def _astream_workflow_generator_xxqg(
         if messages:
             resume_msg += f" {messages[-1]['content']}"
         input_ = Command(resume=resume_msg)
+    recursion_limit = _resolve_recursion_limit(max_step_num)
     async for agent, _, event_data in get_graph_by_format("xxqg").astream(
         input_,
         config={
@@ -248,6 +271,7 @@ async def _astream_workflow_generator_xxqg(
             "max_search_results": max_search_results,
             "mcp_settings": mcp_settings,
             "knowledge_base_name": knowledge_base_name,
+            "recursion_limit": recursion_limit,
         },
         stream_mode=["messages", "updates"],
         subgraphs=True,
@@ -385,6 +409,7 @@ async def _astream_workflow_generator_sp(
         if clean_messages and not interrupt_feedback.startswith("[CONTENT_MODIFY]"):
             resume_msg += f" {clean_messages[-1]['content']}"
         input_ = Command(resume=resume_msg)
+    recursion_limit = _resolve_recursion_limit(max_step_num)
 
     from src.graph.sp_nodes import init_agents
 
@@ -405,6 +430,7 @@ async def _astream_workflow_generator_sp(
             "max_search_results": max_search_results,
             "mcp_settings": mcp_settings,
             "knowledge_base_name": knowledge_base_name,
+            "recursion_limit": recursion_limit,
         },
         stream_mode=["messages", "updates"],
         subgraphs=True,

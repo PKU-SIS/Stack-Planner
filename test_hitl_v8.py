@@ -43,8 +43,34 @@ AVAILABLE_STYLES = ["鲁迅", "赵树理", "侠客岛"]
 # - interactive: 交互式测试
 TEST_MODE = "word_planning"
 
+# 交互控制:
+# - "interactive": 强制走人工输入（仅在 TTY 下有效）
+# - "auto": 强制走自动反馈（即使在 TTY 下也不提示输入）
+INTERACTION_MODE = "interactive"
+
+# 自动反馈循环控制：
+# - AUTO_LOOP_MAX = 0 表示无限循环
+# - >0 表示最多循环次数
+AUTO_LOOP_MAX = 0
+
+# 自动风格切换序列（按顺序循环）
+AUTO_STYLE_SEQUENCE = None  # None 表示使用 AVAILABLE_STYLES
+
 # 字数规划配置
 TOTAL_WORD_LIMIT = 5000  # 总字数限制
+
+
+def is_interactive_input() -> bool:
+    """
+    判断是否应该走交互输入。
+    INTERACTION_MODE=interactive 时，若非 TTY 会回退到自动模式以避免阻塞。
+    """
+    if INTERACTION_MODE == "interactive":
+        if sys.stdin.isatty():
+            return True
+        print("⚠️ INTERACTION_MODE=interactive 但当前不是 TTY，已回退为自动模式。")
+        return False
+    return False if INTERACTION_MODE == "auto" else sys.stdin.isatty()
 
 
 def parse_json_maybe(value: Union[str, dict, list]) -> Union[dict, list, str]:
@@ -90,7 +116,7 @@ def pretty_print_sheet(questions: List[dict]) -> List[str]:
     answers_parsed: List[str] = []
     answer_lines: List[str] = []
 
-    if sys.stdin.isatty():
+    if is_interactive_input():
         answer = input().strip()
         while answer.upper() != "END":
             answer_lines.append(answer)
@@ -161,7 +187,7 @@ def present_outline_and_get_feedback(outline_value: Union[str, dict, list]) -> s
     if "[" in outline_str and "字]" in outline_str:
         print("\n📊 检测到字数规划信息！大纲中包含各节点的字数分配。\n")
 
-    if not sys.stdin.isatty():
+    if not is_interactive_input():
         print("\n非交互式环境，自动确认现有大纲。\n")
         return "[CONFIRMED_OUTLINE]" + outline_str
 
@@ -215,17 +241,33 @@ def present_report_and_get_feedback(report_content: str) -> str:
         print(f"   {i}. {style}")
     print()
 
-    if not sys.stdin.isatty():
+    if not is_interactive_input():
         # 非交互式环境：根据 TEST_MODE 决定测试场景
+        global _auto_loop_count, _style_switch_count, _content_modify_count
+        if AUTO_LOOP_MAX > 0 and _auto_loop_count >= AUTO_LOOP_MAX:
+            print("\n非交互式环境，达到最大循环次数，自动结束。\n")
+            return "[SKIP]"
+        _auto_loop_count += 1
+
         if TEST_MODE == "style_switch":
-            print("非交互式环境，测试风格切换：切换到 '赵树理' 风格...")
-            return "[CHANGED_STYLE]赵树理"
+            styles = AUTO_STYLE_SEQUENCE or AVAILABLE_STYLES
+            style = styles[_style_switch_count % len(styles)]
+            _style_switch_count += 1
+            print(f"非交互式环境，测试风格切换：切换到 '{style}' 风格...")
+            return f"[CHANGED_STYLE]{style}"
         elif TEST_MODE == "content_modify":
+            _content_modify_count += 1
             print("非交互式环境，测试内容修改：请求增加数据支撑...")
-            return "[CONTENT_MODIFY]请在第二段增加更多具体数据和案例支撑"
+            return f"[CONTENT_MODIFY]请在第{_content_modify_count}次修改中增加更多具体数据和案例支撑"
         elif TEST_MODE == "word_planning":
             print("非交互式环境，字数规划测试完成，结束流程...")
             return "[SKIP]"
+        elif TEST_MODE == "interactive":
+            styles = AUTO_STYLE_SEQUENCE or AVAILABLE_STYLES
+            style = styles[_style_switch_count % len(styles)]
+            _style_switch_count += 1
+            print(f"非交互式环境，interactive 模式回退：切换到 '{style}' 风格...")
+            return f"[CHANGED_STYLE]{style}"
         else:
             return "[SKIP]"
 
@@ -268,6 +310,7 @@ _perception_node_count = 0
 _suppress_after_second_perception = False
 _style_switch_count = 0  # 记录风格切换次数
 _content_modify_count = 0  # 记录内容修改次数
+_auto_loop_count = 0  # 记录自动反馈循环次数
 
 
 def _is_perception_node(current_node: Any) -> bool:
@@ -362,17 +405,6 @@ def process_event(
             start_idx = content.find("[REPORT]") + len("[REPORT]")
             end_idx = content.find("[/REPORT]")
             report_content = content[start_idx:end_idx].strip()
-
-            # 非交互式环境下，限制操作次数以避免无限循环
-            if not sys.stdin.isatty():
-                total_count = _style_switch_count + _content_modify_count
-                if total_count > 0:
-                    print("\n非交互式环境，已操作过一次，自动结束。\n")
-                    return {"thread_id": thread_id, "content": "[SKIP]"}
-                if TEST_MODE == "style_switch":
-                    _style_switch_count += 1
-                elif TEST_MODE == "content_modify":
-                    _content_modify_count += 1
 
             feedback_content = present_report_and_get_feedback(report_content)
             print("feedback_content: ", feedback_content)
