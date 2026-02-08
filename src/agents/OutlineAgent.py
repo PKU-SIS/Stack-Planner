@@ -17,13 +17,8 @@ from src.prompts.template import apply_prompt_template, get_prompt_template
 from src.utils.json_utils import repair_json_output
 from src.utils.logger import logger
 from src.utils.statistics import global_statistics
-# from src.prompts.central_decision import Decision, DelegateParams
 from src.utils.reference_utils import global_reference_map
 from ..graph.types import State
-# from .SubAgentConfig import get_sub_agents_by_global_type
-# from src.factstruct.llm_wrapper import FactStructLLMWrapper
-# from src.factstruct.batch_mab import BatchMAB
-# from src.factstruct.outline_node import OutlineNode
 from src.factstruct import FactStructLLMWrapper, BatchMAB, OutlineNode, create_search_engine_adapter,Embedder,outline_node_to_dict,memory_to_dict,Memory,outline_node_to_markdown
 import re
 from src.memory import MemoryStack, MemoryStackEntry#加一个 Memory 吧，要不 decision 做不了
@@ -34,12 +29,10 @@ from src.utils.statistics import global_statistics, timed_step
 # 核心枚举定义
 # -------------------------
 class OutlineTool(Enum):
-    """Outline Agent 可执行的结构性工具"""
-
     INITIALIZATION = "initialization"
     EXPANDATION = "expandation"
-    REDUCTION = "reduction"
-    REFLECT = "reflect"
+    REDUCTION = "compression"       
+    UPDATE = "update"            
     FINISH = "finish"
 
 
@@ -65,8 +58,8 @@ class OutlineToolDecision_Base(BaseModel):
     tool: Literal[
         "initialization",
         "expandation",
-        "reduction",
-        "reflect",
+        "compression",
+        "update",
         "finish",
     ]
     reasoning: str
@@ -146,8 +139,8 @@ class OutlineAgent:
         self.tool_handlers = {
             "initialization": self._tool_initialization,
             "expandation": self._tool_expansion,
-            # "reduction": self._tool_reduction,#未实现，暂时注释
-            # "reflect": self._tool_reflect,#未实现，暂时注释
+            "compression": self._tool_compress,   # 新增
+            "update": self._tool_update,        # 新增
             "finish": self._tool_finish,
         }
 
@@ -332,19 +325,22 @@ class OutlineAgent:
         small_ratio = len(small_nodes) / leaf_count if leaf_count > 0 else 0
 
 
+        # ---------- 文档分布分析 ----------
+        # 找出所有缺文献的叶子节点
+        uncovered_leaf_nodes = [
+            node for node in leaf_nodes
+            if not getattr(self.factstruct_memory, "node_to_docs", {}).get(node.id)
+        ]
+        logger.info(f"uncovered_leaf_nodes{uncovered_leaf_nodes}")
+        # 叶子节点覆盖率（可选，用于简单统计）
+        leaf_coverage_ratio = 1 - len(uncovered_leaf_nodes) / len(leaf_nodes) if leaf_nodes else 0
+        logger.info(f"leaf_coverage_ratio{leaf_coverage_ratio}")
+
         # ----------- 决策建议，根据 prompt 规则生成下一步建议 -------------
         if not outline_exists:
             suggestion = (
                 f"当前 outline_exists={outline_exists}，尚未生成任何大纲结构，"
                 "无法进行字数与结构评估，需要先初始化大纲，应调用 initialization 工具。"
-            )
-
-        elif small_ratio >= 1 / 3:
-            suggestion = (
-                f"当前 outline_exists={outline_exists}，leaf_node_count={leaf_count}，"
-                f"其中有 {len(small_nodes)} 个叶子节点字数小于 300（占比约 {small_ratio:.0%}），"
-                "说明当前大纲结构过于零散、内容承载不足，整体规划不合理，"
-                "需要重新构建大纲结构，应调用 initialization 工具。"
             )
 
         elif len(large_nodes) > 1:
@@ -353,7 +349,23 @@ class OutlineAgent:
                 "说明部分章节负担过重，需要进一步拆分细化章节结构，"
                 "应调用 expandation 工具。"
             )
+            
+        elif small_ratio >= 1 / 3:
+            suggestion = (
+                f"当前 outline_exists={outline_exists}，leaf_node_count={leaf_count}，"
+                f"其中有 {len(small_nodes)} 个叶子节点字数小于 300（占比约 {small_ratio:.0%}），"
+                "说明当前大纲结构过于零散、内容承载不足，整体规划不合理，"
+                "需要重新构建大纲结构，应调用 compression 工具，选择同一父节点下字数 < 300 的一些节点进行压缩。"
+            )
 
+        elif leaf_coverage_ratio<0.9:
+            # 有具体未覆盖的节点 → update
+            missing_ids = [node.id for node in uncovered_leaf_nodes]
+            suggestion = (
+                f"存在 {len(uncovered_leaf_nodes)} 个叶子节点缺文献，"
+                f"节点ID={missing_ids}缺少文献，请你选择其中的属于相同父节点的节点，优化这些节点或微调结构。"
+                "应调用 update 工具"
+            )
         elif (
             total_planned_words >= 0.8 * total_word_limit
             and total_planned_words <= 1.2 * total_word_limit
@@ -363,7 +375,6 @@ class OutlineAgent:
                 f"且大纲规划总字数为 {total_planned_words}，与目标字数 {total_word_limit} 基本一致，"
                 "说明大纲结构和字数规划合理，可以结束大纲构建，应调用 finish 工具。"
             )
-
         else:
             suggestion = (
                 f"当前 outline_exists={outline_exists}，大纲结构已存在，但字数或结构尚未达到最优状态，"
@@ -376,6 +387,8 @@ class OutlineAgent:
             "leaf_node_count": leaf_count,
             "estimated_words": total_planned_words,  # ← 真实字数
             "total_word_limit": total_word_limit,
+            "uncovered_leaf_nodes": uncovered_leaf_nodes,  # 具体哪些节点没覆盖
+            "leaf_coverage_ratio": leaf_coverage_ratio,    # 简单统计，可供参考
             "has_expandation_history": has_expandation,
             "next_step_suggestion": suggestion,
         }
@@ -528,14 +541,6 @@ class OutlineAgent:
                     outline_root, total_word_limit
                 )
                 # outline_response = outline_root.to_text_tree(
-                #     include_word_limit=True
-                # )
-            # else:
-            #     outline_response = outline_node_to_markdown(
-            #         outline_root, max_depth=None, include_root=True
-            #     )
-            # factstruct_outline_dict = outline_node_to_dict(outline_root)
-            # factstruct_memory_dict = memory_to_dict(memory)
 
             # --- Step 7: 更新状态并回到 outline agent ---
             return Command(
@@ -614,14 +619,6 @@ class OutlineAgent:
                     outline_root, total_word_limit
                 )
                 # outline_response = outline_root.to_text_tree(
-                #     include_word_limit=True
-                # )
-            # else:
-            #     outline_response = outline_node_to_markdown(
-            #         outline_root, max_depth=None, include_root=True
-            #     )
-            # factstruct_outline_dict = outline_node_to_dict(outline_root)
-            # factstruct_memory_dict = memory_to_dict(memory)
 
             #最后返回
             logger.info(f"FactStruct Stage 1 完成: "f"{len(outline_root.get_all_nodes())} 个节点")
@@ -644,6 +641,147 @@ class OutlineAgent:
                     "outline_feedback": f"Outline expansion failed: {str(e)}"
                 }
             )
+
+
+
+    def _tool_compress(
+        self,
+        decision: OutlineToolDecision,
+        state: State,
+        config: RunnableConfig,
+    ) -> Command:
+        """
+        收缩现有大纲（压缩 / 合并节点）
+        """
+        logger.info(f"Outline Tool: compress | reasoning={decision.reasoning}")
+
+        outline_root = state.get("factstruct_outline")
+        memory = state.get("factstruct_memory")
+
+        if outline_root is None or memory is None:
+            logger.warning("Compress skipped: outline or memory missing")
+            return Command(
+                update={
+                    "outline_feedback": "Compress skipped: outline or memory missing."
+                }
+            )
+
+        # 提取 decision 参数（可选）
+        params = decision.params or {}
+        # max_iterations = params.get("max_iterations", state.get("factstruct_max_iterations", 3))
+        # batch_size = params.get("batch_size", state.get("factstruct_batch_size", 2))
+        # merge_candidates = params.get("merge_candidates", [])  # 具体要合并的节点信息
+        operation=params.get("operation","无指令")
+        
+        # logger.info(f"Compress params resolved: max_iterations={max_iterations}, batch_size={batch_size}, merge_candidates={merge_candidates}")
+        logger.info(f"Compress params resolved: operation={operation}")
+
+
+        try:
+            # 调用 batch_mab 压缩算法（后续实现）
+            outline_root, memory = self.batch_mab.run_compression(
+                outline_root=outline_root,
+                memory=memory,
+                operation=operation,
+                config=config,
+            )
+
+            # 字数规划（可选）
+            total_word_limit = state.get("total_word_limit", 5000)
+            if total_word_limit > 0:
+                outline_root = self.execute_word_planning(outline_root, total_word_limit)
+
+            logger.info(f"Outline compressed: {len(outline_root.get_all_nodes())} nodes total")
+
+            return Command(
+                update={
+                    "factstruct_outline": outline_root,
+                    "factstruct_memory": memory,
+                    "outline_feedback": "Outline compression completed successfully.",
+                }
+            )
+
+        except Exception as e:
+            import traceback
+            logger.error("Outline compression failed")
+            logger.error(traceback.format_exc())
+            return Command(
+                update={
+                    "outline_feedback": f"Outline compression failed: {str(e)}"
+                }
+            )
+
+    
+    def _tool_update(
+        self,
+        decision: OutlineToolDecision,
+        state: State,
+        config: RunnableConfig,
+    ) -> Command:
+        """
+        更新 / 微调现有大纲（等价变换或添加文献覆盖）
+        """
+        logger.info(f"Outline Tool: update | reasoning={decision.reasoning}")
+
+        outline_root = state.get("factstruct_outline")
+        memory = state.get("factstruct_memory")
+
+        if outline_root is None or memory is None:
+            logger.warning("Update skipped: outline or memory missing")
+            return Command(
+                update={
+                    "outline_feedback": "Update skipped: outline or memory missing."
+                }
+            )
+
+        # 提取 decision 参数（可选）
+        params = decision.params or {}
+        # max_iterations = params.get("max_iterations", state.get("factstruct_max_iterations", 2))
+        # batch_size = params.get("batch_size", state.get("factstruct_batch_size", 2))
+        # uncovered_leaf_nodes = params.get("uncovered_leaf_nodes", [])  # 需要微调的叶子节点
+        # logger.info(f"Update params resolved: max_iterations={max_iterations}, batch_size={batch_size}, uncovered_leaf_nodes={uncovered_leaf_nodes}")
+        instruction=params.get("instruction","无指令")
+        
+        logger.info(f"Update params resolved: instruction={instruction}")
+        
+        try:
+            # 调用 batch_mab 更新算法（后续实现）
+            outline_root, memory = self.batch_mab.run_update(
+                outline_root=outline_root,
+                memory=memory,
+                instruction=instruction,
+                config=config,
+            )
+
+            # 字数规划（可选）
+            total_word_limit = state.get("total_word_limit", 5000)
+            if total_word_limit > 0:
+                outline_root = self.execute_word_planning(outline_root, total_word_limit)
+
+            logger.info(f"Outline updated: {len(outline_root.get_all_nodes())} nodes total")
+
+            return Command(
+                update={
+                    "factstruct_outline": outline_root,
+                    "factstruct_memory": memory,
+                    "outline_feedback": "Outline update completed successfully.",
+                }
+            )
+
+        except Exception as e:
+            import traceback
+            logger.error("Outline update failed")
+            logger.error(traceback.format_exc())
+            return Command(
+                update={
+                    "outline_feedback": f"Outline update failed: {str(e)}"
+                }
+            )
+
+
+
+
+
 
 
 

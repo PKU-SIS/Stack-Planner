@@ -392,6 +392,14 @@ class BatchMAB:
         # --- Step 5: 文档绑定 ---
         self.memory.map_node_to_docs(outline_root.id, initial_docs_with_embed)
         logger.info(f"self.memory.node_to_docs{self.memory.node_to_docs}")
+        
+        #感觉这个地方需要思考一下，初始化的文档是归谁的，现在是放到了 Root 上
+        #我觉得确实不能给子节点，否则文档覆盖率这个东西就不太行了
+        #初始化的节点是否需要给上，奖励如果不给奖励的话，一开始的大纲扩展就只会在第一层进行扩展
+        #那这么说，finish 是不是要多一个 保证大家的reward 都不是零才好结束。
+        #expansion的 reward 更新包括两个地方，一个是检索文档的更新，一个是子节点的生成
+        #compassion的 reward的更新包括两个地方，一个是select node需要计算 reward但是不更新。 另一个是新的节点的生成，这个应该是用parent 的 node 就可以了
+        #updat 的 reward的更新包括两个地方，一个是
         return outline_root, self.memory, initial_docs
 
 
@@ -526,6 +534,7 @@ class BatchMAB:
                         continue
 
                     # 将父节点的 MAB 状态复制给所有新生成的子节点
+                    # 给子节点提供新的 reward
                     for child in new_children:
                         child.pull_count = parent_node.pull_count
                         # 必须创建 reward_history 的副本

@@ -32,8 +32,9 @@
 你 **只能** 选择以下工具之一：
 * `initialization`
 * `expandation`
+* `compression`
+* `update`
 * `finish`
-> ⚠️ `reduction`、`reflect` 当前不可用，不得选择。
 
 ---
 
@@ -59,7 +60,9 @@
 
 你的任务是基于 decision_state 决定下一步工具：
 - 如果 outline_exists == False 且 has_expandation_history == False → initialization
-- 如果 outline_exists == True 且 (leaf_node_count < 20 或 max_depth < 1) → expandation
+- 如果 outline_exists == True 且 (leaf_node_count < 10 或 max_depth < 1) → expandation
+- 如果 outline_exists == True 且 leaf_node_count > 30 或 max_depth > 3 → compression
+- 如果 outline_exists == True 且节点数量和层级保持不变，但需要优化结构，增加文档 → update
 - 如果 outline_exists == True 且 estimated_words >= 0.9 * total_word_limit → finish
 - 其他情况下 → expandation
 
@@ -149,42 +152,32 @@
 
 ---
 
-### 3. reduction
-**这个场景现不要用，不要用，不要用。还没实现。**
+### 3. compression
 使用场景：
+- outline_exists == True 并且节点数量过多或某些同级节点高度冗余
+- 需要合并或删除节点以简化大纲结构
 
-* 相对于目标字数，大纲 **过于冗长**
-* 多个相邻或同级节点在语义上 **高度重叠**
-* 在进一步扩展前，需要先进行结构简化
-
-**Params 格式**
-
+Params 格式
 ```json
 {
   "operation": "描述需要合并或删除的节点，例如：'Node A 和 Node B -> 合并为 Node C'"
 }
-```
+
 
 ---
 
-### 4. reflect
-**这个场景现不要用，不要用，不要用。还没实现。**
-> 该工具用于向 **中枢智能体** 提供整体评估结果。
-> 具体评估过程由 outline 系统内部自动完成，你只需输出总结性判断。
 
+### 4. update
 使用场景：
+- outline_exists == True 且节点数量和层级保持不变
+- 需要优化节点顺序、标题或内容提示，但不改变结构本质
 
-* 需要评估当前大纲结构是否 **平衡、连贯**
-* 需要判断 **字数规划是否与大纲深度匹配**
-* 在做出下一步结构性决策前，需要一次整体反思
-
-**Params 格式**
-
+Params 格式
 ```json
 {
-  "feedback": "对大纲结构、层次平衡以及字数走势的简要评估。"
+  "instruction": "描述节点重写或结构优化要求，重写哪些节点，重写的思路是什么，生成的节点可能是什么样的"
 }
-```
+
 
 ---
 
@@ -220,7 +213,7 @@
 
 ```json
 {
-  "tool": "initialization | expandation | reduction | reflect | finish",
+  "tool": "initialization | expandation | compression | update | finish",
   "reasoning": "选择该工具的清晰、简要理由",
   "params": { ... } | null
 }

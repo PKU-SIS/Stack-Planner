@@ -705,7 +705,7 @@ class FactStructLLMWrapper:
     ):
         """
         为现有节点继承 MAB 状态（pull_count, reward_history）
-
+        感觉就是因为有个 new_root有个 old_root所以做了个复制粘贴。
         通过节点路径（从根到当前节点的路径）匹配来找到对应的节点并继承状态。
         这个方法只处理旧大纲中已存在的节点，不包括新扩展的子节点。
 
