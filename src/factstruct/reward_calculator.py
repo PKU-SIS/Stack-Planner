@@ -56,18 +56,18 @@ class RewardCalculator:
         all_doc_embeddings: np.ndarray,
         node_embedding: np.ndarray = None,
     ) -> Tuple[float, Dict]:
-        """
-        计算奖励值
+        # """
+        # 计算奖励值
 
-        参数:
-            new_docs: 新检索到的文档列表
-            node_title: 节点标题（用于生成节点嵌入，如果 node_embedding 未提供）
-            all_doc_embeddings: 全局文档池的所有嵌入向量，形状为 (N, embedding_dim)
-            node_embedding: 节点的嵌入向量（可选，如果未提供则使用文档平均嵌入）
+        # 参数:
+        #     new_docs: 新检索到的文档列表
+        #     node_title: 节点标题（用于生成节点嵌入，如果 node_embedding 未提供）
+        #     all_doc_embeddings: 全局文档池的所有嵌入向量，形状为 (N, embedding_dim)
+        #     node_embedding: 节点的嵌入向量（可选，如果未提供则使用文档平均嵌入）
 
-        返回:
-            (reward, breakdown): 奖励值和详细分解
-        """
+        # 返回:
+        #     (reward, breakdown): 奖励值和详细分解
+        # """
         if not new_docs:
             return 0.0, {
                 "relevance": 0.0,
@@ -97,19 +97,19 @@ class RewardCalculator:
         docs: List[FactStructDocument],
         node_embedding: np.ndarray = None,
     ) -> float:
-        """
-        计算相关性（Relevance）
+        # """
+        # 计算相关性（Relevance）
 
-        如果提供了 node_embedding，则计算文档与节点的相似度。
-        否则，计算文档之间的平均相似度（文档集合的内聚性）。
+        # 如果提供了 node_embedding，则计算文档与节点的相似度。
+        # 否则，计算文档之间的平均相似度（文档集合的内聚性）。
 
-        参数:
-            docs: 文档列表
-            node_embedding: 节点嵌入向量（可选）
+        # 参数:
+        #     docs: 文档列表
+        #     node_embedding: 节点嵌入向量（可选）
 
-        返回:
-            相关性分数（0-1）
-        """
+        # 返回:
+        #     相关性分数（0-1）
+        # """
         if not docs:
             return 0.0
 
