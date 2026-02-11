@@ -72,6 +72,10 @@ async def run_agent_workflow_async(
             "thread_id": "default",
             "max_plan_iterations": max_plan_iterations,
             "max_step_num": max_step_num,
+            # "max_search_results": max_search_results,
+            # "mcp_settings": mcp_settings,
+            # "knowledge_base_name": knowledge_base_name,
+            "graph_format": graph_format,
             "mcp_settings": {
                 "servers": {
                     "mcp-github-trending": {
