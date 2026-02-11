@@ -36,6 +36,9 @@ class OutlineNode:
         for child in self.children:
             if child.parent != self:
                 child.parent = self
+    #增加hash 代码
+    def __hash__(self):
+        return hash(self.id)
 
     def is_leaf(self) -> bool:
         """判断是否为叶子节点"""
@@ -89,25 +92,56 @@ class OutlineNode:
             return 0.0
         return sum(self.reward_history) / len(self.reward_history)
 
-    def to_text_tree(self, indent: int = 0, include_word_limit: bool = False) -> str:
+    # def to_text_tree(self, indent: int = 0, include_word_limit: bool = False) -> str:
+    #     """
+    #     将节点树转换为文本格式（用于 LLM 提示）
+
+    #     参数:
+    #         indent: 缩进级别
+    #         include_word_limit: 是否包含字数配额信息
+
+    #     返回:
+    #         文本格式的大纲树
+    #     """
+    #     prefix = "  " * indent
+    #     if include_word_limit and self.word_limit > 0:
+    #         result = f"{prefix}- {self.id}{self.title} [{self.word_limit}字]\n"
+    #     else:
+    #         result = f"{prefix}- {self.id}{self.title}\n"
+
+    #     for child in self.children:
+    #         result += child.to_text_tree(indent + 1, include_word_limit)
+
+    #     return result
+    def to_text_tree(
+        self, 
+        indent: int = 0, 
+        include_word_limit: bool = False,
+        include_mab_state: bool = False
+    ) -> str:
         """
         将节点树转换为文本格式（用于 LLM 提示）
 
         参数:
             indent: 缩进级别
             include_word_limit: 是否包含字数配额信息
+            include_mab_state: 是否包含 MAB 状态（pull_count 和 reward_history）
 
         返回:
             文本格式的大纲树
         """
         prefix = "  " * indent
+        parts = [f"{self.id} {self.title}"]
         if include_word_limit and self.word_limit > 0:
-            result = f"{prefix}- {self.title} [{self.word_limit}字]\n"
-        else:
-            result = f"{prefix}- {self.title}\n"
+            parts.append(f"[{self.word_limit}字]")
+
+        if include_mab_state:
+            parts.append(f"(pull_count={self.pull_count}, reward_history={self.reward_history})")
+
+        result = f"{prefix}- " + " ".join(parts) + "\n"
 
         for child in self.children:
-            result += child.to_text_tree(indent + 1, include_word_limit)
+            result += child.to_text_tree(indent + 1, include_word_limit, include_mab_state)
 
         return result
 

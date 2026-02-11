@@ -354,8 +354,9 @@ class OutlineAgent:
             suggestion = (
                 f"当前 outline_exists={outline_exists}，leaf_node_count={leaf_count}，"
                 f"其中有 {len(small_nodes)} 个叶子节点字数小于 300（占比约 {small_ratio:.0%}），"
-                "说明当前大纲结构过于零散、内容承载不足，整体规划不合理，"
-                "需要重新构建大纲结构，应调用 compression 工具，选择同一父节点下字数 < 300 的一些节点进行压缩。"
+                "说明当前大纲结构过于零散、内容承载不足，整体规划不合理。"
+                "应调用 compression 工具，对【同一父节点下】字数 < 300 的部分叶子节点进行合并压缩，"
+                "并通过明确的节点列表与合并次数参数来控制压缩强度。"
             )
 
         elif leaf_coverage_ratio<0.9:
@@ -666,15 +667,44 @@ class OutlineAgent:
                 }
             )
 
-        # 提取 decision 参数（可选）
+        # 提取 decision 参数
         params = decision.params or {}
-        # max_iterations = params.get("max_iterations", state.get("factstruct_max_iterations", 3))
-        # batch_size = params.get("batch_size", state.get("factstruct_batch_size", 2))
-        # merge_candidates = params.get("merge_candidates", [])  # 具体要合并的节点信息
-        operation=params.get("operation","无指令")
+
+        merge_candidates = params.get("merge_candidates", [])
+        max_merges = params.get("max_merges", 1)
+        target_leaf_count = params.get("target_leaf_count",2)
         
-        # logger.info(f"Compress params resolved: max_iterations={max_iterations}, batch_size={batch_size}, merge_candidates={merge_candidates}")
-        logger.info(f"Compress params resolved: operation={operation}")
+
+        merge_candidates_raw = merge_candidates
+        resolved = []
+
+        if not merge_candidates_raw:
+            merge_candidates=resolved
+
+        for item in merge_candidates_raw:
+            # 已经是 OutlineNode
+            if isinstance(item, OutlineNode):
+                resolved.append(item)
+                continue
+
+            # ID（int / str）
+            node_id = str(item)
+            node = outline_root.find_node_by_id(node_id)
+            if node:
+                resolved.append(node)
+            else:
+                logger.warning(f"Merge candidate id '{node_id}' not found in outline")
+
+        merge_candidates=resolved
+
+        logger.info(
+            "Compress params resolved: "
+            f"merge_candidates={len(merge_candidates)}, "
+            f"max_merges={max_merges}, "
+            f"target_leaf_count={target_leaf_count}"
+        )
+
+        
 
 
         try:
@@ -682,9 +712,13 @@ class OutlineAgent:
             outline_root, memory = self.batch_mab.run_compression(
                 outline_root=outline_root,
                 memory=memory,
-                operation=operation,
+                merge_candidates=merge_candidates,
+                max_merges=max_merges,
+                target_leaf_count=target_leaf_count,
                 config=config,
             )
+
+
 
             # 字数规划（可选）
             total_word_limit = state.get("total_word_limit", 5000)

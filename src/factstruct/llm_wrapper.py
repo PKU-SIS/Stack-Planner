@@ -834,3 +834,408 @@ class FactStructLLMWrapper:
             f"target titles found in new outline"
         )
         return True
+
+
+
+    def compress_under_parent(
+        self,
+        outline_root: "OutlineNode",
+        parent_node: "OutlineNode",
+        child_nodes: List["OutlineNode"],
+        memory: "Memory" = None,
+    ) -> Tuple[
+        "OutlineNode",
+        List[Tuple["OutlineNode", List["OutlineNode"]]],
+        Dict[str, List["FactStructDocument"]],
+        Dict[str, List[str]],
+    ]:
+        """
+        在指定父节点下压缩多个相似子节点
+
+        返回:
+            new_root: 压缩后的大纲根节点
+            compressed_nodes_list: [(父节点, [新生成子节点])]
+            new_node_doc_mapping: {新节点ID: [文档列表]}
+            merged_node_mapping: {新节点ID: [被压缩的旧节点ID列表]}
+        """
+        if not parent_node.children:
+            logger.info(f"父节点 '{parent_node.title}' 没有子节点，跳过压缩")
+            return outline_root, [], {}, {}
+
+        elif len(parent_node.children) <= 2:
+            # 1 或 2 个子节点，进行结构折叠（不走 LLM）
+            original_children = child_nodes
+
+            # 1️⃣ 提升孙节点
+            self.flatten_children(parent_node, original_children)
+
+            # 2️⃣ 更新 memory
+            merged_docs = []
+            merged_child_ids = []
+
+            if memory:
+                merged_docs = []
+                for child in original_children:
+                    doc_ids = memory.node_to_docs.get(child.id, set())
+                    if doc_ids:
+                        merged_docs.extend(doc_ids)
+                        del memory.node_to_docs[child.id]
+
+                if merged_docs:
+                    merged_doc_objs = [memory.documents[doc_id] for doc_id in merged_docs if doc_id in memory.documents]
+                    memory.map_node_to_docs(parent_node.id, merged_doc_objs)
+
+            logger.info(
+                f"父节点 '{parent_node.title}' 子节点数量为 {len(original_children)}，已进行结构折叠"
+            )
+
+            return (
+                outline_root,
+                [(parent_node, original_children)],
+                {parent_node.id: merged_docs},
+                {parent_node.id: [child.id for child in original_children]},
+            )
+
+
+        # 多子节点压缩逻辑
+        # 1️⃣ 构造当前大纲文本
+        outline_text = outline_root.to_text_tree()
+
+        # 2️⃣ 构造子节点描述（简要文献信息）
+        children_desc = []
+        merged_source_ids = []
+
+        for node in child_nodes:
+            merged_source_ids.append(node.id)
+            docs = memory.node_to_docs.get(node.id, []) if memory else []
+
+            if docs:
+                doc_summaries = []
+                for doc in docs:
+                    if doc.title:
+                        doc_summaries.append(doc.title().strip()) #doc.title.strip()
+                    elif doc.text:
+                        doc_summaries.append(doc.text[:50].strip() + "…")
+                docs_brief = (
+                    f"{len(docs)} 篇相关文献，主题包括：" + "；".join(doc_summaries[:5])
+                )
+                if len(doc_summaries) > 5:
+                    docs_brief += f" 等（共 {len(doc_summaries)} 个主题锚点）"
+            else:
+                docs_brief = "无直接文献（由上层语义拆分而来）"
+
+            children_desc.append(
+                f"- 子节点标题: {node.title}\n- 文献信息摘要: {docs_brief}"
+            )
+
+        parent_context = parent_node.get_parent_context()
+        context_str = f"{parent_context} > {parent_node.title}" if parent_context else parent_node.title
+
+
+
+        # 3️⃣ 构造压缩 prompt
+        prompt = f"""
+        你是一个研究助手，正在对研究大纲进行**结构压缩优化**。
+
+        ## 当前大纲
+        {outline_text}
+
+        ## 压缩目标
+        父节点：{context_str}
+
+        该父节点下存在多个语义高度相似、信息量偏少的子节点，需要进行合并压缩。
+
+        ## 待压缩子节点
+        {chr(10).join(children_desc)}
+
+        ## 要求
+        1. 你的任务是对「某一父节点下的子节点」**独立地**进行局部修改语义层级压缩与结构重组。
+        2. 当前父节点的子节点数量 ≥ 3，子节点均为同一语义层级，不涉及跨父节点调整。
+        3. 在不丢失关键信息的前提下，对**部分或全部**子节点进行语义合并，生成新的子节点
+        - 允许只对其中一部分子节点进行合并，其余子节点可原样保留
+        - 合并完成后，父节点下的子节点总数**不得少于 2**
+        - 不允许将所有子节点合并为单一子节点
+        4. 压缩后的新的子节点之间应该是并列关系，覆盖该主题的不同方面，而不是层层嵌套，新生成的子节点需要在语义上完整覆盖其所合并的原子节点的核心信息
+        5. 仅允许修改当前父节点的子节点，子节点必须要是叶子节点，非叶子节点不参与合并，父节点之外的任何节点结构、顺序、层级均不得修改。父节点的title 不能更改
+        6. 合并后，父节点下仅保留，新生成的子节点，以及未参与合并的原始子节点，未参与合并的子节点，其标题与语义需保持不变
+        7. **关键**：每个新生成的子节点标题必须能够在对应的"新信息"文档中找到明确的内容支撑，不要生成与文档内容无关的空泛标题。子节点标题应该具体、有信息量，能够直接对应到某个文档的核心内容
+        8. 输出格式必须是 JSON，结构如下：
+        {{
+            "title": "根节点标题",
+            "children": [
+                {{
+                    "title": "子节点1标题",
+                    "children": []
+                }},
+                {{
+                    "title": "子节点2标题（被扩展的叶子节点）",
+                    "children": [
+                        {{
+                            "title": "并列子节点A",
+                            "children": []
+                        }},
+                        {{
+                            "title": "并列子节点B",
+                            "children": []
+                        }},
+                        {{
+                            "title": "并列子节点C",
+                            "children": []
+                        }}
+                    ]
+                }}
+            ]
+        }}
+
+        请只输出 JSON，不要包含其他解释性文字。输出完整的修订后大纲树。"""
+
+
+        try:
+            logger.info(f"compress_under_parent prompt:\n{prompt}")
+            messages = [HumanMessage(content=prompt)]
+            response = self.llm.invoke(messages)
+            content = response.content.strip()
+            logger.info(f"content{content}")
+            # 4️⃣ 解析 JSON 并重建大纲树
+            json_str = self._extract_json(content)
+            outline_data = json.loads(json_str)
+            new_root = self._build_outline_tree(outline_data, parent=None, node_counter=[0])
+
+            # 找到压缩后的父节点及其新子节点
+            def get_node_path(node):
+                path_parts = []
+                current = node
+                while current is not None:
+                    path_parts.insert(0, current.title)
+                    current = current.parent
+                return " > ".join(path_parts)
+
+            def find_node_by_path(root, target_path):
+                for node in root.get_all_nodes():
+                    if get_node_path(node) == target_path:
+                        return node
+                return None
+            # 5️⃣ 找到压缩后的父节点及其新子节点
+            target_path = get_node_path(parent_node)
+            new_parent = find_node_by_path(new_root, target_path)
+            # new_parent = new_root.find_node_by_path(parent_node.get_path_titles())
+            if not new_parent:
+                logger.warning("Parent node not found after compression")
+                return outline_root, [], {}, {}
+
+            new_children = new_parent.children or []
+            compressed_nodes_list = [(new_parent, new_children)]
+
+            # 6️⃣ 构建 merged_node_mapping 和 new_node_doc_mapping
+            merged_node_mapping = {}
+            new_node_doc_mapping = {}
+            for child in new_children:
+                merged_node_mapping[child.id] = merged_source_ids
+                merged_docs = []
+                for old_id in merged_source_ids:
+                    merged_docs.extend(memory.node_to_docs.get(old_id, []))
+                if merged_docs:
+                    new_node_doc_mapping[child.id] = merged_docs
+
+            # # 7️⃣ 删除被压缩旧节点的文档映射，统一在外面删除
+            # if memory:
+            #     for old_id in merged_source_ids:
+            #         if old_id in memory.node_to_docs:
+            #             del memory.node_to_docs[old_id]
+
+            # 8️⃣ 继承 MAB 状态
+            self._inherit_mab_state_for_existing_nodes(outline_root, new_root)
+
+            logger.info(f"Compression success: {len(child_nodes)} -> {len(new_children)} nodes")
+
+            return new_root, compressed_nodes_list, new_node_doc_mapping, merged_node_mapping
+
+        except Exception as e:
+            import traceback
+            logger.error(f"Failed to compress under parent '{parent_node.title}': {e}")
+            logger.error(traceback.format_exc())
+            return outline_root, [], {}, {}
+
+
+    def flatten_children(self,parent_node, child_nodes):
+        """
+        将 child_nodes 的子节点（孙节点）提升为 parent_node 的 children。
+        如果所有 child 都没有 children，则 parent_node 变为叶子节点。
+        """
+        new_children = []
+
+        for child in child_nodes:
+            if child.children:
+                new_children.extend(child.children)
+
+        parent_node.children = new_children  # 可能是 []，这是合法的
+
+
+
+if __name__ == "__main__":
+    """
+    使用真实 Memory + 真实 Outline 测试 compress_under_parent
+    测试场景：
+    压缩 “中性粒细胞在脑缺血急性期的作用” 下的 4 个子节点
+    """
+
+    from src.factstruct.memory import Memory
+    from src.factstruct.document import FactStructDocument
+
+    print("========== START REAL DEBUG ==========")
+
+    # -----------------------
+    # 1️⃣ 构造真实 Memory
+    # -----------------------
+    memory = Memory()
+
+    # 创建 3 个测试文档
+    from datetime import datetime
+
+    doc1 = FactStructDocument(
+        id="doc_1",
+        cite_id="CIT001",
+        source_type="journal",
+        title="中性粒细胞募集机制研究",
+        text="急性期中性粒细胞通过趋化因子被募集到缺血区域。",
+        embedding=None,
+        timestamp=datetime.now()
+    )
+
+    doc2 = FactStructDocument(
+        id="doc_2",
+        cite_id="CIT002",
+        source_type="journal",
+        title="血脑屏障破坏机制",
+        text="促炎因子释放导致血脑屏障通透性增加。",
+        embedding=None,
+        timestamp=datetime.now()
+    )
+
+    doc3 = FactStructDocument(
+        id="doc_3",
+        cite_id="CIT003",
+        source_type="journal",
+        title="炎症与神经损伤",
+        text="炎症反应加剧脑水肿与神经损伤。",
+        embedding=None,
+        timestamp=datetime.now()
+    )
+
+
+    # -----------------------
+    # 2️⃣ 构造真实 Outline
+    # -----------------------
+    root = OutlineNode(
+        id="node_1",
+        title="中性粒细胞在脑缺血中的作用",
+        pull_count=2,
+        reward_history=[0.8, 0.9],
+        word_limit=500
+    )
+
+    acute = OutlineNode(
+        id="node_2",
+        title="中性粒细胞在脑缺血急性期的作用",
+        pull_count=1,
+        reward_history=[0.7],
+        word_limit=300
+    )
+
+    n3 = OutlineNode(
+        id="node_3",
+        title="中性粒细胞的募集与激活机制",
+        pull_count=0,
+        reward_history=[],
+        word_limit=100
+    )
+    n4 = OutlineNode(
+        id="node_4",
+        title="促炎因子释放与血-脑屏障破坏",
+        pull_count=0,
+        reward_history=[],
+        word_limit=100
+    )
+    n5 = OutlineNode(
+        id="node_5",
+        title="炎症反应对脑水肿与神经损伤的影响",
+        pull_count=0,
+        reward_history=[],
+        word_limit=100
+    )
+    n6 = OutlineNode(
+        id="node_6",
+        title="中性粒细胞在神经修复中的潜在作用",
+        pull_count=0,
+        reward_history=[],
+        word_limit=100
+    )
+
+
+    acute.add_child(n3)
+    acute.add_child(n4)
+    acute.add_child(n5)
+    acute.add_child(n6)
+
+    root.add_child(acute)
+
+    # -----------------------
+    # 3️⃣ 建立真实节点-文档映射
+    # -----------------------
+    memory.map_node_to_docs("node_3", [doc1])
+    memory.map_node_to_docs("node_4", [doc2])
+    memory.map_node_to_docs("node_3", [doc3])
+
+    print("\n--- BEFORE ---")
+    # print(root.to_text_tree())
+    print(root.to_text_tree(include_word_limit=True,include_mab_state=True))
+    print("Memory node_to_docs:", memory.node_to_docs)
+
+    # -----------------------
+    # 4️⃣ 创建 wrapper
+    # -----------------------
+    # wrapper = FactStructLLMWrapper(llm=None)
+    # === LLM ===
+    from src.config.agents import AGENT_LLM_MAP
+    from src.llms.llm import get_llm_by_type
+    llm_type = AGENT_LLM_MAP.get("outline", "basic")
+    llm = get_llm_by_type(llm_type)
+
+    wrapper = FactStructLLMWrapper(llm)
+    # -----------------------
+    # 5️⃣ 测试 2 子节点折叠（不走 LLM）
+    # 只压缩 node_8 和 node_9
+    # -----------------------
+    new_root, compressed_list, new_doc_map, merged_map = wrapper.compress_under_parent(
+        outline_root=root,
+        parent_node=acute,
+        child_nodes=[n3, n4],
+        memory=memory,
+    )
+
+    print("\n--- AFTER STRUCTURE ---")
+    print(new_root.to_text_tree(include_word_limit=True,include_mab_state=True))
+
+    print("\nCompressed list:")
+    for p, children in compressed_list:
+        print("Parent:", p.title)
+        print("Affected children:", [c.title for c in children])
+
+    print("\nNew node doc mapping:", new_doc_map)
+    print("Merged node mapping:", merged_map)
+
+    print("\nMemory after compression:")
+    print(memory.node_to_docs)
+
+    # -----------------------
+    # 6️⃣ 验证结构完整性
+    # -----------------------
+    def validate_tree(node):
+        for child in node.children:
+            assert child.parent == node, f"Parent pointer broken at {child.title}"
+            validate_tree(child)
+
+    validate_tree(new_root)
+
+    print("\n✅ Tree structure valid.")
+    print("========== END DEBUG ==========")

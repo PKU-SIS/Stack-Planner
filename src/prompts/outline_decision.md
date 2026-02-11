@@ -153,16 +153,24 @@
 ---
 
 ### 3. compression
-使用场景：
-- outline_exists == True 并且节点数量过多或某些同级节点高度冗余
-- 需要合并或删除节点以简化大纲结构
 
-Params 格式
+使用场景：
+- outline_exists == True
+- 同一父节点下存在较多内容承载不足或语义高度相似的节点
+- 需要通过合并部分节点来减少结构碎片度，而非重写整个大纲
+
+功能说明：
+- compression 工具用于在保持整体结构不变的前提下，
+  对指定的节点集合进行有限次数的压缩（合并或结构折叠）。
+
+Params 格式：
 ```json
 {
-  "operation": "描述需要合并或删除的节点，例如：'Node A 和 Node B -> 合并为 Node C'"
+  "merge_candidates": ["node_id_1", "node_id_2", "..."],
+  "max_merges": 1,
+  "target_leaf_count": 2
 }
-
+```
 
 ---
 
@@ -177,7 +185,7 @@ Params 格式
 {
   "instruction": "描述节点重写或结构优化要求，重写哪些节点，重写的思路是什么，生成的节点可能是什么样的"
 }
-
+```
 
 ---
 
