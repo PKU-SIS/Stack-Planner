@@ -1,0 +1,218 @@
+[33m7fe533e[m[33m ([m[1;36mHEAD -> [m[1;32mzb_demo_v11[m[33m)[m Merge remote-tracking branch 'origin/master' into zb_demo_v11
+[33mc5a4d33[m[33m ([m[1;31morigin/zb_demo_v11[m[33m)[m 优化human agent
+[33ma6004cf[m 修复human agent BUG
+[33m9f560e9[m 增加human agent测试脚本
+[33m0d95330[m 增加human agent
+[33md888b19[m 在 ZB 项目上实现了动态的 SOP 的 naive 版本,这个版本的 Human node 还是和perception和 outline 是耦合的,但是确实整体上改成了动态 sop,yzb 测试了几次现在是只会调用一次 perception 和 outline ,但是系统是否稳定,还需要后面进行观察
+[33mcb45c06[m 修复了问智检索的key
+[33mfb56cd2[m[33m ([m[1;31morigin/zb_demo[m[33m, [m[1;32mzb_demo[m[33m)[m Merge branch 'zb_demo' of github.com:PKU-SIS/Stack-Planner into zb_demo
+[33m42f93af[m Merge branch 'zb_demo' of github.com:PKU-SIS/Stack-Planner into zb_demo
+[33m28bbb98[m 在prompt中强调人类反馈
+[33m9530ee4[m 系统备份,下面要修改和问智的ragflow 知识库接口
+[33m199205e[m 删除 replanner 前的备份
+[33m7c89c2d[m[33m ([m[1;31morigin/master[m[33m, [m[1;31morigin/HEAD[m[33m, [m[1;32mmaster[m[33m)[m update readme
+[33m2a7e71b[m Merge branch 'zb_demo' of github.com:PKU-SIS/Stack-Planner into zb_demo
+[33mf7280e3[m 基于原报告进行风格改写实现
+[33m20d91c4[m Merge branch 'zb_demo' of github.com:PKU-SIS/Stack-Planner into zb_demo
+[33md77f2f1[m 优化central prompt
+[33m233a579[m 修改配置
+[33m955871c[m Merge branch 'zb_demo' of github.com:PKU-SIS/Stack-Planner into zb_demo
+[33mbcdbfb0[m 修改调试配置
+[33mc27572a[m 修改提示
+[33m98d945e[m Merge branch 'zb_demo' of github.com:PKU-SIS/Stack-Planner into zb_demo
+[33mdceddc5[m 修改测试文件
+[33m84abf99[m feat: 实现多轮对话内容修改功能 [CONTENT_MODIFY]
+[33m04a4927[m Merge branch 'zb_demo' of github.com:PKU-SIS/Stack-Planner into zb_demo
+[33m6ba0a08[m update gitignore
+[33md2a1d90[m update gitignore
+[33m2e309fc[m 减少不必要的字符串处理
+[33m2864a8b[m 大纲添加引用、明确引用生成原则
+[33m3dc89e8[m update ref prompt
+[33md9823e6[m revert api_key
+[33m397c451[m update prompt
+[33me2e35eb[m Revert "update prompt"
+[33m7bc3aa9[m update prompt
+[33m1a3d0f4[m 去掉reporter的xx；researcher只调用一次
+[33m2861166[m update reseacher prompt
+[33m0e2de97[m 回退API call适配的相关修改
+[33m82b8218[m Merge branch 'zb_demo' of github.com:PKU-SIS/Stack-Planner into zb_demo
+[33m7756743[m Merge branch 'zb_demo' of github.com:PKU-SIS/Stack-Planner into zb_demo
+[33me387f07[m 更新忽略规则
+[33ma38ac8b[m 解决Qwen2.5 api call问题
+[33mb2ed55e[m add request param
+[33m21c54fa[m reporter prompt改成中文
+[33m23866bc[m 减少检索的数量
+[33m8a4d891[m Merge branch 'zb_demo' of github.com:PKU-SIS/Stack-Planner into zb_demo
+[33mbc11e50[m add request
+[33ma64bbc2[m 更新了 requirement.txt,用于 ZB demo
+[33m9f3b428[m 重构research的prompt
+[33m1cd2fa0[m Merge branch 'zb_demo' of github.com:PKU-SIS/Stack-Planner into zb_demo
+[33m64e84d4[m 重构draft.py测试代码，优化引用标注规则，改进日志输出和引用映射加载逻辑
+[33m232e388[m 重构风格切换机制：从user_query解析改为state直接存储
+[33mc41edee[m Merge branch 'zb_demo' of github.com:PKU-SIS/Stack-Planner into zb_demo
+[33mf607062[m 修改所有文件权限为可执行，更新draft.py中的tenant_id和owner_ids配置，并在zip_data函数中添加调试日志输出
+[33m65139c7[m 修改reporter agent输入
+[33m5e59515[m fix: 移除硬编码的 OpenAI API Key，改用环境变量
+[33m7726caa[m Merge branch 'zb_demo' of github.com:PKU-SIS/Stack-Planner into zb_demo
+[33m2e80556[m 更新END结束指令
+[33mefc40a9[m fix skip
+[33m9ddc133[m debug前的备份
+[33mbff7090[m 完成了合并,现在知识库可以进行选择,与 RAGFLOW 对接完成,并确定可以跑通
+[33mee1314c[m 完成了合并,实现了知识库选择,打算将该分支 push 到zb_demo上
+[33m20b9300[m 完成了知识库对新知识库 API 的迁移.
+[33m5528097[m Merge branch 'zb_demo' of github.com:PKU-SIS/Stack-Planner into zb_demo
+[33m50ee6b7[m 移除test_*.py的gitignore规则并添加API测试文件
+[33m5de090e[m NPU测试脚本
+[33ma47f3b8[m Merge branch 'zb_demo' of github.com:PKU-SIS/Stack-Planner into zb_demo
+[33m876c60c[m 重构reporter节点：使用wait_stage模式统一处理风格切换，移除独立的reporter_feedback节点
+[33m68c97c6[m YZB完成了知识库兼容的实现,但是还没有和新的问智知识库api 对接.
+[33m9b9db1e[m Merge branch 'zb_demo' of github.com:PKU-SIS/Stack-Planner into zb_demo
+[33mfaf55ee[m 风格切换功能开发
+[33m8d3a806[m Merge branch 'master' of github.com:PKU-SIS/Stack-Planner into zb_demo
+[33ma5b2b52[m 完成了鲁迅，赵树理和侠客岛的prompt优化，后续要pull 瑞哲的bug修改
+[33m0b7e139[m Merge pull request #13 from PKU-SIS/zrz_dev_reference
+[33m9cd4b4a[m[33m ([m[1;31morigin/zrz_dev_reference[m[33m)[m fix bug
+[33m9ca5ab9[m update prompt
+[33maf18674[m fix去重bug
+[33m90fc03b[m 修改赵树理，侠客岛提示词前的备份。
+[33mba91ee0[m 切分human_feedback节点
+[33mdcc1bb4[m Merge remote-tracking branch 'origin/master' into zrz_dev_reference
+[33mb136e5c[m 检索换新源，同时去重
+[33m099baa1[m 修复bug
+[33m0809812[m Merge remote-tracking branch 'origin/master' into zb_demo
+[33m2f2586a[m 更新style prompt
+[33md9ddfb0[m 完成了对鲁迅的优化，和存在空白框表单的优化，进行存档
+[33m8b87111[m Merge pull request #11 from PKU-SIS/zrz_dev_reference
+[33m3814bce[m 修改引用格式；补充接口
+[33m560d0e6[m 打算修改表单前的存档
+[33m3310fe4[m yield ref_map
+[33mec0ec6b[m update reference prompt
+[33mf16edc8[m tool result重新排序
+[33md3bdfe5[m 增加reference map管理机制
+[33maf9d3ae[m 更新启动配置，将端口从8082更改为8555，并调整大纲消息的生成顺序以优化输出格式。
+[33me6b32ce[m add startup
+[33m2f4eb3a[m 增强子代理管理器，新增多种角色风格约束，优化生成内容的个性化表达。
+[33mab92932[m 更新启动配置，将端口从8082更改为8555，并调整大纲消息的生成顺序以优化输出格式。
+[33m9f9a103[m 更新中央代理提示，优化了决策要求部分，明确在信息不足时必须采取适当措施收集信息，并调整了各个行动的描述格式以提高可读性。
+[33m7efc85e[m Merge branch 'master' of github.com:PKU-SIS/Stack-Planner
+[33mec4b9ae[m 更新中央代理提示，增加决策要求部分，确保在信息不足时必须委派子代理收集信息，并优化了各个行动的输出要求。
+[33m1330195[m minor fix
+[33m4f68187[m 更新大纲prompt，增加大纲结构方面的要求。
+[33m8793cee[m 删除一些无关文件。
+[33maad0881[m 更新忽略项
+[33m2f7b3ff[m 更新
+[33m304285a[m 更新忽略项
+[33mc6a025c[m Merge branch 'master' of github.com:PKU-SIS/Stack-Planner
+[33m246f1b7[m 更新忽略项
+[33m9d43ad0[m update base outline
+[33m7ea616f[m 增加state中字段说明的文档。
+[33mc5837f2[m 暴露toolmessage
+[33mc86d6f9[m minor fix
+[33m41a4365[m update dc result
+[33m8643481[m update reporter input
+[33m1535b91[m 更新hitl; xxqg_reporter
+[33mc9b2609[m human in the loop开发
+[33me42112c[m update perception(with bug)
+[33m8db1690[m Report Agent v2
+[33m204828a[m Merge branch 'master' of https://github.com/PKU-SIS/Stack-Planner
+[33m7d4bbb2[m 更新.gitignore.
+[33m6b171b2[m ask summarize to show images
+[33mc6feb1b[m 合并deerflow(graph-format = base)
+[33ma306e6a[m 采用prompt工程优化report agent
+[33m94707b2[m 更新全局语言设置，locale表示转化为代码
+[33m4b42880[m Merge pull request #10 from PKU-SIS/revert-9-qzh_dev
+[33mc986e78[m[33m ([m[1;31morigin/revert-9-qzh_dev[m[33m)[m Revert "修复reflect动作"
+[33m69faf12[m Merge pull request #9 from PKU-SIS/qzh_dev
+[33m657cb9c[m[33m ([m[1;31morigin/qzh_dev[m[33m)[m 修复reflect动作
+[33m521e9fe[m Merge pull request #8 from PKU-SIS/zrz_sp_dev
+[33me07f46f[m[33m ([m[1;31morigin/zrz_sp_dev[m[33m)[m minor fix
+[33m52509f4[m Merge remote-tracking branch 'origin/master' into zrz_sp_dev
+[33mb78af3c[m 基于字符串匹配实现规则和示例检索
+[33m06481cf[m 更新部署相关的代码。
+[33me155b45[m Merge branch 'master' of github.com:PKU-SIS/Stack-Planner
+[33ma661bb9[m 中心agent BUG修复。
+[33mb8055c0[m use push with pop
+[33maf00923[m merge and fix info bugs
+[33m1365748[m merge and fix info bugs
+[33m04fec42[m Merge remote-tracking branch 'origin/gjr_dev'
+[33m2fd1031[m Merge remote-tracking branch 'origin/master' into zrz_sp_dev
+[33mdf7fe63[m Merge pull request #7 from PKU-SIS/zjw_dev
+[33m2a0d9c0[m Merge branch 'master' into zjw_dev
+[33m371604b[m add query
+[33m7ae21a6[m Merge pull request #5 from PKU-SIS/qrh_dev
+[33m3d02af0[m 约束centrual_agent生成类型
+[33mc17e0ff[m fix bug: correct reflection memory entry parameter passing
+[33me2279df[m Merge branch 'master' into qrh_dev
+[33m19c3914[m fix usage of non-existing image url for research agent
+[33mdd529a1[m Merge pull request #4 from PKU-SIS/zrz_sp_dev
+[33m6f22dc7[m 其他prompt修改；user query移出system prompt中枢；humanmessage更正
+[33mdb65664[m 优化search，改了一些log
+[33mbd22fa9[m for test
+[33m13f34e4[m minor fix
+[33m994d986[m Merge branch 'xyz_dev' of github.com:PKU-SIS/Stack-Planner into xyz_dev
+[33m1427f9f[m 修复memory_stack.py中pop方法的bug，使用peek方法优化代码
+[33m28e8516[m 修复memory_stack.py中pop方法的bug，使用peek方法优化代码
+[33m9f87955[m Merge pull request #3 from PKU-SIS/zrz_sp_dev
+[33md1748fa[m Merge branch 'master' into zrz_sp_dev
+[33m5f99805[m minor fix
+[33m6e02103[m minor fix and 增添统计数据
+[33m5f4c884[m Merge pull request #2 from PKU-SIS/zjw_dev
+[33m5e1331c[m 根据user_query更新语言设置
+[33m723620d[m Merge pull request #1 from PKU-SIS/zrz_sp_dev
+[33mee51b16[m 新增任务分解agent、补充了一点报错信息
+[33m8ef1050[m 修正循环依赖问题
+[33m0a91dba[m 修改了init agent，暂时还没解循环依赖
+[33mc5011b1[m sub_agent解耦与统一管理
+[33m3045092[m debug SP api and add node state
+[33m05e1872[m updata logger;update graph router in server
+[33me68152c[m update logger.info
+[33maa27671[m Merge remote-tracking branch 'origin/zrz_sp_dev'
+[33m671e465[m minor fix
+[33md8420cb[m 拆分新旧researcher agent
+[33m747507f[m refactor researcher_sp
+[33med0eb14[m refresh gitignore
+[33m80eef94[m gitignore add node_modules AND reflect debug
+[33m59c452d[m merge
+[33mf99b2c1[m graph router
+[33me7f3879[m merge
+[33m0eb91a1[m merge
+[33m4d77ade[m Merge branch 'zrz_dev' into zrz_sp_dev
+[33m963e57b[m 问智改成公网ip
+[33mead3833[m 改xxqg的bug
+[33m90711d6[m naive reflection实现[待debug]
+[33md5cc06c[m 优化memory相关的参数，统一用state传递所有记忆栈
+[33mdc9465d[m 更新think相关prompt，明确其为思考动作
+[33mb6cef76[m 补充xxqg node
+[33m035c569[m debug summary and report generating
+[33m37880f6[m summary may occur many times: need repair prompt
+[33m4464832[m fix bugs: no params in summary and reflect actions
+[33m79e79cf[m debug:更正了模型之间的信息传递与共享内存机制； 一些优化（包括搜索到的结果进行截断以防止湮没控制台）
+[33md61ec0e[m 修复central_agent调用的bug； 优化sp_node的结构，分散到对应的文件中
+[33mad61970[m update explan
+[33maa903c0[m update
+[33ma61ab69[m update plan
+[33mb9c77a1[m add memory, has bugs
+[33m405721f[m add nodes
+[33m3a8025d[m update center-SP framework, has bugs
+[33m6f2b07d[m minor fix
+[33m2ab0b5c[m update README
+[33m5100f29[m 1.补充了zip节点 2.在react框架补充了几个handler
+[33ma28a777[m 修复plan多次的bug
+[33mfa6cfee[m better display
+[33ma7ad15f[m update
+[33mc5b7278[m update requirements.txt
+[33me7fb461[m 把prompt里面的web search改成search docs
+[33mde80b5e[m 修bug background search
+[33m45fde7c[m merge zer_dev into jxk_dev
+[33m98c73b1[m 重写了logger; 把researcher和coder放进了commonreactagent里面
+[33m83f6596[m 补充common react agent，接下来要拆解execute_agent_step
+[33m4df7ada[m merge zrz_dev
+[33m81141a6[m test for pre-commit
+[33m1c75efb[m 补充本地logs文件
+[33maba7c5e[m test for pre-commit
+[33m1f4443f[m init for jxk
+[33m9b8f94f[m 修改了报告生成的图和prompt
+[33m2d76fdc[m 简单修改问智工具调用
+[33m523b7dc[m 用conda管理，添加了requirements;拆除了human node
+[33m3e45000[m 增加知识库搜索
+[33mae98fdf[m Initial commit

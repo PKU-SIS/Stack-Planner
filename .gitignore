@@ -58,3 +58,8 @@ fix_execution.log
 
 test_llm.py
 graceful-mapping-gizmo.md
+
+
+.github/
+docs/
+examples/
