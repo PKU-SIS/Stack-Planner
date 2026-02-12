@@ -851,7 +851,9 @@ class BatchMAB:
                         memory=memory,
                     )
                 )
-
+                print("compressed_nodes_list",compressed_nodes_list)
+                print("new_node_doc_mapping",new_node_doc_mapping)
+                print("merged_node_mapping",merged_node_mapping)
                 # 5️⃣ 状态继承（完全对齐 expansion）
                 for parent_node, new_children in compressed_nodes_list:
                     for child in new_children:
@@ -860,11 +862,7 @@ class BatchMAB:
 
 
                 # --- 6️⃣ reward 更新和Memory 更新（Compression 专用逻辑）---
-                # 暂时用 cohesion 作为 reward proxy（信息损失越小越好）
-                # reward = cohesion
-                # parent.reward_history.append(reward)
                 parent.pull_count += 1
-
                 logger.info(
                     f"Compression success under '{parent.title}', "
                     f"reward={parent.reward_history}"
@@ -872,34 +870,36 @@ class BatchMAB:
                 # merged_node_mapping: { new_node_id: [old_node_id1, old_node_id2, ...] }
 
 
+                #先删除，后增加，被修改的都是 new_memory
+                # new_memory=memory
+                import copy
+                new_memory = copy.deepcopy(memory)
+
+                # --- 删除被压缩节点的文档映射（非常重要）---
+                for old_node_ids in merged_node_mapping.values():
+                    for old_id in old_node_ids:
+                        if old_id in new_memory.node_to_docs:
+                            del new_memory.node_to_docs[old_id]
+                            logger.debug(
+                                f"Removed document mapping for compressed node '{old_id}'"
+                            )
+                
                 # --- 增加新节点的文档映射（非常重要）---
-                print("merged_node_mapping",merged_node_mapping)
                 for new_node_id, old_node_ids in merged_node_mapping.items():
                     merged_docs = []
 
                     for old_id in old_node_ids:
                         docs = memory.get_docs_by_node(old_id)
+                        # print("docs",docs)
                         merged_docs.extend(docs)
-                    print("merged_docs",merged_docs)
+                    # merged_docs 是 FactStructDocument 对象列表
+                    merged_docs = list({doc.id: doc for doc in merged_docs}.values())
+                    # print("merged_docs",merged_docs)
                     if merged_docs:
-                        memory.map_node_to_docs(new_node_id, merged_docs)
+                        new_memory.map_node_to_docs(new_node_id, merged_docs)
 
                 
-                # --- 删除被压缩节点的文档映射（非常重要）---
-                # for old_node_ids in merged_node_mapping.values():
-                #     for old_id in old_node_ids:
-                #         if old_id in memory.node_to_docs:
-                #             del memory.node_to_docs[old_id]
-                #             logger.debug(
-                #                 f"Removed document mapping for compressed node '{old_id}'"
-                #             )
 
-
-
-            # except Exception as e:
-            #     logger.error(f"Compression failed under parent '{parent.title}': {e}")
-            #     parents.remove(parent)
-            #     continue
             except Exception as e:
                 # 打印完整 traceback
                 tb_str = traceback.format_exc()
@@ -923,7 +923,7 @@ class BatchMAB:
             f"Compression finished: merges={t}, "
             f"total_nodes={len(outline_root.get_all_nodes())}"
         )
-        return outline_root, memory
+        return outline_root, new_memory
 
 
     def compute_children_cohesion(
@@ -1036,13 +1036,13 @@ if __name__ == "__main__":
     # -----------------------
     # 2️⃣ 构造 Outline
     # -----------------------
-    root = OutlineNode(id="node_1", title="中性粒细胞在脑缺血中的作用", pull_count=2, reward_history=[0.8, 0.9], word_limit=500)
-    acute = OutlineNode(id="node_2", title="中性粒细胞在脑缺血急性期的作用", pull_count=1, reward_history=[0.7], word_limit=300)
+    root = OutlineNode(id="node_0", title="中性粒细胞在脑缺血中的作用", pull_count=2, reward_history=[0.8, 0.9], word_limit=500)
+    acute = OutlineNode(id="node_1", title="中性粒细胞在脑缺血急性期的作用", pull_count=1, reward_history=[0.7], word_limit=300)
     
-    n3 = OutlineNode(id="node_3", title="中性粒细胞的募集与激活机制", pull_count=0, reward_history=[], word_limit=100)
-    n4 = OutlineNode(id="node_4", title="促炎因子释放与血-脑屏障破坏", pull_count=0, reward_history=[], word_limit=100)
-    n5 = OutlineNode(id="node_5", title="炎症反应对脑水肿与神经损伤的影响", pull_count=0, reward_history=[], word_limit=100)
-    n6 = OutlineNode(id="node_6", title="中性粒细胞在神经修复中的潜在作用", pull_count=0, reward_history=[], word_limit=100)
+    n3 = OutlineNode(id="node_2", title="中性粒细胞的募集与激活机制", pull_count=0, reward_history=[], word_limit=100)
+    n4 = OutlineNode(id="node_3", title="促炎因子释放与血-脑屏障破坏", pull_count=0, reward_history=[], word_limit=100)
+    n5 = OutlineNode(id="node_4", title="炎症反应对脑水肿与神经损伤的影响", pull_count=0, reward_history=[], word_limit=100)
+    n6 = OutlineNode(id="node_5", title="中性粒细胞在神经修复中的潜在作用", pull_count=0, reward_history=[], word_limit=100)
 
     acute.add_child(n3)
     acute.add_child(n4)
@@ -1053,13 +1053,10 @@ if __name__ == "__main__":
     # -----------------------
     # 3️⃣ 构建节点-文档映射
     # -----------------------
-    memory.map_node_to_docs("node_3", [doc1])
-    memory.map_node_to_docs("node_4", [doc2])
-    memory.map_node_to_docs("node_6", [doc3])
+    memory.map_node_to_docs("node_2", [doc1])
+    memory.map_node_to_docs("node_3", [doc2])
+    memory.map_node_to_docs("node_5", [doc3])
 
-    print("\n--- BEFORE COMPRESSION ---")
-    print(root.to_text_tree(include_word_limit=True, include_mab_state=True))
-    print("Memory:", memory.node_to_docs)
 
     # -----------------------
     # 4️⃣ 初始化 LLM Wrapper
@@ -1087,7 +1084,11 @@ if __name__ == "__main__":
 
     # === Wrapper ===
     wrapper = FactStructLLMWrapper(llm)
-
+    print("\n--- BEFORE COMPRESSION ---")
+    print(root.to_text_tree(include_word_limit=True, include_mab_state=True))
+    print("Memory:", memory.node_to_docs)
+    wrapper._inherit_mab_state_for_existing_nodes(old_root=None, new_root=root)
+    
     # === Batch-MAB ===
     batch_mab = BatchMAB(
         llm_wrapper=wrapper,

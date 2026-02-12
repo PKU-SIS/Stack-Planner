@@ -63,55 +63,6 @@ class FactStructLLMWrapper:
 
         parts = []
 
-        # parts.append("你是一个研究助手。请根据用户查询和提供的初始文档，生成一个结构化的研究大纲。\n")
-        # parts.append("## 用户查询\n")
-        # parts.append(query + "\n")
-        # if docs_text:
-        #     parts.append("## 初始文档\n")
-        #     parts.append(docs_text + "\n")
-        # if central_guidance:
-        #     parts.append("## 中枢智能体总体指导\n")
-        #     parts.append(
-        #         "请在生成修改大纲时参考以下内容：\n"
-        #     )
-        #     parts.append(central_guidance + "\n")
-        # if replan_result:
-        #     if isinstance(replan_result, dict):
-        #         parts.append("Replan Result:\n")
-        #         for k, v in replan_result.items():
-        #             parts.append(f"- {k}: {v}\n")
-        #     else:
-        #         parts.append(str(replan_result) + "\n")
-        # if instruction:
-        #     parts.append("## 大纲智能体指导为\n")
-        #     parts.append( instruction + "\n")
-        # output_format="""
-        # ## 要求
-        # 1. 生成一个层次化的研究大纲（建议 2-3 层）
-        # 2. 大纲应该覆盖查询的主要方面
-        # 3. 每个节点应该有一个清晰的标题
-        # 4. 输出格式必须是 JSON，结构如下：
-        # {
-        #     "title": "根节点标题",
-        #     "children": [
-        #         {
-        #             "title": "子节点1标题",
-        #             "children": []
-        #         },
-        #         {
-        #             "title": "子节点2标题",
-        #             "children": [
-        #                 {
-        #                     "title": "子节点2.1标题",
-        #                     "children": []
-        #                 }
-        #             ]
-        #         }
-        #     ]
-        # }
-
-        # 请只输出 JSON，不要包含其他解释性文字。"""
-        # parts.append(output_format)
         parts.append(
             "你是一个研究助手。你的任务是**生成一个初始研究大纲骨架**，"
             "用于后续逐步扩展，而不是一次性完成最终大纲。\n"
@@ -183,8 +134,12 @@ class FactStructLLMWrapper:
             outline_data = json.loads(json_str)
 
             # 构建 OutlineNode 树
-            root = self._build_outline_tree(outline_data, parent=None, node_counter=[0])
+            # root = self._build_outline_tree(outline_data, parent=None, node_counter=[0])
+            root = self._build_outline_tree(outline_data, parent=None)
 
+            # self._inherit_mab_state_for_existing_nodes(None, root)
+            new_node_ids = []
+            self._inherit_mab_state_for_existing_nodes(None, root, new_node_ids=new_node_ids)
             logger.info(
                 f"Generated initial outline with {len(root.get_all_nodes())} nodes"
             )
@@ -225,20 +180,20 @@ class FactStructLLMWrapper:
 
         prompt = f"""你是一个研究助手。请为以下 {len(nodes)} 个大纲节点分别生成一个精确的搜索查询。
 
-## 节点列表
-{chr(10).join(nodes_info)}
+        ## 节点列表
+        {chr(10).join(nodes_info)}
 
-## 要求
-1. 为每个节点生成一个精确、具体的搜索查询
-2. 查询应该能够帮助检索到与该节点主题相关的文档
-3. 如果节点有上下文信息，请在查询中体现
-4. 输出格式必须严格按照以下格式：
-查询 1: [查询内容]
-查询 2: [查询内容]
-...
-查询 {len(nodes)}: [查询内容]
+        ## 要求
+        1. 为每个节点生成一个精确、具体的搜索查询
+        2. 查询应该能够帮助检索到与该节点主题相关的文档
+        3. 如果节点有上下文信息，请在查询中体现
+        4. 输出格式必须严格按照以下格式：
+        查询 1: [查询内容]
+        查询 2: [查询内容]
+        ...
+        查询 {len(nodes)}: [查询内容]
 
-请只输出查询，每行一个，严格按照上述格式。"""
+        请只输出查询，每行一个，严格按照上述格式。"""
 
         try:
             messages = [HumanMessage(content=prompt)]
@@ -374,10 +329,8 @@ class FactStructLLMWrapper:
             outline_data = json.loads(json_str)
 
             # 构建新的 OutlineNode 树
-            new_root = self._build_outline_tree(
-                outline_data, parent=None, node_counter=[0]
-            )
-
+            # new_root = self._build_outline_tree(outline_data, parent=None, node_counter=[0])
+            new_root = self._build_outline_tree(outline_data, parent=None)
             # 验证：检查返回的大纲是否真的包含了对目标节点的修改
             # 这是一个启发式验证，检查目标节点是否仍然存在（可能被修改或移动）
             validation_passed = self._validate_batch_refine_result(
@@ -397,8 +350,9 @@ class FactStructLLMWrapper:
             )
 
             # 先继承所有现有节点的状态（通过路径匹配）
-            self._inherit_mab_state_for_existing_nodes(current_outline, new_root)
-
+            # self._inherit_mab_state_for_existing_nodes(current_outline, new_root)
+            new_node_ids = []
+            self._inherit_mab_state_for_existing_nodes(current_outline, new_root, new_node_ids=new_node_ids)
             logger.info(
                 f"Refined outline with {len(new_root.get_all_nodes())} nodes, "
                 f"{len(expanded_nodes_list)} nodes expanded, "
@@ -483,34 +437,57 @@ class FactStructLLMWrapper:
 
         return queries
 
+    # def _build_outline_tree(
+    #     self,
+    #     data: dict,
+    #     parent: OutlineNode = None,
+    #     node_counter: List[int] = None,
+    # ) -> OutlineNode:
+    #     """递归构建 OutlineNode 树"""
+    #     if node_counter is None:
+    #         node_counter = [0]
+
+    #     node_counter[0] += 1
+    #     node_id = f"node_{node_counter[0]}"
+
+    #     node = OutlineNode(
+    #         id=node_id,
+    #         title=data.get("title", "未命名节点"),
+    #         parent=parent,
+    #         children=[],
+    #     )
+
+    #     # 递归构建子节点
+    #     for child_data in data.get("children", []):
+    #         child = self._build_outline_tree(
+    #             child_data, parent=node, node_counter=node_counter
+    #         )
+    #         node.add_child(child)
+
+    #     return node
     def _build_outline_tree(
         self,
         data: dict,
         parent: OutlineNode = None,
-        node_counter: List[int] = None,
     ) -> OutlineNode:
-        """递归构建 OutlineNode 树"""
-        if node_counter is None:
-            node_counter = [0]
-
-        node_counter[0] += 1
-        node_id = f"node_{node_counter[0]}"
+        """递归构建 OutlineNode 树（只构结构，不分配 id）"""
 
         node = OutlineNode(
-            id=node_id,
+            id=None,  # 🔥 这里先不分配
             title=data.get("title", "未命名节点"),
             parent=parent,
             children=[],
         )
 
-        # 递归构建子节点
         for child_data in data.get("children", []):
             child = self._build_outline_tree(
-                child_data, parent=node, node_counter=node_counter
+                child_data, parent=node
             )
             node.add_child(child)
 
         return node
+
+
 
     def _identify_expanded_nodes(
         self,
@@ -714,6 +691,11 @@ class FactStructLLMWrapper:
         2. 如果路径匹配失败，回退到标题匹配
         3. 如果都失败，节点状态重置为初始值（pull_count=0, reward_history=[]）
         """
+        if old_root is None:
+        # 第一次初始化
+            for node in new_root.get_all_nodes():
+                node.id = OutlineNode.allocate_id()
+            return
 
         def get_node_path(node: OutlineNode) -> str:
             """获取节点的完整路径（从根到当前节点）"""
@@ -743,6 +725,7 @@ class FactStructLLMWrapper:
                 old_node = old_nodes_by_path[new_path]
                 new_node.pull_count = old_node.pull_count
                 new_node.reward_history = old_node.reward_history.copy()
+                new_node.id = old_node.id#增加node_id的继承
                 logger.debug(
                     f"State inherited for node '{new_node.title}' via path match "
                     f"(pull_count={old_node.pull_count})"
@@ -758,6 +741,7 @@ class FactStructLLMWrapper:
                 )
             # 策略3：无法匹配，保持默认状态（pull_count=0, reward_history=[]）
             else:
+                new_node.id = OutlineNode.allocate_id()
                 logger.debug(
                     f"Node '{new_node.title}' (path: {new_path}) not found in old outline, "
                     "using default state"
@@ -936,6 +920,8 @@ class FactStructLLMWrapper:
         # 3️⃣ 构造压缩 prompt
         prompt = f"""
         你是一个研究助手，正在对研究大纲进行**结构压缩优化**。
+        你必须对父节点下的子节点至少执行一次合并或压缩操作，生成新的子节点。
+        新生成的子节点标题必须具体且信息量充足，不能沿用原子节点标题原封不动。
 
         ## 当前大纲
         {outline_text}
@@ -999,7 +985,13 @@ class FactStructLLMWrapper:
             # 4️⃣ 解析 JSON 并重建大纲树
             json_str = self._extract_json(content)
             outline_data = json.loads(json_str)
-            new_root = self._build_outline_tree(outline_data, parent=None, node_counter=[0])
+            # new_root = self._build_outline_tree(outline_data, parent=None, node_counter=[0])
+            new_root = self._build_outline_tree(outline_data, parent=None)
+            # 继承 MAB 状态
+            new_node_ids = []
+            self._inherit_mab_state_for_existing_nodes(outline_root, new_root, new_node_ids=new_node_ids)
+            #原版本
+            # self._inherit_mab_state_for_existing_nodes(outline_root, new_root)
 
             # 找到压缩后的父节点及其新子节点
             def get_node_path(node):
@@ -1043,11 +1035,8 @@ class FactStructLLMWrapper:
             #         if old_id in memory.node_to_docs:
             #             del memory.node_to_docs[old_id]
 
-            # 8️⃣ 继承 MAB 状态
-            self._inherit_mab_state_for_existing_nodes(outline_root, new_root)
-
-            logger.info(f"Compression success: {len(child_nodes)} -> {len(new_children)} nodes")
-
+        
+            logger.info(f"Compression success: { len(parent_node.children)} -> {len(new_children)} nodes")
             return new_root, compressed_nodes_list, new_node_doc_mapping, merged_node_mapping
 
         except Exception as e:
