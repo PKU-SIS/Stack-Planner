@@ -773,8 +773,8 @@ class BatchMAB:
         outline_root,
         memory,
         merge_candidates: List["OutlineNode"],
-        max_merges: int,
-        target_leaf_count: int,
+        max_merges: int, #不做迭代了。
+        target_leaf_count: int, #这个给到提示词即可。
         config: RunnableConfig,
     ):
         """
@@ -783,6 +783,7 @@ class BatchMAB:
 
         logger.info("Running outline compression")
         t = 0  # 压缩次数计数
+        compression_node_number=0
 
         # 1️⃣ 按父节点分组（从叶子节点回溯）
         parent_to_children = {}
@@ -808,12 +809,19 @@ class BatchMAB:
         while t < max_merges:
 
             ucb_scores = []
-            for parent in parents:
+            for parent_iter in parents:
+                # 用 id 在最新树中重新定位节点
+                current_parent = outline_root.find_node_by_id(parent_iter.id)
+
+                if current_parent is None:
+                    logger.warning(f"Parent {parent.id} not found in new tree, skipping")
+                    continue
+                parent=current_parent
                 children = parent_to_children.get(parent, [])
                 
                 # 子节点相关性（是否适合压）
                 cohesion = self.compute_children_cohesion(parent, children)
-
+                print("parent",parent,"cohesion",cohesion)
                 # exploration / exploitation
                 t_current = t + 1
                 if parent.pull_count == 0:
@@ -843,6 +851,7 @@ class BatchMAB:
 
             try:
                 # 4️⃣ 调用 LLM 做结构压缩
+                print("compress_under_parent的parent",parent)
                 outline_root, compressed_nodes_list, new_node_doc_mapping, merged_node_mapping = (
                     self.llm_wrapper.compress_under_parent(
                         outline_root=outline_root,
@@ -874,7 +883,7 @@ class BatchMAB:
                 # new_memory=memory
                 import copy
                 new_memory = copy.deepcopy(memory)
-
+                # compression_node_number=
                 # --- 删除被压缩节点的文档映射（非常重要）---
                 for old_node_ids in merged_node_mapping.values():
                     for old_id in old_node_ids:
@@ -911,8 +920,10 @@ class BatchMAB:
                 continue
 
             t += 1
+            memory=new_memory
+            outline_root=outline_root
 
-            # 7️⃣ 检查终止条件
+            # 7️⃣ 检查终止条件，这个地方是不对的
             current_leaf_count = len(outline_root.get_leaf_nodes())
             logger.info(f"Current leaf count: {current_leaf_count}")
             if current_leaf_count <= target_leaf_count:
@@ -1036,26 +1047,152 @@ if __name__ == "__main__":
     # -----------------------
     # 2️⃣ 构造 Outline
     # -----------------------
-    root = OutlineNode(id="node_0", title="中性粒细胞在脑缺血中的作用", pull_count=2, reward_history=[0.8, 0.9], word_limit=500)
-    acute = OutlineNode(id="node_1", title="中性粒细胞在脑缺血急性期的作用", pull_count=1, reward_history=[0.7], word_limit=300)
+    # root = OutlineNode(id="node_0", title="中性粒细胞在脑缺血中的作用", pull_count=2, reward_history=[0.8, 0.9], word_limit=500)
+    # acute = OutlineNode(id="node_1", title="中性粒细胞在脑缺血急性期的作用", pull_count=1, reward_history=[0.7], word_limit=300)
     
-    n3 = OutlineNode(id="node_2", title="中性粒细胞的募集与激活机制", pull_count=0, reward_history=[], word_limit=100)
-    n4 = OutlineNode(id="node_3", title="促炎因子释放与血-脑屏障破坏", pull_count=0, reward_history=[], word_limit=100)
-    n5 = OutlineNode(id="node_4", title="炎症反应对脑水肿与神经损伤的影响", pull_count=0, reward_history=[], word_limit=100)
-    n6 = OutlineNode(id="node_5", title="中性粒细胞在神经修复中的潜在作用", pull_count=0, reward_history=[], word_limit=100)
+    # n2 = OutlineNode(id="node_2", title="中性粒细胞的募集与激活机制", pull_count=0, reward_history=[], word_limit=100)
+    # n3 = OutlineNode(id="node_3", title="促炎因子释放与血-脑屏障破坏", pull_count=0, reward_history=[], word_limit=100)
+    # n4 = OutlineNode(id="node_4", title="炎症反应对脑水肿与神经损伤的影响", pull_count=0, reward_history=[], word_limit=100)
+    # n5 = OutlineNode(id="node_5", title="中性粒细胞在神经修复中的潜在作用", pull_count=0, reward_history=[], word_limit=100)
 
-    acute.add_child(n3)
-    acute.add_child(n4)
-    acute.add_child(n5)
-    acute.add_child(n6)
-    root.add_child(acute)
+    # acute.add_child(n2)
+    # acute.add_child(n3)
+    # acute.add_child(n4)
+    # acute.add_child(n5)
+    # root.add_child(acute)
+    
+    # -----------------------
+    # 2️⃣ 构造 Outline（多 parent 测试）
+    # -----------------------
 
+    root = OutlineNode(
+        id="node_0",
+        title="中性粒细胞在脑缺血中的作用",
+        pull_count=0,
+        reward_history=[],
+        word_limit=500
+    )
+
+    # ===== Parent A（高 reward，不应该被选）=====
+    acute_A = OutlineNode(id="node_1",
+        title="中性粒细胞在脑缺血急性炎症阶段的分子机制",
+        # pull_count=5,reward_history=[0.9, 0.88, 0.92, 0.91, 0.87],
+        pull_count=1,reward_history=[0.1],
+        word_limit=300
+    )
+
+    A1 = OutlineNode(id="node_2",
+        title="中性粒细胞募集的趋化因子调控机制",
+        pull_count=0,reward_history=[]
+    )
+
+    A2 = OutlineNode(id="node_3",
+        title="中性粒细胞激活后的促炎信号级联反应",
+        pull_count=0,reward_history=[]
+    )
+
+    A3 = OutlineNode(id="node_4",
+        title="中性粒细胞诱导的血脑屏障通透性改变",
+        pull_count=0,reward_history=[]
+    )
+
+    acute_A.add_child(A1)
+    acute_A.add_child(A2)
+    acute_A.add_child(A3)
+
+    # ===== Parent B（低 reward，应该被选）=====
+    acute_B = OutlineNode(id="node_5",
+        title="急性缺血性脑卒中中中性粒细胞介导的炎症损伤",
+        pull_count=1,reward_history=[0.1],word_limit=300
+    )
+
+    B1 = OutlineNode(id="node_6",
+        title="中性粒细胞介导的急性炎症反应机制",
+        pull_count=0,reward_history=[]
+    )
+
+    B2 = OutlineNode(id="node_7",
+        title="急性期中性粒细胞释放炎症因子的机制",
+        pull_count=0,reward_history=[]
+    )
+
+    B3 = OutlineNode(id="node_8",
+        title="中性粒细胞在急性脑缺血炎症级联中的作用",
+        pull_count=0,reward_history=[]
+    )
+
+
+    acute_B.add_child(B1)
+    acute_B.add_child(B2)
+    acute_B.add_child(B3)
+
+    root.add_child(acute_A)
+    root.add_child(acute_B)
+
+
+
+
+    # # -----------------------
+    # # 3️⃣ 构建节点-文档映射
+    # # -----------------------
+    # memory.map_node_to_docs("node_2", [doc1])
+    # memory.map_node_to_docs("node_3", [doc2])
+    # memory.map_node_to_docs("node_4", [doc3])
     # -----------------------
-    # 3️⃣ 构建节点-文档映射
+    # 3️⃣ 构建节点-文档映射（增强版）
     # -----------------------
-    memory.map_node_to_docs("node_2", [doc1])
-    memory.map_node_to_docs("node_3", [doc2])
-    memory.map_node_to_docs("node_5", [doc3])
+
+    docs = []
+    docs = [
+        FactStructDocument(
+            id="doc_1",
+            cite_id="CIT001",
+            source_type="journal",
+            title="中性粒细胞在脑缺血损伤中作用的研究进展",
+            text="综述中性粒细胞在急性脑缺血中的炎症机制...",
+            embedding=None,
+            timestamp=datetime.now(),
+        ),
+        FactStructDocument(
+            id="doc_2",
+            cite_id="CIT002",
+            source_type="journal",
+            title="急性缺血性脑卒中中炎症级联反应机制",
+            text="炎症因子释放与脑组织损伤密切相关...",
+            embedding=None,
+            timestamp=datetime.now(),
+        ),
+        FactStructDocument(
+            id="doc_3",
+            cite_id="CIT003",
+            source_type="journal",
+            title="血脑屏障破坏与中性粒细胞浸润关系研究",
+            text="BBB通透性变化促进炎症细胞进入脑组织...",
+            embedding=None,
+            timestamp=datetime.now(),
+        ),
+        FactStructDocument(
+            id="doc_4",
+            cite_id="CIT004",
+            source_type="journal",
+            title="急性脑卒中后免疫细胞动态变化研究",
+            text="中性粒细胞在早期炎症反应中占主导地位...",
+            embedding=None,
+            timestamp=datetime.now(),
+        ),
+    ]
+
+
+    # Parent A
+    memory.map_node_to_docs("node_2", [docs[0]])
+    memory.map_node_to_docs("node_3", [docs[1]])
+    memory.map_node_to_docs("node_4", [docs[2]])
+
+    # Parent B
+    memory.map_node_to_docs("node_6", [docs[0], docs[3]])
+    memory.map_node_to_docs("node_7", [docs[1]])
+    memory.map_node_to_docs("node_8", [docs[0], docs[1]])
+
 
 
     # -----------------------
@@ -1104,8 +1241,13 @@ if __name__ == "__main__":
     # -----------------------
     # 6️⃣ 执行 run_compression
     # -----------------------
-    merge_candidates = [n3, n4, n5]
-    max_merges = 1#2
+    # merge_candidates = [n3, n4, n5]
+    merge_candidates = [A1, A2, A3, B1, B2, B3]
+
+    # merge_candidates = [n3, n4]
+    # merge_candidates = [n2, n3]
+    # merge_candidates = [n2]
+    max_merges = 2
     target_leaf_count = 2
     config = RunnableConfig()
 

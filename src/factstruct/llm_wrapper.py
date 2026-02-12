@@ -675,10 +675,12 @@ class FactStructLLMWrapper:
 
         return None
 
+
     def _inherit_mab_state_for_existing_nodes(
         self,
         old_root: OutlineNode,
         new_root: OutlineNode,
+        new_node_ids: List[str] = None,
     ):
         """
         为现有节点继承 MAB 状态（pull_count, reward_history）
@@ -691,11 +693,17 @@ class FactStructLLMWrapper:
         2. 如果路径匹配失败，回退到标题匹配
         3. 如果都失败，节点状态重置为初始值（pull_count=0, reward_history=[]）
         """
+
+        if new_node_ids is None:
+            new_node_ids = []
+
         if old_root is None:
-        # 第一次初始化
+            # 第一次初始化
             for node in new_root.get_all_nodes():
                 node.id = OutlineNode.allocate_id()
+                new_node_ids.append(node.id)  # 收集新节点
             return
+
 
         def get_node_path(node: OutlineNode) -> str:
             """获取节点的完整路径（从根到当前节点）"""
@@ -715,6 +723,8 @@ class FactStructLLMWrapper:
             # 也保留标题映射作为备用（可能会有重复标题，但至少能找到第一个）
             if node.title not in old_nodes_by_title:
                 old_nodes_by_title[node.title] = node
+
+
 
         def inherit_recursive(new_node: OutlineNode):
             """递归继承状态"""
@@ -742,6 +752,7 @@ class FactStructLLMWrapper:
             # 策略3：无法匹配，保持默认状态（pull_count=0, reward_history=[]）
             else:
                 new_node.id = OutlineNode.allocate_id()
+                new_node_ids.append(new_node.id)  # 收集新节点
                 logger.debug(
                     f"Node '{new_node.title}' (path: {new_path}) not found in old outline, "
                     "using default state"
@@ -842,6 +853,8 @@ class FactStructLLMWrapper:
             new_node_doc_mapping: {新节点ID: [文档列表]}
             merged_node_mapping: {新节点ID: [被压缩的旧节点ID列表]}
         """
+        print("len(parent_node.children)",len(parent_node.children))
+        print("child_nodes",child_nodes)
         if not parent_node.children:
             logger.info(f"父节点 '{parent_node.title}' 没有子节点，跳过压缩")
             return outline_root, [], {}, {}
@@ -938,9 +951,21 @@ class FactStructLLMWrapper:
         1. 你的任务是对「某一父节点下的子节点」**独立地**进行局部修改语义层级压缩与结构重组。
         2. 当前父节点的子节点数量 ≥ 3，子节点均为同一语义层级，不涉及跨父节点调整。
         3. 在不丢失关键信息的前提下，对**部分或全部**子节点进行语义合并，生成新的子节点
-        - 允许只对其中一部分子节点进行合并，其余子节点可原样保留
-        - 合并完成后，父节点下的子节点总数**不得少于 2**
-        - 不允许将所有子节点合并为单一子节点
+        ## 子节点数量压缩规则（强约束，必须遵守）
+
+        当前父节点下共有 N = {len(children_desc)} 个子节点。
+        压缩后的子节点数量必须满足以下规则：
+        1. 如果 N = 3 → 必须压缩为 2 个子节点
+        2. 如果 N = 4 → 必须压缩为 2 或 3 个子节点
+        3. 如果 N ≥ 5 → 必须压缩为 ⌊N/2⌋ 或 ⌈N/2⌉ 个子节点
+        4. 无论任何情况：
+        - 子节点数量必须 < N
+        - 子节点数量必须 ≥ 2
+        - 不允许保留原数量不变
+        - 不允许压缩为 1 个
+
+        如果你的输出不满足上述数量规则，则视为结构错误。
+        你必须在语义合理的前提下，通过合并操作，使最终子节点数量严格符合规则。
         4. 压缩后的新的子节点之间应该是并列关系，覆盖该主题的不同方面，而不是层层嵌套，新生成的子节点需要在语义上完整覆盖其所合并的原子节点的核心信息
         5. 仅允许修改当前父节点的子节点，子节点必须要是叶子节点，非叶子节点不参与合并，父节点之外的任何节点结构、顺序、层级均不得修改。父节点的title 不能更改
         6. 合并后，父节点下仅保留，新生成的子节点，以及未参与合并的原始子节点，未参与合并的子节点，其标题与语义需保持不变
@@ -1007,6 +1032,7 @@ class FactStructLLMWrapper:
                     if get_node_path(node) == target_path:
                         return node
                 return None
+            
             # 5️⃣ 找到压缩后的父节点及其新子节点
             target_path = get_node_path(parent_node)
             new_parent = find_node_by_path(new_root, target_path)
@@ -1015,7 +1041,16 @@ class FactStructLLMWrapper:
                 logger.warning("Parent node not found after compression")
                 return outline_root, [], {}, {}
 
-            new_children = new_parent.children or []
+            # new_children = new_parent.children or []
+            new_children = []
+            # new_node_ids 是 id 列表
+            for node_id in new_node_ids:
+                node = new_root.find_node_by_id(node_id)
+                if node:
+                    new_children.append(node)
+                else:
+                    logger.warning(f"Node with id {node_id} not found in new_root")
+
             compressed_nodes_list = [(new_parent, new_children)]
 
             # 6️⃣ 构建 merged_node_mapping 和 new_node_doc_mapping
@@ -1028,12 +1063,6 @@ class FactStructLLMWrapper:
                     merged_docs.extend(memory.node_to_docs.get(old_id, []))
                 if merged_docs:
                     new_node_doc_mapping[child.id] = merged_docs
-
-            # # 7️⃣ 删除被压缩旧节点的文档映射，统一在外面删除
-            # if memory:
-            #     for old_id in merged_source_ids:
-            #         if old_id in memory.node_to_docs:
-            #             del memory.node_to_docs[old_id]
 
         
             logger.info(f"Compression success: { len(parent_node.children)} -> {len(new_children)} nodes")
