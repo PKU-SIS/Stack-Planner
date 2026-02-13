@@ -614,6 +614,378 @@ class BatchMAB:
         return outline_root, self.memory
 
 
+
+
+    def run_compression(
+        self,
+        outline_root,
+        memory,
+        merge_candidates: List["OutlineNode"],
+        # max_merges: int, #不做迭代了。
+        # target_leaf_count: int, #这个暂时也不要了。
+        config: RunnableConfig,
+    ):
+        """
+        执行大纲压缩（Batch-MAB 风格，每次选择一个父节点进行结构合并）
+        """
+
+        logger.info("Running outline compression")
+        # t = 0  # 压缩次数计数
+        # compression_node_number=0
+
+        # 1️⃣ 按父节点分组（从叶子节点回溯）
+        parent_to_children = {}
+
+        for node in merge_candidates:
+            if node.parent:
+                parent = node.parent
+                parent_to_children.setdefault(parent, []).append(node)
+
+        logger.info(f"可压缩父节点数量: {len(parent_to_children)}")
+        logger.info("父节点列表:")
+        for parent, children in parent_to_children.items():
+            logger.info(
+                f"- Parent: {parent.title} (id={parent.id}) "
+                f"children_count={len(children)}"
+            )
+
+        parents = list(parent_to_children.keys())  # 现在是 OutlineNode 对象
+
+
+
+        # 2️⃣ Batch-MAB 主循环（每轮只压一个 parent）
+        # while t < max_merges:
+        ucb_scores = []
+        for parent_iter in parents:
+            # 用 id 在最新树中重新定位节点
+            current_parent = outline_root.find_node_by_id(parent_iter.id)
+
+            if current_parent is None:
+                logger.warning(f"Parent {parent.id} not found in new tree, skipping")
+                continue
+            parent=current_parent
+            children = parent_to_children.get(parent, [])
+            
+            # 子节点相关性（是否适合压）
+            cohesion = self.compute_children_cohesion(parent, children)
+            logger.info(f"parent:{parent},cohesion{cohesion}")
+            # exploration / exploitation
+            t_current = 0 + 1#暂时先这么写
+            if parent.pull_count == 0:
+                exploration = float("inf")
+                avg_reward = 0.0
+            else:
+                avg_reward = parent.avg_reward()
+                exploration = math.sqrt(2 * math.log(t_current) / parent.pull_count)
+
+            # ✅ Compression 专用 UCB
+            ucb_score = cohesion - (avg_reward + exploration)
+            ucb_scores.append((ucb_score, parent))
+
+        if not ucb_scores:
+            logger.info("No parents scored, stopping compression")
+            # break
+            return
+
+        # 3️⃣ 选择最“安全可压”的父节点
+        ucb_scores.sort(key=lambda x: x[0], reverse=True)
+        parent = ucb_scores[0][1]
+        children = parent_to_children.get(parent, [])
+
+        logger.info(
+            f"Compressing under parent '{parent.title}' "
+            f"(children={len(children)})"
+        )
+
+        try:
+            # 4️⃣ 调用 LLM 做结构压缩
+            logger.info(f"compress_under_parent的parent{parent}")
+            outline_root, compressed_nodes_list, new_node_doc_mapping, merged_node_mapping = (
+                self.llm_wrapper.compress_under_parent(
+                    outline_root=outline_root,
+                    parent_node=parent,
+                    child_nodes=children,
+                    memory=memory,
+                )
+            )
+            logger.info(f"compressed_nodes_list{compressed_nodes_list}")
+            logger.info(f"new_node_doc_mapping{new_node_doc_mapping}")
+            logger.info(f"merged_node_mapping{merged_node_mapping}")
+            # 5️⃣ 状态继承（完全对齐 expansion）
+            for parent_node, new_children in compressed_nodes_list:
+                for child in new_children:
+                    child.pull_count = parent_node.pull_count
+                    child.reward_history = list(parent_node.reward_history)
+
+
+            # --- 6️⃣ reward 更新和Memory 更新（Compression 专用逻辑）---
+            parent.pull_count += 1
+            logger.info(
+                f"Compression success under '{parent.title}', "
+                f"reward={parent.reward_history}"
+            )
+            # merged_node_mapping: { new_node_id: [old_node_id1, old_node_id2, ...] }
+
+
+            #先删除，后增加，被修改的都是 new_memory
+            # new_memory=memory
+            import copy
+            new_memory = copy.deepcopy(memory)
+            # compression_node_number=
+            # --- 删除被压缩节点的文档映射（非常重要）---
+            for old_node_ids in merged_node_mapping.values():
+                for old_id in old_node_ids:
+                    if old_id in new_memory.node_to_docs:
+                        del new_memory.node_to_docs[old_id]
+                        logger.debug(
+                            f"Removed document mapping for compressed node '{old_id}'"
+                        )
+            
+            # --- 增加新节点的文档映射（非常重要）---
+            for new_node_id, old_node_ids in merged_node_mapping.items():
+                merged_docs = []
+
+                for old_id in old_node_ids:
+                    docs = memory.get_docs_by_node(old_id)
+                    # print("docs",docs)
+                    merged_docs.extend(docs)
+                # merged_docs 是 FactStructDocument 对象列表
+                merged_docs = list({doc.id: doc for doc in merged_docs}.values())
+                # print("merged_docs",merged_docs)
+                if merged_docs:
+                    new_memory.map_node_to_docs(new_node_id, merged_docs)
+
+        except Exception as e:
+            # 打印完整 traceback
+            tb_str = traceback.format_exc()
+            logger.error(
+                f"Compression failed under parent '{parent.title}': {e}\n"
+                f"Traceback:\n{tb_str}"
+            )
+            parents.remove(parent)
+            # continue
+            return
+
+        # t += 1
+        memory=new_memory
+        outline_root=outline_root
+
+        # 7️⃣ 检查终止条件，这个地方是不对的
+        # current_leaf_count = len(outline_root.get_leaf_nodes())
+        # logger.info(f"Current leaf count: {current_leaf_count}")
+        # if current_leaf_count <= target_leaf_count:
+        #     logger.info("Target leaf count reached, stopping compression")
+        #     break
+
+        logger.info(
+            f"Compression finished:"
+            f"total_nodes={len(outline_root.get_all_nodes())}"
+        )
+        return outline_root, new_memory
+
+
+
+    def run_update(
+        self,
+        outline_root,
+        memory,
+        update_candidates: List["OutlineNode"],
+        config: RunnableConfig,
+    ):
+        """
+        执行大纲节点更新（单次更新，类似 Compression + Expansion，但不迭代）
+        
+        参数:
+            outline_root: 当前大纲根节点
+            memory: 当前 Memory 对象
+            update_candidates: 待更新的节点列表
+            config: RunnableConfig 配置对象
+        
+        返回:
+            更新后的 outline_root 和 memory
+        """
+        import copy
+        import traceback
+
+        logger.info("Running outline update")
+
+        # 1️⃣ 按父节点分组（从叶子节点回溯）
+        parent_to_children = {}
+        for node in update_candidates:
+            if node.parent:
+                parent = node.parent
+                parent_to_children.setdefault(parent, []).append(node)
+
+        logger.info(f"可更新父节点数量: {len(parent_to_children)}")
+        logger.info("父节点列表:")
+        for parent, children in parent_to_children.items():
+            logger.info(
+                f"- Parent: {parent.title} (id={parent.id}) "
+                f"children_count={len(children)}"
+            )
+
+        parents = list(parent_to_children.keys())  # 现在是 OutlineNode 对象
+
+        ucb_scores = []
+        # 2️⃣ Batch-MAB 主逻辑
+        for parent_iter in parents:
+            # 用 id 在最新树中重新定位节点
+            parent = outline_root.find_node_by_id(parent_iter.id)
+
+            if parent is None:
+                logger.warning(f"Parent {parent.id} not found in new tree, skipping")
+                continue
+
+            # 计算 exploration 和 exploitation
+            t_current = 0 + 1  # 暂时这样处理
+            if parent.pull_count == 0:
+                exploration = float("inf")
+                avg_reward = 0.0
+            else:
+                avg_reward = parent.avg_reward()
+                exploration = math.sqrt(2 * math.log(t_current) / parent.pull_count)
+
+            # ✅ update 专用 UCB
+            ucb_score = avg_reward + exploration
+            ucb_scores.append((ucb_score, parent))
+
+        if not ucb_scores:
+            logger.info("No parents scored, stopping update")
+            return outline_root, memory
+
+        # 3️⃣ 选择最“安全更新”的父节点
+        ucb_scores.sort(key=lambda x: x[0], reverse=True)
+        parent = ucb_scores[0][1]
+        children = parent_to_children.get(parent, [])
+        # ==========================================
+        # 🔍 3. 批量检索（拉动摇臂）
+        # ==========================================
+        if len(children)==0:
+            selected_nodes = children
+        else:
+            selected_nodes=[parent]
+        # selected_nodes=[parent]
+
+        logger.info("Batch generating queries...")
+        queries = self.llm_wrapper.batch_generate_queries(selected_nodes)
+
+        logger.info(f"Performing parallel search for {len(queries)} queries...")
+        logger.info(f"Performing parallel search for {queries}")
+        new_docs_list = self._parallel_search(queries, k=3, config=config)
+
+        # 文档嵌入
+        new_docs_list_with_embed = []
+        for docs in new_docs_list:
+            docs_with_embed = self.embedder.embed_docs(docs)
+            new_docs_list_with_embed.append(docs_with_embed)
+
+        # ==========================================
+        # 🎯 4. 批量计算 reward
+        # ==========================================
+
+        all_embeddings = memory.get_all_doc_embeddings()
+
+        for i, node in enumerate(selected_nodes):
+            new_docs = new_docs_list_with_embed[i]
+
+            # 构造节点文本
+            node_text = node.title
+            parent_context = node.get_parent_context()
+            if parent_context:
+                node_text = f"{parent_context} > {node.title}"
+
+            node_embedding = self.embedder.embed_text(node_text)
+
+            reward, breakdown = self.reward_calculator.calculate_reward(
+                new_docs=new_docs,
+                node_title=node.title,
+                all_doc_embeddings=all_embeddings,
+                node_embedding=node_embedding,
+            )
+
+            logger.info(
+                f"[UPDATE] Node '{node.title}': reward={reward:.4f} "
+                f"(rel={breakdown['relevance']:.4f}, nov={breakdown['novelty']:.4f})"
+            )
+
+            # 更新 MAB 状态
+            node.reward_history.append(reward)
+            node.pull_count += 1
+
+            # 更新 memory
+            memory.store_docs(new_docs)
+            memory.map_node_to_docs(node.id, new_docs)
+
+
+
+
+
+
+        logger.info(f"Updating under parent '{parent.title}' (children={len(children)})")
+
+        try:
+            # 4️⃣ 调用 LLM 更新操作
+            logger.info(f"update_under_parent 的 parent: {parent}")
+            outline_root, updated_nodes_list, new_node_doc_mapping, updated_node_mapping = (
+                self.llm_wrapper.update_under_parent(
+                    outline_root=outline_root,
+                    parent_node=parent,
+                    child_nodes=children,
+                    memory=memory,
+                )
+            )
+
+            logger.info(f"updated_nodes_list: {updated_nodes_list}")
+            logger.info(f"new_node_doc_mapping: {new_node_doc_mapping}")
+            logger.info(f"updated_node_mapping: {updated_node_mapping}")
+
+            # 5️⃣ 状态继承（完全对齐）
+            for parent_node, new_children in updated_nodes_list:
+                for child in new_children:
+                    child.pull_count = parent_node.pull_count
+                    child.reward_history = list(parent_node.reward_history)
+
+            # --- 6️⃣ reward 更新和 Memory 更新 ---
+            parent.pull_count += 1
+            logger.info(
+                f"Update success under '{parent.title}', reward={parent.reward_history}"
+            )
+
+            # 新建 memory，以免修改原 memory
+            new_memory = copy.deepcopy(memory)
+
+            # 7️⃣ 删除旧节点的文档映射
+            for old_node_ids in updated_node_mapping.values():
+                for old_id in old_node_ids:
+                    if old_id in new_memory.node_to_docs:
+                        del new_memory.node_to_docs[old_id]
+                        logger.debug(f"Removed document mapping for updated node '{old_id}'")
+
+            # 8️⃣ 增加新节点的文档映射
+            for new_node_id, old_node_ids in updated_node_mapping.items():
+                updated_docs = []
+
+                for old_id in old_node_ids:
+                    docs = memory.get_docs_by_node(old_id)
+                    updated_docs.extend(docs)
+
+                # 更新 docs 列表，去除重复
+                updated_docs = list({doc.id: doc for doc in updated_docs}.values())
+
+                if updated_docs:
+                    new_memory.map_node_to_docs(new_node_id, updated_docs)
+                    logger.debug(f"New node '{new_node_id}' mapped to {len(updated_docs)} documents")
+
+        except Exception as e:
+            tb_str = traceback.format_exc()
+            logger.error(f"Update failed under parent '{parent.title}': {e}\nTraceback:\n{tb_str}")
+            return outline_root, memory
+
+        logger.info(f"Update finished: total nodes={len(outline_root.get_all_nodes())}")
+
+        return outline_root, new_memory
+
+
     def _select_top_k_nodes(
         self,
         leaf_nodes: List[OutlineNode],
@@ -689,11 +1061,30 @@ class BatchMAB:
                 try:
                     docs = future.result()
                     results[index] = docs
+                # except Exception as e:
+                #     logger.error(
+                #         f"Search failed for query {index} ({queries[index]}): {e}"
+                #     )
+                #     results[index] = []  # 失败时返回空列表
                 except Exception as e:
+                    import traceback
+
+                    tb = traceback.format_exc()
+
                     logger.error(
-                        f"Search failed for query {index} ({queries[index]}): {e}"
+                        f"[SEARCH ERROR] Query index={index}, "
+                        f"query='{queries[index]}', "
+                        f"error={str(e)}\nTraceback:\n{tb}"
                     )
-                    results[index] = []  # 失败时返回空列表
+
+                    results[index] = {
+                        "error": True,
+                        "query": queries[index],
+                        "exception": str(e),
+                        "traceback": tb,
+                        "docs": []
+                    }
+
 
         return results
 
@@ -767,176 +1158,6 @@ class BatchMAB:
     
 
 
-
-    def run_compression(
-        self,
-        outline_root,
-        memory,
-        merge_candidates: List["OutlineNode"],
-        max_merges: int, #不做迭代了。
-        target_leaf_count: int, #这个给到提示词即可。
-        config: RunnableConfig,
-    ):
-        """
-        执行大纲压缩（Batch-MAB 风格，每次选择一个父节点进行结构合并）
-        """
-
-        logger.info("Running outline compression")
-        t = 0  # 压缩次数计数
-        compression_node_number=0
-
-        # 1️⃣ 按父节点分组（从叶子节点回溯）
-        parent_to_children = {}
-
-        for node in merge_candidates:
-            if node.parent:
-                parent = node.parent
-                parent_to_children.setdefault(parent, []).append(node)
-
-        print(f"可压缩父节点数量: {len(parent_to_children)}")
-        print("父节点列表:")
-        for parent, children in parent_to_children.items():
-            print(
-                f"- Parent: {parent.title} (id={parent.id}) "
-                f"children_count={len(children)}"
-            )
-
-        parents = list(parent_to_children.keys())  # 现在是 OutlineNode 对象
-
-
-
-        # 2️⃣ Batch-MAB 主循环（每轮只压一个 parent）
-        while t < max_merges:
-
-            ucb_scores = []
-            for parent_iter in parents:
-                # 用 id 在最新树中重新定位节点
-                current_parent = outline_root.find_node_by_id(parent_iter.id)
-
-                if current_parent is None:
-                    logger.warning(f"Parent {parent.id} not found in new tree, skipping")
-                    continue
-                parent=current_parent
-                children = parent_to_children.get(parent, [])
-                
-                # 子节点相关性（是否适合压）
-                cohesion = self.compute_children_cohesion(parent, children)
-                print("parent",parent,"cohesion",cohesion)
-                # exploration / exploitation
-                t_current = t + 1
-                if parent.pull_count == 0:
-                    exploration = float("inf")
-                    avg_reward = 0.0
-                else:
-                    avg_reward = parent.avg_reward()
-                    exploration = math.sqrt(2 * math.log(t_current) / parent.pull_count)
-
-                # ✅ Compression 专用 UCB
-                ucb_score = cohesion - (avg_reward + exploration)
-                ucb_scores.append((ucb_score, parent))
-
-            if not ucb_scores:
-                logger.info("No parents scored, stopping compression")
-                break
-
-            # 3️⃣ 选择最“安全可压”的父节点
-            ucb_scores.sort(key=lambda x: x[0], reverse=True)
-            parent = ucb_scores[0][1]
-            children = parent_to_children.get(parent, [])
-
-            logger.info(
-                f"Compressing under parent '{parent.title}' "
-                f"(children={len(children)})"
-            )
-
-            try:
-                # 4️⃣ 调用 LLM 做结构压缩
-                print("compress_under_parent的parent",parent)
-                outline_root, compressed_nodes_list, new_node_doc_mapping, merged_node_mapping = (
-                    self.llm_wrapper.compress_under_parent(
-                        outline_root=outline_root,
-                        parent_node=parent,
-                        child_nodes=children,
-                        memory=memory,
-                    )
-                )
-                print("compressed_nodes_list",compressed_nodes_list)
-                print("new_node_doc_mapping",new_node_doc_mapping)
-                print("merged_node_mapping",merged_node_mapping)
-                # 5️⃣ 状态继承（完全对齐 expansion）
-                for parent_node, new_children in compressed_nodes_list:
-                    for child in new_children:
-                        child.pull_count = parent_node.pull_count
-                        child.reward_history = list(parent_node.reward_history)
-
-
-                # --- 6️⃣ reward 更新和Memory 更新（Compression 专用逻辑）---
-                parent.pull_count += 1
-                logger.info(
-                    f"Compression success under '{parent.title}', "
-                    f"reward={parent.reward_history}"
-                )
-                # merged_node_mapping: { new_node_id: [old_node_id1, old_node_id2, ...] }
-
-
-                #先删除，后增加，被修改的都是 new_memory
-                # new_memory=memory
-                import copy
-                new_memory = copy.deepcopy(memory)
-                # compression_node_number=
-                # --- 删除被压缩节点的文档映射（非常重要）---
-                for old_node_ids in merged_node_mapping.values():
-                    for old_id in old_node_ids:
-                        if old_id in new_memory.node_to_docs:
-                            del new_memory.node_to_docs[old_id]
-                            logger.debug(
-                                f"Removed document mapping for compressed node '{old_id}'"
-                            )
-                
-                # --- 增加新节点的文档映射（非常重要）---
-                for new_node_id, old_node_ids in merged_node_mapping.items():
-                    merged_docs = []
-
-                    for old_id in old_node_ids:
-                        docs = memory.get_docs_by_node(old_id)
-                        # print("docs",docs)
-                        merged_docs.extend(docs)
-                    # merged_docs 是 FactStructDocument 对象列表
-                    merged_docs = list({doc.id: doc for doc in merged_docs}.values())
-                    # print("merged_docs",merged_docs)
-                    if merged_docs:
-                        new_memory.map_node_to_docs(new_node_id, merged_docs)
-
-                
-
-            except Exception as e:
-                # 打印完整 traceback
-                tb_str = traceback.format_exc()
-                logger.error(
-                    f"Compression failed under parent '{parent.title}': {e}\n"
-                    f"Traceback:\n{tb_str}"
-                )
-                parents.remove(parent)
-                continue
-
-            t += 1
-            memory=new_memory
-            outline_root=outline_root
-
-            # 7️⃣ 检查终止条件，这个地方是不对的
-            current_leaf_count = len(outline_root.get_leaf_nodes())
-            logger.info(f"Current leaf count: {current_leaf_count}")
-            if current_leaf_count <= target_leaf_count:
-                logger.info("Target leaf count reached, stopping compression")
-                break
-
-        logger.info(
-            f"Compression finished: merges={t}, "
-            f"total_nodes={len(outline_root.get_all_nodes())}"
-        )
-        return outline_root, new_memory
-
-
     def compute_children_cohesion(
         self,
         parent: "OutlineNode",
@@ -983,6 +1204,8 @@ class BatchMAB:
 
         cohesion = total_sim / pair_count
         return float(cohesion)
+
+
 
 
 
@@ -1077,7 +1300,7 @@ if __name__ == "__main__":
     acute_A = OutlineNode(id="node_1",
         title="中性粒细胞在脑缺血急性炎症阶段的分子机制",
         # pull_count=5,reward_history=[0.9, 0.88, 0.92, 0.91, 0.87],
-        pull_count=1,reward_history=[0.1],
+        pull_count=1,reward_history=[0.9],
         word_limit=300
     )
 
@@ -1096,9 +1319,9 @@ if __name__ == "__main__":
         pull_count=0,reward_history=[]
     )
 
-    acute_A.add_child(A1)
-    acute_A.add_child(A2)
-    acute_A.add_child(A3)
+    # acute_A.add_child(A1)
+    # acute_A.add_child(A2)
+    # acute_A.add_child(A3)
 
     # ===== Parent B（低 reward，应该被选）=====
     acute_B = OutlineNode(id="node_5",
@@ -1184,9 +1407,9 @@ if __name__ == "__main__":
 
 
     # Parent A
-    memory.map_node_to_docs("node_2", [docs[0]])
-    memory.map_node_to_docs("node_3", [docs[1]])
-    memory.map_node_to_docs("node_4", [docs[2]])
+    # memory.map_node_to_docs("node_2", [docs[0]])
+    # memory.map_node_to_docs("node_3", [docs[1]])
+    # memory.map_node_to_docs("node_4", [docs[2]])
 
     # Parent B
     memory.map_node_to_docs("node_6", [docs[0], docs[3]])
@@ -1207,13 +1430,14 @@ if __name__ == "__main__":
     # 5️⃣ 初始化 Embedder + LLM + BatchMAB（仿真实系统）
     # -----------------------
 
-
-
     # === Embedder（真实模型）===
     embedder = Embedder(model_name="../../Model/MiniLM/all-MiniLM-L6-v2")
 
     # === Search Engine（如果不想真的搜，可以给 dummy）===
-    search_engine = lambda q, k: []   # 测试压缩不需要搜索
+    from src.factstruct.integration import create_search_engine_adapter
+
+    search_engine = create_search_engine_adapter()
+    # search_engine = lambda q, k: []   # 测试压缩不需要搜索
 
     # === LLM ===
     llm_type = AGENT_LLM_MAP.get("outline", "basic")
@@ -1238,34 +1462,34 @@ if __name__ == "__main__":
 
 
 
-    # -----------------------
-    # 6️⃣ 执行 run_compression
-    # -----------------------
-    # merge_candidates = [n3, n4, n5]
-    merge_candidates = [A1, A2, A3, B1, B2, B3]
+    # # -----------------------
+    # # 6️⃣ 执行 run_compression
+    # # -----------------------
+    # # merge_candidates = [n3, n4, n5]
+    # merge_candidates = [A1, A2, A3, B1, B2, B3]
 
-    # merge_candidates = [n3, n4]
-    # merge_candidates = [n2, n3]
-    # merge_candidates = [n2]
-    max_merges = 2
-    target_leaf_count = 2
-    config = RunnableConfig()
+    # # merge_candidates = [n3, n4]
+    # # merge_candidates = [n2, n3]
+    # # merge_candidates = [n2]
+    # max_merges = 2
+    # target_leaf_count = 2
+    # config = RunnableConfig()
 
-    new_root, new_memory = batch_mab.run_compression(
-        outline_root=root,
-        memory=memory,
-        merge_candidates=merge_candidates,
-        max_merges=max_merges,
-        target_leaf_count=target_leaf_count,
-        config=config
-    )
+    # new_root, new_memory = batch_mab.run_compression(
+    #     outline_root=root,
+    #     memory=memory,
+    #     merge_candidates=merge_candidates,
+    #     # max_merges=max_merges,
+    #     # target_leaf_count=target_leaf_count,
+    #     config=config
+    # )
 
-    # -----------------------
-    # 7️⃣ 输出结果
-    # -----------------------
-    print("\n--- AFTER COMPRESSION ---")
-    print(new_root.to_text_tree(include_word_limit=True, include_mab_state=True))
-    print("Memory:", new_memory.node_to_docs)
+    # # -----------------------
+    # # 7️⃣ 输出结果
+    # # -----------------------
+    # print("\n--- AFTER COMPRESSION ---")
+    # print(new_root.to_text_tree(include_word_limit=True, include_mab_state=True))
+    # print("Memory:", new_memory.node_to_docs)
 
     # 验证 parent-child 链路
     def validate_tree(node):
@@ -1273,9 +1497,39 @@ if __name__ == "__main__":
             assert child.parent == node, f"Parent pointer broken at {child.title}"
             validate_tree(child)
 
+    # validate_tree(new_root)
+    # print("\n✅ Tree structure valid.")
+    # print("========== END DEBUG ==========")
+    print("\n========== START BATCH-MAB UPDATE DEBUG ==========")
+
+    print("\n--- BEFORE UPDATE ---")
+    print(root.to_text_tree(include_word_limit=True, include_mab_state=True))
+    print("Memory:", memory.node_to_docs)
+
+    # update_candidates = [A1, A2, A3, B1, B2, B3]
+    update_candidates = [acute_A,B1, B2, B3]
+
+    # config = RunnableConfig()
+    config = {
+        "configurable": {
+            "thread_id": "debug-session"
+        }
+    }
+    
+    new_root, new_memory = batch_mab.run_update(
+        outline_root=root,
+        memory=memory,
+        update_candidates=update_candidates,
+        config=config
+    )
+
+    print("\n--- AFTER UPDATE ---")
+    print(new_root.to_text_tree(include_word_limit=True, include_mab_state=True))
+    print("Memory:", new_memory.node_to_docs)
+
     validate_tree(new_root)
     print("\n✅ Tree structure valid.")
-    print("========== END DEBUG ==========")
+    print("========== END UPDATE DEBUG ==========")
 
 
 

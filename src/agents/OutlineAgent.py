@@ -356,7 +356,7 @@ class OutlineAgent:
                 f"其中有 {len(small_nodes)} 个叶子节点字数小于 300（占比约 {small_ratio:.0%}），"
                 "说明当前大纲结构过于零散、内容承载不足，整体规划不合理。"
                 "应调用 compression 工具，对【同一父节点下】字数 < 300 的部分叶子节点进行合并压缩，"
-                "并通过明确的节点列表与合并次数参数来控制压缩强度。"
+                "并通过可能的叶子节点列表来控制压缩强度。"
             )
 
         elif leaf_coverage_ratio<0.9:
@@ -671,10 +671,9 @@ class OutlineAgent:
         params = decision.params or {}
 
         merge_candidates = params.get("merge_candidates", [])
-        max_merges = params.get("max_merges", 1)
-        target_leaf_count = params.get("target_leaf_count",2)
+        # max_merges = params.get("max_merges", 1)
+        # target_leaf_count = params.get("target_leaf_count",2)
         
-
         merge_candidates_raw = merge_candidates
         resolved = []
 
@@ -705,20 +704,16 @@ class OutlineAgent:
         )
 
         
-
-
         try:
             # 调用 batch_mab 压缩算法（后续实现）
             outline_root, memory = self.batch_mab.run_compression(
                 outline_root=outline_root,
                 memory=memory,
                 merge_candidates=merge_candidates,
-                max_merges=max_merges,
-                target_leaf_count=target_leaf_count,
+                # max_merges=max_merges,
+                # target_leaf_count=target_leaf_count,
                 config=config,
             )
-
-
 
             # 字数规划（可选）
             total_word_limit = state.get("total_word_limit", 5000)

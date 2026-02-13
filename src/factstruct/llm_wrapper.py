@@ -841,7 +841,8 @@ class FactStructLLMWrapper:
     ) -> Tuple[
         "OutlineNode",
         List[Tuple["OutlineNode", List["OutlineNode"]]],
-        Dict[str, List["FactStructDocument"]],
+        # Dict[str, List["FactStructDocument"]],
+        Dict[str, List[str]],
         Dict[str, List[str]],
     ]:
         """
@@ -1089,6 +1090,284 @@ class FactStructLLMWrapper:
         parent_node.children = new_children  # 可能是 []，这是合法的
 
 
+    def update_under_parent(
+        self,
+        outline_root: "OutlineNode",
+        parent_node: "OutlineNode",
+        child_nodes: List["OutlineNode"],
+        memory: "Memory" = None,
+    ) -> Tuple[
+        "OutlineNode",
+        List[Tuple["OutlineNode", List["OutlineNode"]]],
+        # Dict[str, List["FactStructDocument"]],
+        Dict[str, List[str]],
+        Dict[str, List[str]],
+    ]:
+        """
+        Update 指定父节点（不同于 compression）
+        
+        规则：
+        - 若子节点数 == 0 → 允许修改父节点标题
+        - 若子节点数 > 0 → 不允许改变结构，只允许更新标题/语义
+        """
+        logger.info(f"Running update_under_parent on '{parent_node.title}'")
+        logger.info(f"Children count: {len(parent_node.children)}")
+        
+        # ================================
+        # 🟢 情况 1：没有子节点
+        # ================================
+        if len(parent_node.children) == 0:
+        
+            logger.info(f"父节点 '{parent_node.title}' 没有子节点，跳过标题修改")
+            
+            # 只更新文档映射,文档映射应该也不用，已经在外面的函数里做了
+            # merged_docs = []
+            # if memory:
+            #     for doc in new_docs:
+            #         merged_docs.append(doc)
+            #     if merged_docs:
+            #         memory.map_node_to_docs(parent_node.id, merged_docs)
+
+            updated_nodes_list = [(parent_node, [])]
+
+            # 更新后的节点映射
+            updated_node_mapping = {parent_node.id: []}
+
+            # 文档映射
+            # new_node_doc_mapping = {parent_node.id: merged_docs}
+            # merged_docs: List[FactStructDocument]
+
+            # doc_ids = [doc.id for doc in merged_docs]
+            doc_ids=[]
+            new_node_doc_mapping = {parent_node.id: doc_ids}
+
+            logger.info(f"Update success: '{parent_node.title}' (no children)")
+
+            return (
+                outline_root,
+                updated_nodes_list,
+                new_node_doc_mapping,
+                updated_node_mapping,
+            )
+
+        # ================================
+        # 🟢 情况 2：存在子节点
+        # ================================
+
+        outline_text = outline_root.to_text_tree()
+
+        # 构造输入文档的文档摘要
+        # doc_desc = []
+        # for doc in new_docs:
+        #     if doc.title and doc.text:
+        #         doc_desc.append("标题"+doc.title.strip()+"内容"+doc.text[:100].strip() + "…")
+        #     elif doc.text:
+        #         doc_desc.append(doc.text[:100].strip() + "…")
+
+        # new_docs_brief = "\n".join(f"- {d}" for d in doc_desc[:10])
+        # if not new_docs:
+        #     new_docs_brief = "无新增文档"
+
+        parent_context = parent_node.get_parent_context()
+        context_str = (
+            f"{parent_context} > {parent_node.title}"
+            if parent_context
+            else parent_node.title
+        )
+
+        children_titles = [c.title for c in parent_node.children]
+        # 2️⃣ 构造子节点描述（简要文献信息）
+        children_desc = []
+        merged_source_ids = []
+
+        for node in child_nodes:
+            merged_source_ids.append(node.id)
+            docs = memory.node_to_docs.get(node.id, []) if memory else []
+
+            if docs:
+                doc_summaries = []
+                for doc in docs:
+                    if doc.title:
+                        doc_summaries.append(doc.title().strip())   # ⚠ 修正这里
+                    elif doc.text:
+                        doc_summaries.append(doc.text[:50].strip() + "…")
+
+                docs_brief = (
+                    f"{len(docs)} 篇相关文献，主题包括：" + "；".join(doc_summaries[:5])
+                )
+
+                if len(doc_summaries) > 5:
+                    docs_brief += f" 等（共 {len(doc_summaries)} 个主题锚点）"
+
+            else:
+                docs_brief = "无直接文献（由上层语义拆分而来）"
+
+            children_desc.append(
+                f"- 子节点标题: {node.title}\n  文献信息摘要: {docs_brief}"
+            )
+
+
+            # 3️⃣ 构造压缩 prompt
+            prompt = f"""
+            你是研究助手，需要根据新增文档对研究大纲进行【局部语义强化更新】。
+            
+            ⚠ 本任务不是压缩，也不是扩展，而是在保持结构完全不变的前提下，对现有子节点进行
+
+            ## 当前完整大纲
+            {outline_text}
+
+            ## 目标父节点
+            {context_str}
+            该父节点下存在多个语义高度相似、信息量偏少的子节点，需要进行合并压缩。
+
+            ## 当前子节点及其支撑文献
+            {chr(10).join(children_desc)}
+
+
+            ---
+            ## 强约束规则（必须遵守）
+
+            1. 不允许增加子节点数量
+            2. 不允许减少子节点数量
+            3. 不允许改变层级结构
+            4. 不允许修改父节点标题
+            5. 只允许修改当前父节点下的【叶子子节点标题】
+            6. 至少必须修改 1 个子节点标题（不可全部保持不变）
+            7. 修改必须基于新增文档内容
+            8. 更新后的子节点标题必须更具体、更具信息量
+            9. 不允许生成与文档无关的空泛概括标题
+            10. 输出完整 JSON 树
+
+            如果你的输出与原结构完全一致，则视为错误。
+            {{
+                "title": "根节点标题",
+                "children": [
+                    {{
+                        "title": "子节点1标题",
+                        "children": []
+                    }},
+                    {{
+                        "title": "子节点2标题（被扩展的叶子节点）",
+                        "children": [
+                            {{
+                                "title": "并列子节点A",
+                                "children": []
+                            }},
+                            {{
+                                "title": "并列子节点B",
+                                "children": []
+                            }},
+                            {{
+                                "title": "并列子节点C",
+                                "children": []
+                            }}
+                        ]
+                    }}
+                ]
+            }}
+
+            请只输出 JSON，不要包含其他解释性文字。输出完整的修订后大纲树。"""
+
+
+
+        try:
+            logger.info(f"update_under_parent prompt:\n{prompt}")
+
+            messages = [HumanMessage(content=prompt)]
+            response = self.llm.invoke(messages)
+            content = response.content.strip()
+            logger.info(f"content{content}")
+            json_str = self._extract_json(content)
+            outline_data = json.loads(json_str)
+
+            new_root = self._build_outline_tree(outline_data, parent=None)
+
+            # 继承 MAB 状态
+            new_node_ids = []
+            self._inherit_mab_state_for_existing_nodes(
+                outline_root, new_root, new_node_ids=new_node_ids
+            )
+            logger.info(f"new_node_ids{new_node_ids}")
+            # ========= 路径工具函数 =========
+            def get_node_path(node):
+                path_parts = []
+                current = node
+                while current is not None:
+                    path_parts.insert(0, current.title)
+                    current = current.parent
+                return " > ".join(path_parts)
+
+            def find_node_by_path(root, target_path):
+                for node in root.get_all_nodes():
+                    if get_node_path(node) == target_path:
+                        return node
+                return None
+
+
+            # ========= 找更新后的父节点 =========
+            target_path = get_node_path(parent_node)
+            new_parent = find_node_by_path(new_root, target_path)
+
+            if not new_parent:
+                logger.warning("Parent node not found after update")
+                return outline_root, [], {}, {}
+
+            # ========= 用 new_node_ids 找到更新后的子节点 =========
+            new_children = []
+
+            for node_id in new_node_ids:
+                node = new_root.find_node_by_id(node_id)
+                if node:
+                    new_children.append(node)
+                else:
+                    logger.warning(f"Node with id {node_id} not found in new_root")
+
+            updated_nodes_list = [(new_parent, new_children)]
+            logger.info(f"new_children{new_children}")
+            # ========= 构建 updated_node_mapping =========
+            # update 是 1 对 1 语义增强
+            # new_node_ids 和 old_child_ids 应该等长
+            old_child_ids = [child.id for child in parent_node.children]
+
+            updated_node_mapping = {}
+            new_node_doc_mapping = {}
+            # new_doc_ids = [doc.id for doc in new_docs] if new_docs else []
+            for child in new_children:
+                updated_node_mapping[child.id] = merged_source_ids
+                merged_docs = []
+                for old_id in merged_source_ids:
+                    merged_docs.extend(memory.node_to_docs.get(old_id, []))
+                
+                # all_docs = merged_docs + new_doc_ids
+                if merged_docs:#all_docs:
+                    new_node_doc_mapping[child.id] = merged_docs
+                    # new_node_doc_mapping[child.id] = all_docs
+
+
+            logger.info(
+                f"Update success: {len(old_child_ids)} -> {len(new_children)} nodes under '{parent_node.title}'"
+            )
+
+            return (
+                new_root,
+                updated_nodes_list,
+                new_node_doc_mapping,
+                updated_node_mapping,
+            )
+
+
+
+        except Exception as e:
+            import traceback
+            logger.error(
+                f"Failed to update under parent '{parent_node.title}': {e}"
+            )
+            logger.error(traceback.format_exc())
+            return outline_root, [], {}, {}
+
+
+
+
 
 if __name__ == "__main__":
     """
@@ -1145,7 +1424,7 @@ if __name__ == "__main__":
     # 2️⃣ 构造真实 Outline
     # -----------------------
     root = OutlineNode(
-        id="node_1",
+        id="node_0",
         title="中性粒细胞在脑缺血中的作用",
         pull_count=2,
         reward_history=[0.8, 0.9],
@@ -1153,7 +1432,7 @@ if __name__ == "__main__":
     )
 
     acute = OutlineNode(
-        id="node_2",
+        id="node_1",
         title="中性粒细胞在脑缺血急性期的作用",
         pull_count=1,
         reward_history=[0.7],
@@ -1161,28 +1440,28 @@ if __name__ == "__main__":
     )
 
     n3 = OutlineNode(
-        id="node_3",
+        id="node_2",
         title="中性粒细胞的募集与激活机制",
         pull_count=0,
         reward_history=[],
         word_limit=100
     )
     n4 = OutlineNode(
-        id="node_4",
+        id="node_3",
         title="促炎因子释放与血-脑屏障破坏",
         pull_count=0,
         reward_history=[],
         word_limit=100
     )
     n5 = OutlineNode(
-        id="node_5",
+        id="node_4",
         title="炎症反应对脑水肿与神经损伤的影响",
         pull_count=0,
         reward_history=[],
         word_limit=100
     )
     n6 = OutlineNode(
-        id="node_6",
+        id="node_5",
         title="中性粒细胞在神经修复中的潜在作用",
         pull_count=0,
         reward_history=[],
@@ -1220,40 +1499,99 @@ if __name__ == "__main__":
     llm = get_llm_by_type(llm_type)
 
     wrapper = FactStructLLMWrapper(llm)
+    wrapper._inherit_mab_state_for_existing_nodes(old_root=None, new_root=root)
     # -----------------------
     # 5️⃣ 测试 2 子节点折叠（不走 LLM）
     # 只压缩 node_8 和 node_9
     # -----------------------
-    new_root, compressed_list, new_doc_map, merged_map = wrapper.compress_under_parent(
+    # new_root, compressed_list, new_doc_map, merged_map = wrapper.compress_under_parent(
+    #     outline_root=root,
+    #     parent_node=acute,
+    #     child_nodes=[n3, n4],
+    #     memory=memory,
+    # )
+
+    # print("\n--- AFTER STRUCTURE ---")
+    # print(new_root.to_text_tree(include_word_limit=True,include_mab_state=True))
+
+    # print("\nCompressed list:")
+    # for p, children in compressed_list:
+    #     print("Parent:", p.title)
+    #     print("Affected children:", [c.title for c in children])
+
+    # print("\nNew node doc mapping:", new_doc_map)
+    # print("Merged node mapping:", merged_map)
+
+    # print("\nMemory after compression:")
+    # print(memory.node_to_docs)
+
+    # # -----------------------
+    # # 6️⃣ 验证结构完整性
+    # # -----------------------
+    # def validate_tree(node):
+    #     for child in node.children:
+    #         assert child.parent == node, f"Parent pointer broken at {child.title}"
+    #         validate_tree(child)
+
+    # validate_tree(new_root)
+
+    # print("\n✅ Tree structure valid.")
+    # print("========== END DEBUG ==========")
+
+
+    # -----------------------
+    # 5️⃣ 测试 update_under_parent
+    # -----------------------
+
+    print("\n========== TEST UPDATE ==========")
+
+    # 构造新增文档（模拟 retrieval 新结果）
+    from datetime import datetime
+
+    new_doc = FactStructDocument(
+        id="doc_4",
+        cite_id="CIT004",
+        source_type="journal",
+        title="急性期炎症级联反应研究",
+        text="中性粒细胞释放NETs并激活炎症级联反应。",
+        embedding=None,
+        timestamp=datetime.now()
+    )
+
+    # 注意：update 版本不应该直接改 memory
+    # 只传入 parent + memory + 由函数返回 new_doc_map
+
+    new_root, updated_list, new_doc_map, updated_node_map = wrapper.update_under_parent(
         outline_root=root,
-        parent_node=acute,
-        child_nodes=[n3, n4],
+        parent_node=acute,      # 测试有子节点情况
+        child_nodes=acute.children,
         memory=memory,
     )
 
-    print("\n--- AFTER STRUCTURE ---")
-    print(new_root.to_text_tree(include_word_limit=True,include_mab_state=True))
+    print("\n--- AFTER UPDATE STRUCTURE ---")
+    print(new_root.to_text_tree(include_word_limit=True, include_mab_state=True))
 
-    print("\nCompressed list:")
-    for p, children in compressed_list:
+    print("\nUpdated list:")
+    for p, children in updated_list:
         print("Parent:", p.title)
-        print("Affected children:", [c.title for c in children])
+        print("Children:", [c.title for c in children])
 
     print("\nNew node doc mapping:", new_doc_map)
-    print("Merged node mapping:", merged_map)
+    print("Updated node mapping:", updated_node_map)
 
-    print("\nMemory after compression:")
-    print(memory.node_to_docs)
+    print("\n========== TEST UPDATE (NO CHILDREN) ==========")
 
-    # -----------------------
-    # 6️⃣ 验证结构完整性
-    # -----------------------
-    def validate_tree(node):
-        for child in node.children:
-            assert child.parent == node, f"Parent pointer broken at {child.title}"
-            validate_tree(child)
+    leaf_node = n6   # node_6 没有子节点
 
-    validate_tree(new_root)
+    new_root2, updated_list2, new_doc_map2, updated_node_map2 = wrapper.update_under_parent(
+        outline_root=new_root,
+        parent_node=leaf_node,
+        child_nodes=[],
+        memory=memory,
+    )
 
-    print("\n✅ Tree structure valid.")
-    print("========== END DEBUG ==========")
+    print("\n--- AFTER UPDATE (NO CHILDREN) ---")
+    print(new_root2.to_text_tree(include_word_limit=True, include_mab_state=True))
+
+    print("\nNew node doc mapping:", new_doc_map2)
+    print("Updated node mapping:", updated_node_map2)

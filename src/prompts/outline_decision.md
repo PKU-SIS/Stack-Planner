@@ -166,9 +166,7 @@
 Params 格式：
 ```json
 {
-  "merge_candidates": ["node_id_1", "node_id_2", "..."],
-  "max_merges": 1,
-  "target_leaf_count": 2
+  "merge_candidates": ["node_id_1", "node_id_2", "..."]
 }
 ```
 
