@@ -181,8 +181,7 @@ Params 格式：
 Params 格式
 ```json
 {
-  "instruction": "描述节点重写或结构优化要求，重写哪些节点，重写的思路是什么，生成的节点可能是什么样的"
-}
+  "update_candidates":  ["node_id_1", "node_id_2", "..."]
 ```
 
 ---

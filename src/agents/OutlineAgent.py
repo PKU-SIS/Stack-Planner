@@ -364,7 +364,7 @@ class OutlineAgent:
             missing_ids = [node.id for node in uncovered_leaf_nodes]
             suggestion = (
                 f"存在 {len(uncovered_leaf_nodes)} 个叶子节点缺文献，"
-                f"节点ID={missing_ids}缺少文献，请你选择其中的属于相同父节点的节点，优化这些节点或微调结构。"
+                f"节点ID={missing_ids}缺少文献，请你选择其中的属于相同父节点的叶子节点，优化这些节点或微调结构。"
                 "应调用 update 工具"
             )
         elif (
@@ -699,8 +699,8 @@ class OutlineAgent:
         logger.info(
             "Compress params resolved: "
             f"merge_candidates={len(merge_candidates)}, "
-            f"max_merges={max_merges}, "
-            f"target_leaf_count={target_leaf_count}"
+            # f"max_merges={max_merges}, "
+            # f"target_leaf_count={target_leaf_count}"
         )
 
         
@@ -769,16 +769,43 @@ class OutlineAgent:
         # batch_size = params.get("batch_size", state.get("factstruct_batch_size", 2))
         # uncovered_leaf_nodes = params.get("uncovered_leaf_nodes", [])  # 需要微调的叶子节点
         # logger.info(f"Update params resolved: max_iterations={max_iterations}, batch_size={batch_size}, uncovered_leaf_nodes={uncovered_leaf_nodes}")
-        instruction=params.get("instruction","无指令")
+        update_candidates=params.get("update_candidates","无指令")
         
-        logger.info(f"Update params resolved: instruction={instruction}")
+        # ================================
+        # 0️⃣ 解析 update_candidates
+        # ================================
+
+        resolved = []
+
+        for item in update_candidates or []:
+            # 已经是 OutlineNode
+            if isinstance(item, OutlineNode):
+                resolved.append(item)
+                continue
+
+            # ID（int / str）
+            node_id = str(item)
+            node = outline_root.find_node_by_id(node_id)
+
+            if node:
+                resolved.append(node)
+            else:
+                logger.warning(
+                    f"Update candidate id '{node_id}' not found in outline"
+                )
+
+        update_candidates = resolved
+
+        logger.info(f"Update params resolved: update_candidates={len(update_candidates)}" )
+
+        
         
         try:
             # 调用 batch_mab 更新算法（后续实现）
             outline_root, memory = self.batch_mab.run_update(
                 outline_root=outline_root,
                 memory=memory,
-                instruction=instruction,
+                update_candidates=update_candidates,
                 config=config,
             )
 

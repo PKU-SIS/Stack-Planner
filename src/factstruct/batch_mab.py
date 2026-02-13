@@ -679,7 +679,8 @@ class BatchMAB:
                 exploration = math.sqrt(2 * math.log(t_current) / parent.pull_count)
 
             # ✅ Compression 专用 UCB
-            ucb_score = cohesion - (avg_reward + exploration)
+            parent_depth=parent.get_depth()
+            ucb_score = cohesion - (avg_reward + exploration)+parent_depth#加个深度，要不 root 容易被选，再加个文档数吧
             ucb_scores.append((ucb_score, parent))
 
         if not ucb_scores:
@@ -846,7 +847,9 @@ class BatchMAB:
                 exploration = math.sqrt(2 * math.log(t_current) / parent.pull_count)
 
             # ✅ update 专用 UCB
-            ucb_score = avg_reward + exploration
+            parent_depth=parent.get_depth()#加个深度
+            parent_doc_num=len(memory.map_node_to_docs(parent))#加个文档数
+            ucb_score = avg_reward + exploration+parent_depth-parent_doc_num
             ucb_scores.append((ucb_score, parent))
 
         if not ucb_scores:
