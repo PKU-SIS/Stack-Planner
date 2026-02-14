@@ -719,3 +719,124 @@ def _generate_graphviz_image(
 
     # 保存图片
     dot.render(output_path, format="png", cleanup=True)
+
+
+if __name__ == "__main__":
+    """
+    测试 FactStruct Stage 2:
+    基于大纲递归生成 Markdown 报告
+    """
+
+    from datetime import datetime
+
+    print("========== START FACTSTRUCT STAGE2 DEBUG ==========")
+
+    # =====================================================
+    # 1️⃣ 构造 Memory
+    # =====================================================
+
+    memory = Memory()
+
+    docs = [
+        FactStructDocument(
+            id="doc_1",
+            cite_id="CIT001",
+            source_type="journal",
+            title="中性粒细胞募集机制",
+            text="急性脑缺血后，中性粒细胞通过趋化因子被募集至缺血区域。",
+            embedding=None,
+            timestamp=datetime.now(),
+        ),
+        FactStructDocument(
+            id="doc_2",
+            cite_id="CIT002",
+            source_type="journal",
+            title="炎症因子释放机制",
+            text="中性粒细胞释放IL-1β和TNF-α，加剧炎症反应。",
+            embedding=None,
+            timestamp=datetime.now(),
+        ),
+    ]
+
+    # =====================================================
+    # 2️⃣ 构造 Outline（树结构）
+    # =====================================================
+
+    root = OutlineNode(
+        id="node_0",
+        title="中性粒细胞在脑缺血中的作用",
+        word_limit=800
+    )
+
+    acute = OutlineNode(
+        id="node_1",
+        title="急性期炎症机制",
+        word_limit=400
+    )
+
+    mech1 = OutlineNode(
+        id="node_2",
+        title="中性粒细胞募集机制",
+        word_limit=200
+    )
+
+    mech2 = OutlineNode(
+        id="node_3",
+        title="炎症因子释放机制",
+        word_limit=200
+    )
+
+    acute.add_child(mech1)
+    acute.add_child(mech2)
+    root.add_child(acute)
+
+    print("\n--- OUTLINE TREE ---")
+    print(root.to_text_tree(include_word_limit=True, include_mab_state=True))
+
+    # =====================================================
+    # 3️⃣ 构建 Memory 映射
+    # =====================================================
+
+    memory.map_node_to_docs("node_2", [docs[0]])
+    memory.map_node_to_docs("node_3", [docs[1]])
+
+    print("\n--- MEMORY MAPPING ---")
+    print(memory.node_to_docs)
+
+    # =====================================================
+    # 4️⃣ 序列化（模拟真实系统）
+    # =====================================================
+
+    outline_dict = outline_node_to_dict(root)
+    memory_dict = memory_to_dict(memory)
+
+    print("\n--- SERIALIZED OUTLINE ---")
+    print(outline_dict)
+
+    print("\n--- SERIALIZED MEMORY ---")
+    print(memory_dict)
+
+    # =====================================================
+    # 5️⃣ 运行 Stage 2
+    # =====================================================
+
+    user_query = "请系统阐述中性粒细胞在脑缺血急性期的炎症作用机制"
+
+    print("\n========== RUNNING STAGE 2 ==========")
+
+    final_report = run_factstruct_stage2(
+        outline_dict=outline_dict,
+        memory_dict=memory_dict,
+        user_query=user_query,
+        llm_type="basic",
+        locale="zh-CN"
+    )
+
+    # =====================================================
+    # 6️⃣ 输出结果
+    # =====================================================
+
+    print("\n========== FINAL REPORT ==========")
+    print(final_report)
+
+    print("\n========== END STAGE2 DEBUG ==========")

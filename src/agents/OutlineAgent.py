@@ -290,6 +290,8 @@ class OutlineAgent:
 
         # ---------- 基础结构信息 ----------
         if outline_exists:
+            if isinstance(outline, dict):
+                outline = dict_to_outline_node(outline)
             leaf_nodes = outline.get_leaf_nodes()
             leaf_count = len(leaf_nodes)
             max_depth = max(node.get_depth() for node in outline.get_all_nodes())

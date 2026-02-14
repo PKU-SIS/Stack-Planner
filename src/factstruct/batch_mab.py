@@ -848,7 +848,7 @@ class BatchMAB:
 
             # ✅ update 专用 UCB
             parent_depth=parent.get_depth()#加个深度
-            parent_doc_num=len(memory.map_node_to_docs(parent))#加个文档数
+            parent_doc_num=len(memory.get_docs_by_node(parent))#加个文档数
             ucb_score = avg_reward + exploration+parent_depth-parent_doc_num
             ucb_scores.append((ucb_score, parent))
 

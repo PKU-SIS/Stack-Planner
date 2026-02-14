@@ -741,15 +741,15 @@ class FactStructLLMWrapper:
                     f"(pull_count={old_node.pull_count})"
                 )
             # 策略2：回退到标题匹配（可能不够准确，但比丢失状态好）
-            elif new_node.title in old_nodes_by_title:
-                old_node = old_nodes_by_title[new_node.title]
-                new_node.pull_count = old_node.pull_count
-                new_node.reward_history = old_node.reward_history.copy()
-                logger.debug(
-                    f"State inherited for node '{new_node.title}' via title match "
-                    f"(path may differ, pull_count={old_node.pull_count})"
-                )
-            # 策略3：无法匹配，保持默认状态（pull_count=0, reward_history=[]）
+            # elif new_node.title in old_nodes_by_title:
+            #     old_node = old_nodes_by_title[new_node.title]
+            #     new_node.pull_count = old_node.pull_count
+            #     new_node.reward_history = old_node.reward_history.copy()
+            #     logger.debug(
+            #         f"State inherited for node '{new_node.title}' via title match "
+            #         f"(path may differ, pull_count={old_node.pull_count})"
+            #     )
+            # # 策略3：无法匹配，保持默认状态（pull_count=0, reward_history=[]）
             else:
                 new_node.id = OutlineNode.allocate_id()
                 new_node_ids.append(new_node.id)  # 收集新节点
