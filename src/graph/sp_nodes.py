@@ -92,7 +92,25 @@ async def outline_node(state: State, config: RunnableConfig) -> Command:
     _check_agents_initialized()
     return await sub_agent_manager.execute_outline(state, config)
 
+
 async def human_feedback_node(state: State, config: RunnableConfig) -> Command:
-    """人工反馈节点处理函数"""
+    """人工反馈节点处理函数（已废弃，保留用于兼容）"""
     _check_agents_initialized()
     return await sub_agent_manager.execute_human_feedback(state, config)
+
+
+async def human_agent_node(state: State, config: RunnableConfig) -> Command:
+    """
+    Human Agent 节点处理函数
+
+    专门负责与人类的交互，包括：
+    - form_filling: 表单填写（perception 阶段）
+    - outline_confirmation: 大纲确认（outline 阶段）
+    - report_feedback: 报告反馈（reporter 阶段）
+    - proactive_question: 主动提问（central agent 发起）
+
+    🔴 核心原则：人类反馈优先级最高
+    """
+    _check_agents_initialized()
+    logger.info("Human Agent 节点激活")
+    return await sub_agent_manager.execute_human(state, config)

@@ -1,4 +1,6 @@
 
+
+test_llm.py
 ./*.txt
 CHANGELOG.md
 # Python-generated files
@@ -29,15 +31,34 @@ conf.yaml
 .idea/
 .langgraph_api/
 *.log
-tests/
+# tests/
+draft.py
 
 # coverage report
 coverage.xml
 coverage/
 cases/*
-test_*.py
 shells/*
 .cursor/
+.windsurf/
+Stack Planner流式接口文档.md
+startup.sh
+test_hitl_*
+!test_hitl_v8.py
+
+# Temporary fix scripts and backups
+fix_validation_error.sh
+apply_patch_and_restart.sh
+check_status.sh
+restart_service.sh
+FIX_SUMMARY.md
+FINAL_FIX_REPORT.md
+*.backup.*
+fix_execution.log
+
+test_llm.py
+graceful-mapping-gizmo.md
+
 
 .github/
 docs/

@@ -24,7 +24,12 @@ from .nodes import (
     researcher_xxqg_node,
 )
 
-from .sp_nodes import central_agent_node, perception_node, outline_node,human_feedback_node
+from .sp_nodes import (
+    central_agent_node,
+    perception_node,
+    outline_node,
+    human_feedback_node as sp_human_feedback_node,
+)
 from src.agents.sub_agent_registry import get_sub_agents_by_global_type
 
 
@@ -137,12 +142,14 @@ def get_next_perception(state: State) -> str:
     else:
         return "outline"
 
+
 def get_next_outline(state: State) -> str:
     wait_stage = state.get("wait_stage", "")
     if wait_stage == "outline":
         return "human_feedback"
     else:
         return "central_agent"
+
 
 def get_next_feedback(state: State) -> str:
     wait_stage = state.get("wait_stage", "")
@@ -152,6 +159,7 @@ def get_next_feedback(state: State) -> str:
         return "outline"
     else:
         return "central_agent"
+
 
 def _build_graph_sp_xxqg():
     """
@@ -165,13 +173,17 @@ def _build_graph_sp_xxqg():
     builder = StateGraph(State)
 
     # 添加center planner agent
-    builder.add_node("perception", perception_node)
+    # 修改成动态 workflow，所有的节点都变成中枢智能体子节点
     builder.add_node("central_agent", central_agent_node)
-    builder.add_node("outline", outline_node)
-    builder.add_node("human_feedback", human_feedback_node)
 
-    # 添加sub agent
-    sub_agents = get_sub_agents_by_global_type("sp_xxqg")
+    # Human Agent 现在通过 sub_agent_registry 注册为子 agent
+    # 不再需要单独添加 human_feedback 节点
+    # builder.add_node("human_feedback", sp_human_feedback_node)  # 已废弃
+
+    # 添加 sub agent（包括 human agent）
+    sub_agents = get_sub_agents_by_global_type(
+        "sp_xxqg"
+    )  # 包含 perception, outline, researcher, reporter, human
 
     for sub_agent in sub_agents:
         builder.add_node(sub_agent["name"], sub_agent["node"])
@@ -183,7 +195,10 @@ def _build_graph_sp_xxqg():
     builder.add_node("zip_data", zip_data)
 
     # 感知层，包括search before plan、human in the loop
-    builder.add_edge(START, "perception")
+    builder.add_edge(
+        START, "central_agent"
+    )  # 这个多轮对话的SOP 我还没看咋实现，看起来估计是 Human Node 去跳 finish？
+    # builder.add_edge(START, "perception")
     # builder.add_conditional_edge(
     #     "perception",
     #     get_next_perception
@@ -197,7 +212,7 @@ def _build_graph_sp_xxqg():
     #     get_next_feedback
     # )
 
-    builder.add_edge("central_agent", "zip_data")
+    # builder.add_edge("central_agent", "zip_data")
 
     # 后处理部分
     builder.add_edge("zip_data", END)

@@ -1,1 +1,0 @@
-python server.py --port 8556 --log-level debug

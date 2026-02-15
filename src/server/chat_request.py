@@ -61,6 +61,9 @@ class ChatRequest(BaseModel):
     graph_format: Optional[str] = Field(
         "sp", description="The format of the graph to be used in the chat"
     )
+    knowledge_base_name: Optional[str] = Field(
+        "学习强国", description="Name of the knowledge base"
+    )
 
 
 class TTSRequest(BaseModel):

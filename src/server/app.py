@@ -8,6 +8,7 @@ from math import log
 from sympy import im
 from src.utils.logger import logger
 import os
+
 from typing import Annotated, List, cast
 from uuid import uuid4
 
@@ -43,7 +44,6 @@ from src.server.rag_request import (
 from src.tools import VolcengineTTS
 from src.utils.reference_utils import global_reference_map
 
-
 app = FastAPI(
     title="DeerFlow API",
     description="API for Deer",
@@ -64,6 +64,26 @@ in_memory_store = InMemoryStore()
 graph = build_graph_with_memory()
 
 
+def _resolve_recursion_limit(max_step_num: int) -> int:
+    default_limit = 25
+    if isinstance(max_step_num, int) and max_step_num > 0:
+        default_limit = max(default_limit, max_step_num * 2 + 10)
+    env_value = os.getenv("GRAPH_RECURSION_LIMIT") or os.getenv("AGENT_RECURSION_LIMIT")
+    if env_value is not None:
+        try:
+            parsed = int(env_value)
+            if parsed > 0:
+                return parsed
+            logger.warning(
+                f"GRAPH_RECURSION_LIMIT/AGENT_RECURSION_LIMIT={env_value} is not positive; using {default_limit}."
+            )
+        except ValueError:
+            logger.warning(
+                f"Invalid GRAPH_RECURSION_LIMIT/AGENT_RECURSION_LIMIT='{env_value}'; using {default_limit}."
+            )
+    return default_limit
+
+
 @app.post("/api/chat/stream")
 async def chat_stream(request: ChatRequest):
     thread_id = request.thread_id
@@ -81,6 +101,7 @@ async def chat_stream(request: ChatRequest):
             request.interrupt_feedback,
             request.mcp_settings,
             request.enable_background_investigation,
+            request.knowledge_base_name,
         ),
         media_type="text/event-stream",
     )
@@ -97,6 +118,7 @@ async def _astream_workflow_generator(
     interrupt_feedback: str,
     mcp_settings: dict,
     enable_background_investigation,
+    knowledge_base_name,
 ):
     input_ = {
         "messages": messages,
@@ -114,6 +136,7 @@ async def _astream_workflow_generator(
         if messages:
             resume_msg += f" {messages[-1]['content']}"
         input_ = Command(resume=resume_msg)
+    recursion_limit = _resolve_recursion_limit(max_step_num)
     async for agent, _, event_data in graph.astream(
         input_,
         config={
@@ -123,6 +146,9 @@ async def _astream_workflow_generator(
             "max_step_num": max_step_num,
             "max_search_results": max_search_results,
             "mcp_settings": mcp_settings,
+            "knowledge_base_name": knowledge_base_name,
+            "recursion_limit": recursion_limit,
+            "graph_format": graph_format,
         },
         stream_mode=["messages", "updates"],
         subgraphs=True,
@@ -199,6 +225,7 @@ async def chat_stream(request: ChatRequest):
             request.interrupt_feedback,
             request.mcp_settings,
             request.enable_background_investigation,
+            request.knowledge_base_name,
         ),
         media_type="text/event-stream",
     )
@@ -215,6 +242,7 @@ async def _astream_workflow_generator_xxqg(
     interrupt_feedback: str,
     mcp_settings: dict,
     enable_background_investigation,
+    knowledge_base_name,
 ):
     input_ = {
         "messages": messages,
@@ -233,6 +261,7 @@ async def _astream_workflow_generator_xxqg(
         if messages:
             resume_msg += f" {messages[-1]['content']}"
         input_ = Command(resume=resume_msg)
+    recursion_limit = _resolve_recursion_limit(max_step_num)
     async for agent, _, event_data in get_graph_by_format("xxqg").astream(
         input_,
         config={
@@ -242,6 +271,9 @@ async def _astream_workflow_generator_xxqg(
             "max_step_num": max_step_num,
             "max_search_results": max_search_results,
             "mcp_settings": mcp_settings,
+            "knowledge_base_name": knowledge_base_name,
+            "recursion_limit": recursion_limit,
+            "graph_format": graph_format,
         },
         stream_mode=["messages", "updates"],
         subgraphs=True,
@@ -320,6 +352,7 @@ async def chat_stream(request: ChatRequest):
             request.mcp_settings,
             request.enable_background_investigation,
             request.graph_format,
+            request.knowledge_base_name,
         ),
         media_type="text/event-stream",
     )
@@ -337,16 +370,35 @@ async def _astream_workflow_generator_sp(
     mcp_settings: dict,
     enable_background_investigation,
     graph_format: str = "sp",
+    knowledge_base_name="学习强国",
 ):
+    # 从 user_query 中提取 style_role 并清理
+    raw_user_query = messages[-1]["content"] if messages else ""
+    style_role = ""
+    clean_user_query = raw_user_query
+    if "[STYLE_ROLE]" in raw_user_query:
+        parts = raw_user_query.split("[STYLE_ROLE]")
+        clean_user_query = parts[0].strip()
+        style_role = parts[-1].strip()
+
+    # 同时清理 messages 中的 [STYLE_ROLE] 后缀
+    clean_messages = []
+    for msg in messages:
+        clean_msg = msg.copy()
+        if "[STYLE_ROLE]" in clean_msg.get("content", ""):
+            clean_msg["content"] = clean_msg["content"].split("[STYLE_ROLE]")[0].strip()
+        clean_messages.append(clean_msg)
+
     input_ = {
-        "messages": messages,
+        "messages": clean_messages,
         "plan_iterations": 0,
         "final_report": "",
         "current_plan": None,
         "observations": [],
         "auto_accepted_plan": auto_accepted_plan,
         "enable_background_investigation": enable_background_investigation,
-        "user_query": messages[-1]["content"] if messages else "",
+        "user_query": clean_user_query,
+        "current_style": style_role,
         "data_collections": [],
     }
     if not auto_accepted_plan and interrupt_feedback:
@@ -354,10 +406,12 @@ async def _astream_workflow_generator_sp(
             resume_msg = interrupt_feedback
         else:
             resume_msg = f"[{interrupt_feedback}]"
-        # add the last message to the resume message
-        if messages:
-            resume_msg += f" {messages[-1]['content']}"
+        # add the last message to the resume message (使用清理后的内容)
+        # 但对于 [CONTENT_MODIFY] 类型的反馈，不需要拼接原始消息
+        if clean_messages and not interrupt_feedback.startswith("[CONTENT_MODIFY]"):
+            resume_msg += f" {clean_messages[-1]['content']}"
         input_ = Command(resume=resume_msg)
+    recursion_limit = _resolve_recursion_limit(max_step_num)
 
     from src.graph.sp_nodes import init_agents
 
@@ -377,6 +431,9 @@ async def _astream_workflow_generator_sp(
             "max_step_num": max_step_num,
             "max_search_results": max_search_results,
             "mcp_settings": mcp_settings,
+            "knowledge_base_name": knowledge_base_name,
+            "recursion_limit": recursion_limit,
+            "graph_format": graph_format,
         },
         stream_mode=["messages", "updates"],
         subgraphs=True,
@@ -391,7 +448,10 @@ async def _astream_workflow_generator_sp(
             }
             yield _make_event("node_status", current_node_state)
 
-        logger.debug(f"Event data: {event_data}")
+        if isinstance(event_data, dict):
+            logger.debug(f"Event data: {event_data}")
+        else:
+            logger.debug(f"Event data type: {type(event_data)}")
         if isinstance(event_data, dict):
             if "__ref_map__" in event_data:
                 ref_map = event_data["__ref_map__"][0].value
@@ -430,6 +490,19 @@ async def _astream_workflow_generator_sp(
                             "outline": outline,
                         },
                     )
+                elif "[REPORT]" in data_value:
+                    # 报告生成完成，支持风格切换
+                    report = data_value.split("[REPORT]")[-1].split("[/REPORT]")[0]
+                    yield _make_event(
+                        "interrupt",
+                        {
+                            "thread_id": thread_id,
+                            "id": event_data["__interrupt__"][0].ns[0],
+                            "role": "assistant",
+                            "content": f"[REPORT]{report}[/REPORT]",
+                            "finish_reason": "interrupt",
+                        },
+                    )
             elif "tools" in event_data:
                 toolMessage = event_data["tools"]["messages"][0]
                 yield _make_event(
@@ -448,9 +521,11 @@ async def _astream_workflow_generator_sp(
         message_chunk, message_metadata = cast(
             tuple[BaseMessage, dict[str, any]], event_data
         )
+
         event_stream_message: dict[str, any] = {
             "thread_id": thread_id,
             "agent": agent[0].split(":")[0],
+            "action_name": getattr(message_chunk, "name", None),
             "id": message_chunk.id,
             "role": "assistant",
             "content": message_chunk.content,
@@ -482,6 +557,24 @@ async def _astream_workflow_generator_sp(
                 # AI Message - Raw message tokens
                 yield _make_event("message_chunk", event_stream_message)
         else:
+            # 把 outline 给跳过了，紧急处理，后续需要修改
+            logger.info(f"action的数据结构打印{event_stream_message}")
+            # if (
+            #     event_stream_message["agent"] == "outline"
+            #     or event_stream_message["agent"] == "researcher"
+            # ):
+            #     logger.info(
+            #         f"前端内容筛选，不要 outline 或 researcher{event_stream_message}"
+            #     )
+            #     continue
+            if event_stream_message.get("agent") in {"outline", "researcher"} or (
+                event_stream_message.get("agent") == "central_agent"
+                and event_stream_message.get("action_name") == "central_think"
+            ):
+                logger.info(
+                    f"前端内容筛选，跳过 outline / researcher / central_think: {event_stream_message}"
+                )
+                continue
             yield _make_event("agent_action", event_stream_message)
 
 
@@ -494,6 +587,7 @@ def _make_event(event_type: str, data: dict[str, any]):
 @app.get("/api/references/{thread_id}")
 async def get_references(thread_id: str):
     """Get the references for a given thread ID."""
+    logger.info(f"Received request for references with thread_id: {thread_id}")
     try:
         references = global_reference_map.get_session_ref_map(thread_id)
         return {"thread_id": thread_id, "references": references}
