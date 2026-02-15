@@ -12,8 +12,8 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 # os.environ["HTTPS_PROXY"] = "http://localhost:8888"
 
 
-url = "http://localhost:8515/api/chat/sp_stream"
-base_url = "http://localhost:8515"  # 基础 URL，用于其他 API 调用
+url = "http://localhost:8555/api/chat/sp_stream"
+base_url = "http://localhost:8555"  # 基础 URL，用于其他 API 调用
 
 # 初始请求内容，带有 [STYLE_ROLE] 标记指定初始风格
 content = """你是一位资深政策讲话撰稿专家。请根据以下要求撰写一篇领导干部发言稿：

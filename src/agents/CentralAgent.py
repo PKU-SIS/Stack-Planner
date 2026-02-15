@@ -268,8 +268,8 @@ class CentralAgent:
         """
 
         # 这个似乎要改其他地方，反正后面用不上，不要了
-        graph_format=config["configurable"]["graph_format"]
-        if graph_format=="sp_xxqg":
+        graph_format = config["configurable"]["graph_format"]
+        if graph_format == "sp_xxqg":
             state["sop"] = DECISION_SOP_SP
             logger.info(f"使用 SP 的 SOP")
         else:
