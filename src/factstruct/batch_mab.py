@@ -191,6 +191,7 @@ class BatchMAB:
             # 并行执行检索（按照 proposal 要求实现真正的并行检索）
             logger.info(f"Performing parallel search for {len(queries)} queries...")
             new_docs_list = self._parallel_search(queries, k=3,config=config)
+            #在这里补一个吧
 
             # 预处理新文档（嵌入）
             new_docs_list_with_embed = []
@@ -368,6 +369,7 @@ class BatchMAB:
             if not all(isinstance(doc, FactStructDocument) for doc in initial_docs):
                 logger.info(f"initial_docs before:{initial_docs}")
                 logger.info(f"Type of initial_docs: {type(initial_docs)}")
+                #这个地方要加一下。总结更新
                 initial_docs = self.wrap_raw_docs_to_factstruct(initial_docs)
                 logger.info(f"initial_docs after:{initial_docs}")
 
@@ -460,7 +462,8 @@ class BatchMAB:
             # 并行执行检索（按照 proposal 要求实现真正的并行检索）
             logger.info(f"Performing parallel search for {len(queries)} queries...")
             new_docs_list = self._parallel_search(queries, k=3,config=config)
-
+            #在这里补一个吧
+            
             # 预处理新文档（嵌入）
             new_docs_list_with_embed = []
             for docs in new_docs_list:
@@ -875,6 +878,7 @@ class BatchMAB:
         logger.info(f"Performing parallel search for {len(queries)} queries...")
         logger.info(f"Performing parallel search for {queries}")
         new_docs_list = self._parallel_search(queries, k=3, config=config)
+        #算了还是在这里补一个吧
 
         # 文档嵌入
         new_docs_list_with_embed = []

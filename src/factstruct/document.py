@@ -33,6 +33,8 @@ class FactStructDocument:
     embedding: Optional[np.ndarray] = None
     url: Optional[str] = None
     title: Optional[str] = None
+    observation: Optional[dict] = None
+
 
     def __post_init__(self):
         """验证数据有效性"""

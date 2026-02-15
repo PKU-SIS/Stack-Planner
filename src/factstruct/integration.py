@@ -454,13 +454,30 @@ def run_factstruct_stage2(
             report_parts.append(f"{'#' * level} {node.title}\n")
 
         if node.is_leaf():
-            relevant_docs = memory.get_docs_by_node(node.id)
+            # relevant_docs = memory.get_docs_by_node(node.id)
+            relevant_docs = []
 
+            current = node
+
+            while current is not None:
+                # 如果是 root 就跳过（root 没有 parent）
+                # logger.info(f"current{current}")
+                # logger.info(f"current.parent{current.parent}")
+                
+                # 先看看加上的效果如何
+                # if current.parent is None:
+                #     break
+
+                docs = memory.get_docs_by_node(current.id)
+                relevant_docs.extend(docs)
+
+                current = current.parent
+            
             # 处理字数限制
             word_limit = None#是零就不处理
             logger.info(f"node{node}")
             logger.info(f"node.word_limit = {node.word_limit}, type = {type(node.word_limit)}")
-
+            logger.info(f"relevant_docs{relevant_docs}")
             if isinstance(node.word_limit, int) and node.word_limit > 0: #是正整数就处理
                 word_limit = node.word_limit
 
@@ -756,6 +773,15 @@ if __name__ == "__main__":
             embedding=None,
             timestamp=datetime.now(),
         ),
+        FactStructDocument(
+            id="doc_3",
+            cite_id="CIT003",
+            source_type="journal",
+            title=" 根节点的",
+            text="根节点，根节点，根节点",
+            embedding=None,
+            timestamp=datetime.now(),
+        ),
     ]
 
     # =====================================================
@@ -796,8 +822,8 @@ if __name__ == "__main__":
     # =====================================================
     # 3️⃣ 构建 Memory 映射
     # =====================================================
-
-    memory.map_node_to_docs("node_2", [docs[0]])
+    memory.map_node_to_docs("node_0", [docs[2]])
+    memory.map_node_to_docs("node_1", [docs[0]])
     memory.map_node_to_docs("node_3", [docs[1]])
 
     print("\n--- MEMORY MAPPING ---")
