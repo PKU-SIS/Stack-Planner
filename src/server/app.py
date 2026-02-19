@@ -5,7 +5,6 @@ import base64
 import json
 from math import log
 
-from sympy import im
 from src.utils.logger import logger
 import os
 
@@ -538,10 +537,10 @@ async def _astream_workflow_generator_sp(
             #         f"前端内容筛选，不要 outline 或 researcher{event_stream_message}"
             #     )
             #     continue
-            if (event_stream_message.get("agent") in {"outline", "researcher"}
-                or (
-                    event_stream_message.get("agent") == "central_agent"
-                    and event_stream_message.get("action_name") == "central_think")):
+            if event_stream_message.get("agent") in {"outline", "researcher"} or (
+                event_stream_message.get("agent") == "central_agent"
+                and event_stream_message.get("action_name") == "central_think"
+            ):
                 logger.info(
                     f"前端内容筛选，跳过 outline / researcher / central_think: {event_stream_message}"
                 )

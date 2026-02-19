@@ -1,7 +1,9 @@
 
+.vscode/launch.json
 test_llm.py
 ./*.txt
 CHANGELOG.md
+AGENTS.md
 # Python-generated files
 __pycache__/
 *.py[oc]
