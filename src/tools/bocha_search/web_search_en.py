@@ -6,15 +6,15 @@ import asyncio
 from typing import List, Dict, Any
 from src.utils.logger import logger
 
+
 class WebSearcherEnglish(WebSearcher):
     def __init__(self, api_key: str = None):
         if api_key is None:
             api_key = os.getenv("BOCHA_API_KEY")
             assert api_key is not None, "LANG_SEARCH_API_KEY is not set"
         self.api_key = api_key
-        self.base_url =  "https://api.langsearch.com/v1/web-search" # ←←← 必须有这一行！
-        super().__init__(self.api_key,self.base_url)
-
+        self.base_url = "https://api.langsearch.com/v1/web-search"  # ←←← 必须有这一行！
+        super().__init__(self.api_key, self.base_url)
 
 
 def web_search(query: str, top_k: int = 10):
@@ -28,13 +28,12 @@ def web_search(query: str, top_k: int = 10):
         logger.error("环境变量 BOCHA_API_KEY 未设置")
         return None
 
-
     try:
         searcher = WebSearcherEnglish()
-        raw_result=searcher.search(query, top_k)
-        clean_results=_clean_results(raw_result)
+        raw_result = searcher.search(query, top_k)
+        clean_results = _clean_results(raw_result)
         return clean_results
-    
+
     except requests.RequestException as e:
         logger.error(f"BoCha 搜索请求异常: {e}")
 
@@ -58,6 +57,6 @@ def _clean_results(raw_results: List[Dict]) -> List[Dict]:
 
 
 if __name__ == "__main__":
-    results = web_search("Why the sky is blue?", top_k = 10)
+    results = web_search("Why the sky is blue?", top_k=10)
     for result in results:
         print(result)

@@ -67,7 +67,7 @@ from src.factstruct import (
     memory_to_dict,
     filter_content_by_relevant_docs,
     mark_content_with_support,
-    repair_unknown_citations
+    repair_unknown_citations,
 )
 
 from ..graph.types import State
@@ -77,7 +77,16 @@ import re
 from typing import Dict, Any
 import json
 from src.utils.reference_utils import global_reference_map, process_final_report
-from src.factstruct import FactStructLLMWrapper, BatchMAB, OutlineNode, create_search_engine_adapter,Embedder,outline_node_to_dict,memory_to_dict
+from src.factstruct import (
+    FactStructLLMWrapper,
+    BatchMAB,
+    OutlineNode,
+    create_search_engine_adapter,
+    Embedder,
+    outline_node_to_dict,
+    memory_to_dict,
+)
+
 
 # -------------------------
 # 子Agent管理模块
@@ -90,7 +99,6 @@ class SubAgentManager:
 
     def __init__(self, central_agent: "CentralAgent"):
         self.central_agent = central_agent
-
 
     @timed_step("execute_researcher")
     async def execute_researcher(self, state: State, config: RunnableConfig) -> Command:
@@ -285,7 +293,7 @@ class SubAgentManager:
         # 配置研究工具链
         # tools = [search_docs_tool]
         tools = [get_web_search_tool(10)]
-        
+
         # 实例化研究Agent
         research_agent = ResearcherAgentSP(
             config=config, agent_type="researcher_web", default_tools=tools
@@ -350,7 +358,6 @@ class SubAgentManager:
             },
             goto="central_agent",
         )
-
 
     @timed_step("execute_coder")
     async def execute_coder(self, state: State, config: RunnableConfig) -> Command:
@@ -550,63 +557,71 @@ class SubAgentManager:
             data_collections = state.get("data_collections", [])
             observations = state.get("observations", [])
 
+            joined_observations = "\n\n".join(observations)
+
             messages.append(
                 HumanMessage(
-                    f"##User Query\n\n{state.get('user_query', '')}\n\n##用户约束\n\n{state.get("user_dst","")}\n\n##报告大纲{state.get('report_outline','用户未提供大纲')}\n\nBelow are information collected in previous tasks:\n\n{"\n\n".join(observations)}"
+                    f"##User Query\n\n{state.get('user_query', '')}\n\n"
+                    f"##用户约束\n\n{state.get('user_dst', '')}\n\n"
+                    f"##报告大纲\n\n{state.get('report_outline', '用户未提供大纲')}\n\n"
+                    f"Below are information collected in previous tasks:\n\n"
+                    f"{joined_observations}"
                 )
-            )        
+            )
+            # messages.append(
+            #     HumanMessage(
+            #         f"##User Query\n\n{state.get('user_query', '')}\n\n##用户约束\n\n{state.get('user_dst','')}\n\n##报告大纲{state.get('report_outline','用户未提供大纲')}\n\nBelow are information collected in previous tasks:\n\n{"\n\n".join(observations)}"
+            #     )
+            # )
             # messages.append(
             #     HumanMessage(
             #         f"##User Query\n\n{state.get('user_query', '')}\n\n##用户约束\n\n{state.get("user_dst","")}\n\n##报告大纲{state.get('report_outline','用户未提供大纲')}\n\nBelow are information collected in previous tasks:\n\n{"\n\n".join(data_collections)}"
             #     )
-            # )        
+            # )
             logger.debug(f"Reporter messages: {messages}")
             llm = get_llm_by_type(AGENT_LLM_MAP.get("reporter", "default"))
             response = llm.invoke(messages)
             final_report = response.content
-            #可以在这个地方加一个对final_report的处理
-            
+            # 可以在这个地方加一个对final_report的处理
 
-            
-            
             session_id = config["configurable"]["thread_id"]
-            reference_map=global_reference_map.get_session_ref_map(session_id)
+            reference_map = global_reference_map.get_session_ref_map(session_id)
             # logger.info(f"before reference_map:{reference_map}")
             # logger.info(f"before final_report :{final_report}")
             final_report = process_final_report(final_report, reference_map)
             # logger.info(f"after final_report :{final_report}")
 
-
-            #增加引用检查部分
+            # 增加引用检查部分
             logger.info(f"引用检查")
             # logger.info(f"state:{state}")
             logger.info(f"observations:{observations}")
             # logger.info(f"data_collections:{data_collections}")
             logger.info(f"final_report:{final_report}")
-            semantic_cls = CrossEncoder("/data1/Yangzb/Model/StructBert/cross-encoder/nli-deberta-v3-small")
-            #这个是判断引用和句子的关系
+            semantic_cls = CrossEncoder(
+                "/data1/Yangzb/Model/StructBert/cross-encoder/nli-deberta-v3-small"
+            )
+            # 这个是判断引用和句子的关系
             supported = filter_content_by_relevant_docs(
                 content=final_report,
                 relevant_docs=reference_map,
-                semantic_cls=semantic_cls
+                semantic_cls=semantic_cls,
             )
             logger.info(f"supported :{supported}")
-            
-            #这个是把关系应用到生成文章上
+
+            # 这个是把关系应用到生成文章上
             new_content = mark_content_with_support(
-                content=final_report,
-                nli_results=supported
+                content=final_report, nli_results=supported
             )
             logger.info(f"new_content :{new_content}")
-            
-            #这个是把错误引用进行处理的
-            final_report=repair_unknown_citations(
+
+            # 这个是把错误引用进行处理的
+            final_report = repair_unknown_citations(
                 content=new_content,
                 relevant_docs=reference_map,
-                semantic_cls=semantic_cls
+                semantic_cls=semantic_cls,
             )
             logger.info(f"final_report :{final_report}")
-            
+
         except Exception as e:
             import traceback
 
@@ -660,9 +675,7 @@ class SubAgentManager:
         factstruct_memory = state.get("factstruct_memory")
 
         if not factstruct_outline or not factstruct_memory:
-            logger.warning(
-                "FactStruct 数据缺失，回退到传统 Reporter 方法"
-            )
+            logger.warning("FactStruct 数据缺失，回退到传统 Reporter 方法")
             return self.execute_xxqg_reporter(state, config)
 
         user_query = state.get("user_query", "")
@@ -679,18 +692,16 @@ class SubAgentManager:
                 llm_type=AGENT_LLM_MAP.get("reporter_factstruct", "basic"),
                 locale=state.get("locale", "zh-CN"),
             )
-            
-            #可以在这个地方加一个对final_report的处理
+
+            # 可以在这个地方加一个对final_report的处理
             session_id = config["configurable"]["thread_id"]
-            reference_map=global_reference_map.get_session_ref_map(session_id)
+            reference_map = global_reference_map.get_session_ref_map(session_id)
             logger.info(f"before reference_map:{reference_map}")
             logger.info(f"before final_report :{final_report}")
             final_report = process_final_report(final_report, reference_map)
             logger.info(f"after final_report :{final_report}")
-            
-            logger.info(
-                f"FactStruct Stage 2 报告生成完成: {len(final_report)} 个字符"
-            )
+
+            logger.info(f"FactStruct Stage 2 报告生成完成: {len(final_report)} 个字符")
 
         except Exception as e:
             import traceback
@@ -723,8 +734,6 @@ class SubAgentManager:
             },
             goto="central_agent",
         )
-
-
 
     @timed_step("execute_sp_planner")
     def execute_sp_planner(self, state: State, config: RunnableConfig) -> Command:
@@ -1014,7 +1023,7 @@ class SubAgentManager:
         outline_llm = get_llm_by_type(AGENT_LLM_MAP.get("outline", "default"))
         wait_stage = state.get("wait_stage", "")
         if wait_stage != "outline":
-            #bg_investigation = search_docs(user_query, top_k=5)
+            # bg_investigation = search_docs(user_query, top_k=5)
             bg_investigation = web_search(user_query, top_k=5)
             user_dst = state.get("user_dst", "")
             try:
@@ -1037,14 +1046,15 @@ class SubAgentManager:
                     {"title": user_query, "children": []}, ensure_ascii=False
                 )
 
-
             outline_confirmed = outline_response.strip()
             logger.info(f"大纲自动确认: {outline_confirmed}")
 
             return Command(
                 update={
                     "messages": [
-                        HumanMessage(content=f"大纲确认: {outline_confirmed}", name="outline")
+                        HumanMessage(
+                            content=f"大纲确认: {outline_confirmed}", name="outline"
+                        )
                     ],
                     "report_outline": outline_confirmed,
                     "current_node": "outline",
@@ -1052,32 +1062,33 @@ class SubAgentManager:
                 goto="central_agent",
             )
 
-
-
     @timed_step("execute_outline_factstruct")
-    async def execute_outline_factstruct(self, state: State, config: RunnableConfig) -> Command:
+    async def execute_outline_factstruct(
+        self, state: State, config: RunnableConfig
+    ) -> Command:
         logger.info("大纲Agent开始执行")
 
         user_query = state.get("user_query", "")
         user_dst = state.get("user_dst", "")
-        #你不能保证一开始是没有这个的
-        factstruct_outline_dict = state.get("factstruct_outline", None)#如果有的话，后续更改到时候再修
-        factstruct_memory_dict = state.get("factstruct_memory",None)
-        #提取的是 guideline
+        # 你不能保证一开始是没有这个的
+        factstruct_outline_dict = state.get(
+            "factstruct_outline", None
+        )  # 如果有的话，后续更改到时候再修
+        factstruct_memory_dict = state.get("factstruct_memory", None)
+        # 提取的是 guideline
         delegation_context = state.get("delegation_context", {})
         task_description = delegation_context.get("task_description", "未知研究任务")
         report_outline = "大纲生成失败: 未知错误"
-        
-        
+
         full_query = user_query
         if user_dst:
             full_query = f"{user_query}\n\n用户补充需求：{user_dst}"
 
-
-
         logger.info(f"中枢智能体的指导是否存在delegation_context{task_description}")
-        
-        outline_agent = OutlineAgent(initial_query=full_query,central_guidance=task_description,state=state)
+
+        outline_agent = OutlineAgent(
+            initial_query=full_query, central_guidance=task_description, state=state
+        )
 
         try:
             state.update(
@@ -1091,10 +1102,12 @@ class SubAgentManager:
             update = command.update or {}
 
             # === 强制对齐老接口字段 ===
-            factstruct_outline_dict =outline_node_to_dict(update.get("factstruct_outline"))
+            factstruct_outline_dict = outline_node_to_dict(
+                update.get("factstruct_outline")
+            )
             factstruct_memory_dict = memory_to_dict(update.get("factstruct_memory"))
 
-            #这个是干啥的，还没弄明白，但是确定应该有个 observation
+            # 这个是干啥的，还没弄明白，但是确定应该有个 observation
             if update.get("report_outline"):
                 report_outline = update["report_outline"]
 
@@ -1113,7 +1126,7 @@ class SubAgentManager:
             agent_type="outline",
             content="大纲任务: 使用 FactStruct Stage 1 生成或调整报告大纲",
             result={
-                "outline": report_outline,               #observation
+                "outline": report_outline,  # observation
                 "factstruct_outline": factstruct_outline_dict,
             },
         )
@@ -1129,7 +1142,7 @@ class SubAgentManager:
                         name="outline",
                     )
                 ],
-                "report_outline": report_outline,        # SP的 Outline 大纲是大纲，Factstruct 的大纲是给中枢智能体的大纲的反馈
+                "report_outline": report_outline,  # SP的 Outline 大纲是大纲，Factstruct 的大纲是给中枢智能体的大纲的反馈
                 "factstruct_outline": factstruct_outline_dict,
                 "factstruct_memory": factstruct_memory_dict,
                 "current_node": "central_agent",
@@ -1137,10 +1150,6 @@ class SubAgentManager:
             },
             goto="central_agent",
         )
-
-
-
-
 
     # #老接口
     # @timed_step("execute_outline_factstruct")
@@ -1161,7 +1170,7 @@ class SubAgentManager:
     #     delegation_context = state.get("delegation_context", {})
     #     task_description = delegation_context.get("task_description", "未知研究任务")
     #     outline_response = "大纲生成失败: 未知错误"
-        
+
     #     #这玩意是人工确认 human node的，感觉没啥用，FactStruct 如果配上 Human feedback 才需要这个
     #     # auto_accepted_plan = state.get("auto_accepted_plan", False)
     #     # if not auto_accepted_plan:
@@ -1190,7 +1199,7 @@ class SubAgentManager:
     #         # 删减大纲
     #         # 字数控制反馈
     #         # 使用FactStruct自己的 LLM 来做这个事情。
-            
+
     #         outline_root, memory = run_factstruct_stage1(
     #             query=full_query,
     #             max_iterations=state.get("factstruct_max_iterations", 4),
@@ -1262,5 +1271,3 @@ class SubAgentManager:
     #         },
     #         goto="central_agent",
     #     )
-
-

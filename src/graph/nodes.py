@@ -602,7 +602,7 @@ async def _execute_agent_step(
         )
 
     # Invoke the agent
-    default_recursion_limit = 100 #25
+    default_recursion_limit = 100  # 25
     try:
         env_value_str = os.getenv("AGENT_RECURSION_LIMIT", str(default_recursion_limit))
         parsed_limit = int(env_value_str)
@@ -781,6 +781,7 @@ async def researcher_web_node(
     )
     return await research_agent.execute_agent_step(state)
 
+
 async def coder_node(
     state: State, config: RunnableConfig
 ) -> Command[Literal["research_team"]]:
@@ -839,7 +840,7 @@ def speech_node(state: State):
     return {"final_report": response_content}
 
 
-def zip_data(state: State,config: RunnableConfig):
+def zip_data(state: State, config: RunnableConfig):
     final_report = state.get("final_report")
     user_query = state.get("user_query")
     plan = state.get("current_plan")
@@ -864,7 +865,5 @@ def zip_data(state: State,config: RunnableConfig):
     session_id = config["configurable"]["thread_id"]
     global_reference_map.save_session(session_id)
     return Command(
-        update={
-            "ref_map": global_reference_map.get_session_ref_map(session_id)
-        }
+        update={"ref_map": global_reference_map.get_session_ref_map(session_id)}
     )

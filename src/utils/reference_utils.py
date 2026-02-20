@@ -5,6 +5,7 @@ from pathlib import Path
 import re
 from typing import Dict, Any
 
+
 def get_project_root() -> Path:
     """Get the project root directory"""
     return Path(__file__).resolve().parent.parent.parent
@@ -33,11 +34,11 @@ class SessionMap:
         content = None
         try:
             if isinstance(reference, dict):
-                source = reference.get('source')
-                content = reference.get('content')
+                source = reference.get("source")
+                content = reference.get("content")
             else:
-                source = getattr(reference, 'source', None)
-                content = getattr(reference, 'content', None)
+                source = getattr(reference, "source", None)
+                content = getattr(reference, "content", None)
         except Exception:
             source = None
             content = None
@@ -49,9 +50,15 @@ class SessionMap:
                 try:
                     # 尽量统一 content 的表示（若不是字符串，先序列化），再计算 sha256
                     if not isinstance(content, (str, bytes)):
-                        content_bytes = json.dumps(content, sort_keys=True, ensure_ascii=False).encode('utf-8')
+                        content_bytes = json.dumps(
+                            content, sort_keys=True, ensure_ascii=False
+                        ).encode("utf-8")
                     else:
-                        content_bytes = content.encode('utf-8') if isinstance(content, str) else content
+                        content_bytes = (
+                            content.encode("utf-8")
+                            if isinstance(content, str)
+                            else content
+                        )
                     h = hashlib.sha256(content_bytes).hexdigest()
                     return f"{source}::sha256:{h}"
                 except Exception:
@@ -65,7 +72,9 @@ class SessionMap:
 
         # 没有 source 时退回到对整个对象的 JSON 序列化或 repr
         try:
-            s = json.dumps(reference, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+            s = json.dumps(
+                reference, sort_keys=True, ensure_ascii=False, separators=(",", ":")
+            )
         except Exception:
             s = repr(reference)
         return s
@@ -124,22 +133,21 @@ class SessionMap:
                 del self._index[key]
             return True
 
-    def save(self,file_path:str):
+    def save(self, file_path: str):
         """将 reference_map 保存到指定文件路径，格式为 JSON。"""
         with self._lock:
             # 确保父目录存在
             Path(file_path).parent.mkdir(parents=True, exist_ok=True)
-            with open(file_path, 'w', encoding='utf-8') as f:
+            with open(file_path, "w", encoding="utf-8") as f:
                 json.dump(self.reference_map, f, ensure_ascii=False, indent=2)
-
 
 
 class ReferenceMap:
     ## 管理多个 session 的 references map，使用session_id作为区分
     def __init__(self):
         self._session_maps = {}
-        self._lock = threading.RLock()  # 并发安全  
-    
+        self._lock = threading.RLock()  # 并发安全
+
     def get_session_map(self, session_id):
         """获取指定 session_id 的 SessionMap 实例，若不存在则创建。"""
         with self._lock:
@@ -161,7 +169,7 @@ class ReferenceMap:
         """根据 session_id 和 references 列表获取对应的 id 列表。"""
         session_map = self.get_session_map(session_id)
         return session_map.get_reference_ids(references)
-    
+
     def get_reference_id(self, session_id, reference):
         """根据 session_id 和单个 reference 获取对应的 id。"""
         session_map = self.get_session_map(session_id)
@@ -178,10 +186,10 @@ class ReferenceMap:
         session_map = self.get_session_map(session_id)
         session_map.save(file_path)
 
-    def get_session_ref_map(self,session_id):
+    def get_session_ref_map(self, session_id):
         file_path = PROJECT_ROOT / "references_logs" / f"{session_id}_references.json"
         if file_path.exists():
-            with open(file_path, 'r', encoding='utf-8') as f:
+            with open(file_path, "r", encoding="utf-8") as f:
                 reference_map = json.load(f)
             return reference_map
         session_map = self.get_session_map(session_id)
@@ -190,7 +198,7 @@ class ReferenceMap:
 
 def process_final_report(content: str, reference_map: Dict[str, Dict[str, Any]]) -> str:
     # Step 1: 找出所有【数字】形式的引用，并保留顺序（去重但保留首次出现顺序）
-    matches = re.findall(r'【(\d+)】', content)
+    matches = re.findall(r"【(\d+)】", content)
     unique_refs_in_order = []
     seen = set()
     for ref in matches:
@@ -209,7 +217,7 @@ def process_final_report(content: str, reference_map: Dict[str, Dict[str, Any]])
         else:
             return ""  # 如果不在 reference_map 中，删除该引用
 
-    new_content = re.sub(r'【(\d+)】', replace_ref, content)
+    new_content = re.sub(r"【(\d+)】", replace_ref, content)
 
     # Step 4: 构建参考文献部分
     ref_lines = []
@@ -226,7 +234,4 @@ def process_final_report(content: str, reference_map: Dict[str, Dict[str, Any]])
     return final_output
 
 
-
 global_reference_map = ReferenceMap()
-
-

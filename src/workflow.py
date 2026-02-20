@@ -50,7 +50,9 @@ async def run_agent_workflow_async(
 
     graph = get_graph_by_format(graph_format=graph_format, with_memory=False)
 
-    logger.info(f"Starting async workflow with user input: {user_input} (format: {graph_format})")
+    logger.info(
+        f"Starting async workflow with user input: {user_input} (format: {graph_format})"
+    )
     initial_state = {
         # Runtime Variables
         "messages": [{"role": "user", "content": user_input}],

@@ -22,30 +22,31 @@
 
 from src.tools.bocha_search import create_web_searcher
 
+
 def test_english_web_searcher(api_key):
     print("Running English Web Searcher test...")
-    web_searcher = create_web_searcher("english",api_key)
+    web_searcher = create_web_searcher("english", api_key)
     assert web_searcher is not None
     result = web_searcher.search("why is the sky blue?")
     assert isinstance(result, list)
     print("English test passed ✓\n")
-    print("result",result)
+    print("result", result)
 
 
 def test_chinese_web_searcher(api_key):
     print("Running Chinese Web Searcher test...")
-    web_searcher = create_web_searcher("chinese",api_key)
+    web_searcher = create_web_searcher("chinese", api_key)
     assert web_searcher is not None
     result = web_searcher.search("为什么天是蓝的?")
     assert isinstance(result, list)
     print("Chinese test passed ✓\n")
-    print("result",result)
+    print("result", result)
 
 
 def test_unsupported_language(api_key):
     print("Running unsupported language test...")
     try:
-        create_web_searcher("unsupported",api_key)
+        create_web_searcher("unsupported", api_key)
     except ValueError:
         print("Unsupported language test passed ✓\n")
         return
@@ -54,8 +55,8 @@ def test_unsupported_language(api_key):
 
 
 if __name__ == "__main__":
-    api_key_zh="aaaa"
-    api_key_en="aaaa"
+    api_key_zh = "aaaa"
+    api_key_en = "aaaa"
 
     test_english_web_searcher(api_key_en)
     test_chinese_web_searcher(api_key_zh)

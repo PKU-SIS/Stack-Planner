@@ -35,7 +35,6 @@ class FactStructDocument:
     title: Optional[str] = None
     observation: Optional[dict] = None
 
-
     def __post_init__(self):
         """验证数据有效性"""
         if not self.id:

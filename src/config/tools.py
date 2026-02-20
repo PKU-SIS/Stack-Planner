@@ -11,7 +11,7 @@ class SearchEngine(enum.Enum):
     BRAVE_SEARCH = "brave_search"
     ARXIV = "arxiv"
     BING = "bing"
-    BOCHA="bocha"
+    BOCHA = "bocha"
 
 
 # Tool configuration

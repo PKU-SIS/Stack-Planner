@@ -27,13 +27,20 @@ from langchain_core.runnables import RunnableConfig
 import re
 from collections import defaultdict
 import json
+
 # from modelscope.pipelines import pipeline
 # from modelscope.utils.constant import Tasks
 from sentence_transformers import CrossEncoder
-from .cite_verify import filter_content_by_relevant_docs,mark_content_with_support,repair_unknown_citations
+from .cite_verify import (
+    filter_content_by_relevant_docs,
+    mark_content_with_support,
+    repair_unknown_citations,
+)
+
+
 def create_search_engine_adapter(
     search_func: Callable = None,
-) -> Callable[[str, int,RunnableConfig], List[FactStructDocument]]:
+) -> Callable[[str, int, RunnableConfig], List[FactStructDocument]]:
     """
     创建搜索引擎适配器
 
@@ -47,10 +54,13 @@ def create_search_engine_adapter(
         适配后的搜索函数，签名 (query: str, k: int) -> List[FactStructDocument]
     """
     if search_func is None:
-        #这个地方要改成网络搜索
+        # 这个地方要改成网络搜索
         # search_func = search_docs
         search_func = web_search
-    def adapter(query: str, k: int, config:RunnableConfig=None) -> List[FactStructDocument]:
+
+    def adapter(
+        query: str, k: int, config: RunnableConfig = None
+    ) -> List[FactStructDocument]:
         """
         适配后的搜索函数
 
@@ -67,28 +77,29 @@ def create_search_engine_adapter(
         results = search_func(query, top_k=k)
         logger.info(f"results:{results}")
         ids = None
-        if config!=None:
+        if config != None:
             session_id = config["configurable"]["thread_id"]
             # logger.info(f"config:{config}")
             ids = global_reference_map.add_references(session_id, results)
         else:
             # logger.debug("config为None，无法存储 reference_map")
-            logger.debug("config为None，无法存储 reference_map\n" + "".join(traceback.format_stack()))        
+            logger.debug(
+                "config为None，无法存储 reference_map\n"
+                + "".join(traceback.format_stack())
+            )
         if not ids:
             # 没有 ids，说明 config=None 或 add_references 失败
             # 直接 fallback：用 enumerate 的顺序作为临时 id
             ids = list(range(1, len(results) + 1))
         ids, sorted_results = zip(*sorted(zip(ids, results), key=lambda x: x[0]))
 
-
-        
         # 转换为 FactStructDocument
-        documents = []        
+        documents = []
         for cite_id, result in zip(ids, sorted_results):
             doc_id = f"doc_{hash(result.get('content', ''))}_{cite_id}"
             doc = FactStructDocument(
-                id=doc_id,            # 直接使用 reference id（排序后的）
-                cite_id=cite_id,            # cite_id 同 doc_id
+                id=doc_id,  # 直接使用 reference id（排序后的）
+                cite_id=cite_id,  # cite_id 同 doc_id
                 text=result.get("content", ""),
                 source_type=result.get("source", "unknown"),
                 timestamp=datetime.now(),
@@ -97,12 +108,9 @@ def create_search_engine_adapter(
             )
             documents.append(doc)
 
-
         return documents
 
     return adapter
-
-
 
 
 def run_factstruct_stage1(
@@ -116,7 +124,7 @@ def run_factstruct_stage1(
     factstruct_memory=None,
     initial_docs: Optional[List[FactStructDocument]] = None,
     search_engine: Optional[Callable] = None,
-    config: RunnableConfig=None,
+    config: RunnableConfig = None,
 ) -> Tuple[OutlineNode, Memory]:
     # """
     # 运行 FactStruct Stage 1（便捷接口）
@@ -141,7 +149,7 @@ def run_factstruct_stage1(
     if search_engine is None:
         search_engine = create_search_engine_adapter()
 
-    embedder = Embedder(model_name="../../Model/MiniLM/all-MiniLM-L6-v2") 
+    embedder = Embedder(model_name="../../Model/MiniLM/all-MiniLM-L6-v2")
     llm_wrapper = FactStructLLMWrapper(llm)
 
     # 创建 Batch-MAB 实例
@@ -154,8 +162,16 @@ def run_factstruct_stage1(
     )
 
     # 运行算法
-    central_guidance = json.dumps(task_description,ensure_ascii=False,indent=2,)
-    replan_result= json.dumps(replan_result,ensure_ascii=False,indent=2,)
+    central_guidance = json.dumps(
+        task_description,
+        ensure_ascii=False,
+        indent=2,
+    )
+    replan_result = json.dumps(
+        replan_result,
+        ensure_ascii=False,
+        indent=2,
+    )
     logger.info(f"central_guidance{central_guidance}")
     outline_root, memory = batch_mab.run(
         initial_query=query,
@@ -297,8 +313,6 @@ def memory_to_dict(memory: Memory) -> dict:
     }
 
 
-
-
 def outline_node_to_dict(node: OutlineNode) -> dict:
     """
     将 OutlineNode 完整转换为字典（保留所有字段，包括 MAB 状态）
@@ -319,7 +333,9 @@ def outline_node_to_dict(node: OutlineNode) -> dict:
     }
 
 
-def dict_to_outline_node(data: dict, parent: Optional[OutlineNode] = None) -> OutlineNode:
+def dict_to_outline_node(
+    data: dict, parent: Optional[OutlineNode] = None
+) -> OutlineNode:
     """
     从字典恢复 OutlineNode（递归构建子树）
 
@@ -371,6 +387,7 @@ def dict_to_memory(data: dict) -> Memory:
 
     return memory
 
+
 def run_factstruct_stage2(
     outline_dict: dict,
     memory_dict: dict,
@@ -408,21 +425,24 @@ def run_factstruct_stage2(
     memory = dict_to_memory(memory_dict)
 
     # 生成完整大纲的 Markdown 表示
-    full_outline = outline_node_to_markdown(outline_root, max_depth=None, include_root=True)
+    full_outline = outline_node_to_markdown(
+        outline_root, max_depth=None, include_root=True
+    )
 
     llm = get_llm_by_type(llm_type)
     report_parts = []
     path_stack = [[]]
 
-    #初始化 NLI 模型
-    nli_model_path="/data1/Yangzb/Model/nlp_structbert_nli_chinese-tiny"
+    # 初始化 NLI 模型
+    nli_model_path = "/data1/Yangzb/Model/nlp_structbert_nli_chinese-tiny"
     # semantic_cls = pipeline(Tasks.nli,nli_model_path,model_revision='master')
-    semantic_cls = CrossEncoder("/data1/Yangzb/Model/StructBert/cross-encoder/nli-deberta-v3-small")
-
+    semantic_cls = CrossEncoder(
+        "/data1/Yangzb/Model/StructBert/cross-encoder/nli-deberta-v3-small"
+    )
 
     def get_progress_context(stack, will_complete_chapters: list, next_chapter: str):
         context_lines = []
-        
+
         context_lines.append("当前文章写作进度：")
 
         for i, level_nodes in enumerate(stack):
@@ -435,8 +455,12 @@ def run_factstruct_stage2(
             context_lines.append(f"{indent}正在完成{current_node_title}")
 
         if will_complete_chapters:
-            chapters_str = "、".join([f"「{title}」" for title in will_complete_chapters])
-            context_lines.append(f"\n完成当前章节后，以下父章节也将完成：{chapters_str}")
+            chapters_str = "、".join(
+                [f"「{title}」" for title in will_complete_chapters]
+            )
+            context_lines.append(
+                f"\n完成当前章节后，以下父章节也将完成：{chapters_str}"
+            )
 
         if next_chapter:
             context_lines.append(f"当前章节完成后的下一个章节为：{next_chapter}")
@@ -445,7 +469,13 @@ def run_factstruct_stage2(
 
         return "\n".join(context_lines)
 
-    def generate(node: OutlineNode, level: int = 1, will_complete_chapters: list = None, next_chapter: str = None,semantic_cls=None):
+    def generate(
+        node: OutlineNode,
+        level: int = 1,
+        will_complete_chapters: list = None,
+        next_chapter: str = None,
+        semantic_cls=None,
+    ):
         logger.debug(f"正在生成子章节: {node.title}（ID: {node.id}）")
 
         path_stack[-1].append(node.title)
@@ -463,7 +493,7 @@ def run_factstruct_stage2(
                 # 如果是 root 就跳过（root 没有 parent）
                 # logger.info(f"current{current}")
                 # logger.info(f"current.parent{current.parent}")
-                
+
                 # 先看看加上的效果如何
                 # if current.parent is None:
                 #     break
@@ -472,33 +502,51 @@ def run_factstruct_stage2(
                 relevant_docs.extend(docs)
 
                 current = current.parent
-            
+
             # 处理字数限制
-            word_limit = None#是零就不处理
+            word_limit = None  # 是零就不处理
             logger.info(f"node{node}")
-            logger.info(f"node.word_limit = {node.word_limit}, type = {type(node.word_limit)}")
+            logger.info(
+                f"node.word_limit = {node.word_limit}, type = {type(node.word_limit)}"
+            )
             logger.info(f"relevant_docs{relevant_docs}")
-            if isinstance(node.word_limit, int) and node.word_limit > 0: #是正整数就处理
+            if (
+                isinstance(node.word_limit, int) and node.word_limit > 0
+            ):  # 是正整数就处理
                 word_limit = node.word_limit
 
             if not relevant_docs:
-                logger.warning(
-                    f"节点 '{node.title}' (ID: {node.id}) 未找到关联文档"
-                )
+                logger.warning(f"节点 '{node.title}' (ID: {node.id}) 未找到关联文档")
                 relevant_docs_text = "（无相关资料）"
             else:
                 # logger.debug(
                 #     f"获取到 {len(relevant_docs)} 个 Stage 1 关联文档"
                 # )
+                # relevant_docs_text = "\n\n".join(
+                #     [
+                #         f"[{doc.cite_id}] 来源: {doc.source_type}\n{doc.text[:500]}..."
+                #         for idx, doc in enumerate(relevant_docs)
+                #     ]
+                # )
+                # relevant_docs_text = "\n\n".join(
+                #     [
+                #         f"[{doc.cite_id}] 来源: {doc.source_type}\n{doc.observation}..."
+                #         for idx, doc in enumerate(relevant_docs)
+                #     ]
+                # )
                 relevant_docs_text = "\n\n".join(
                     [
-                        f"[{doc.cite_id}] 来源: {doc.source_type}\n{doc.text[:500]}..."
-                        for idx, doc in enumerate(relevant_docs)
+                        f"[{doc.cite_id}] 来源: {doc.source_type}\n"
+                        f"{(doc.observation if getattr(doc, 'observation', None) else (doc.text[:500] if doc.text else ''))}..."
+                        for doc in relevant_docs
                     ]
                 )
+
                 # logger.info(f"relevant_docs_text :{relevant_docs_text }")
                 logger.info(f"relevant_docs :{relevant_docs}")
-            progress_context = get_progress_context(path_stack, will_complete_chapters, next_chapter)
+            progress_context = get_progress_context(
+                path_stack, will_complete_chapters, next_chapter
+            )
 
             completed_content = "".join(report_parts).strip()
             if not completed_content:
@@ -512,7 +560,7 @@ def run_factstruct_stage2(
                 "completed_content": completed_content,
                 "reference_materials": relevant_docs_text,
                 "locale": locale,
-                "word_limit": word_limit,   #词数限制
+                "word_limit": word_limit,  # 词数限制
             }
 
             try:
@@ -526,16 +574,16 @@ def run_factstruct_stage2(
                         "completed_content": completed_content,
                         "reference_materials": relevant_docs_text,
                         "locale": locale,
-                        "word_limit": word_limit,   #词数限制
-                    }
+                        "word_limit": word_limit,  # 词数限制
+                    },
                 )
                 logger.info(f"messages:{messages}")
                 response = llm.invoke(messages)
                 content = response.content.strip()
                 report_parts.append(f"{content}\n")
                 logger.debug(f"  生成了 {len(content)} 个字符")
-                
-                #如果没文档就不做引用检查了，后面再考虑上文的引用
+
+                # 如果没文档就不做引用检查了，后面再考虑上文的引用
                 if not relevant_docs:
                     logger.warning(
                         f"节点 '{node.title}' (ID: {node.id}) 未找到关联文档，不进行引用检查"
@@ -543,54 +591,62 @@ def run_factstruct_stage2(
                 else:
                     logger.info(f"content :{content}")
                     logger.info(f"relevant_docs:{relevant_docs}")
-                    #这个是判断引用和句子的关系
+                    # 这个是判断引用和句子的关系
                     supported = filter_content_by_relevant_docs(
                         content=content,
                         relevant_docs=relevant_docs,
-                        semantic_cls=semantic_cls
+                        semantic_cls=semantic_cls,
                     )
                     logger.info(f"supported :{supported}")
-                    
-                    #这个是把关系应用到生成文章上
+
+                    # 这个是把关系应用到生成文章上
                     new_content = mark_content_with_support(
-                        content=content,
-                        nli_results=supported
+                        content=content, nli_results=supported
                     )
                     logger.info(f"new_content :{new_content}")
-                    
-                    #这个是把错误引用进行处理的
-                    content=repair_unknown_citations(
+
+                    # 这个是把错误引用进行处理的
+                    content = repair_unknown_citations(
                         content=new_content,
                         relevant_docs=relevant_docs,
-                        semantic_cls=semantic_cls
+                        semantic_cls=semantic_cls,
                     )
                     logger.info(f"content :{content}")
-                    
+
             except Exception as e:
                 logger.error(f"  生成失败: {str(e)}")
 
         if node.children:
             path_stack.append([])
             for i, child in enumerate(node.children):
-                if (i == len(node.children) - 1):
+                if i == len(node.children) - 1:
                     child_will_complete = will_complete_chapters + [node.title]
                     child_next_chapter = next_chapter
                 else:
                     child_will_complete = []
                     child_next_chapter = node.children[i + 1].title
-                generate(child, level + 1, child_will_complete, child_next_chapter,semantic_cls=semantic_cls)
+                generate(
+                    child,
+                    level + 1,
+                    child_will_complete,
+                    child_next_chapter,
+                    semantic_cls=semantic_cls,
+                )
             path_stack.pop()
 
-    generate(outline_root, level=1, will_complete_chapters=[], next_chapter=None,semantic_cls=semantic_cls)
+    generate(
+        outline_root,
+        level=1,
+        will_complete_chapters=[],
+        next_chapter=None,
+        semantic_cls=semantic_cls,
+    )
 
     final_report = "\n".join(report_parts)
 
-    logger.info(
-        f"FactStruct Stage 2 完成: 生成了 {len(final_report)} 个字符的报告"
-    )
+    logger.info(f"FactStruct Stage 2 完成: 生成了 {len(final_report)} 个字符的报告")
 
     return final_report
-
 
 
 def visualize_outline_with_citations(
@@ -788,29 +844,13 @@ if __name__ == "__main__":
     # 2️⃣ 构造 Outline（树结构）
     # =====================================================
 
-    root = OutlineNode(
-        id="node_0",
-        title="中性粒细胞在脑缺血中的作用",
-        word_limit=800
-    )
+    root = OutlineNode(id="node_0", title="中性粒细胞在脑缺血中的作用", word_limit=800)
 
-    acute = OutlineNode(
-        id="node_1",
-        title="急性期炎症机制",
-        word_limit=400
-    )
+    acute = OutlineNode(id="node_1", title="急性期炎症机制", word_limit=400)
 
-    mech1 = OutlineNode(
-        id="node_2",
-        title="中性粒细胞募集机制",
-        word_limit=200
-    )
+    mech1 = OutlineNode(id="node_2", title="中性粒细胞募集机制", word_limit=200)
 
-    mech2 = OutlineNode(
-        id="node_3",
-        title="炎症因子释放机制",
-        word_limit=200
-    )
+    mech2 = OutlineNode(id="node_3", title="炎症因子释放机制", word_limit=200)
 
     acute.add_child(mech1)
     acute.add_child(mech2)
@@ -855,7 +895,7 @@ if __name__ == "__main__":
         memory_dict=memory_dict,
         user_query=user_query,
         llm_type="basic",
-        locale="zh-CN"
+        locale="zh-CN",
     )
 
     # =====================================================

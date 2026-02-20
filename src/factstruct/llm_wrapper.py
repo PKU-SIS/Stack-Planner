@@ -9,7 +9,7 @@ LLM Wrapper: LLM 批量方法包装器
 
 import json
 import re
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Optional
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.language_models import BaseChatModel
 
@@ -17,9 +17,8 @@ from src.utils.logger import logger
 from src.prompts import get_prompt_template
 from .outline_node import OutlineNode
 from .document import FactStructDocument
+
 # from jinja2 import Template
-
-
 
 
 class FactStructLLMWrapper:
@@ -56,8 +55,7 @@ class FactStructLLMWrapper:
         返回:
             根 OutlineNode
         """
-    
-    
+
         # 格式化文档信息
         docs_text = self._format_documents(docs)
 
@@ -92,8 +90,7 @@ class FactStructLLMWrapper:
             parts.append("## 大纲智能体指导\n")
             parts.append(instruction + "\n")
 
-        parts.append(
-            """
+        parts.append("""
         ## 生成要求（非常重要）
 
         1. **这是初始化阶段，只生成最小可用的大纲骨架**
@@ -117,9 +114,7 @@ class FactStructLLMWrapper:
             }
         ]
         }
-        """
-        )
-
+        """)
 
         prompt = "\n".join(parts)
         logger.info(f"大纲初始输入 prompt:{prompt}")
@@ -139,7 +134,9 @@ class FactStructLLMWrapper:
 
             # self._inherit_mab_state_for_existing_nodes(None, root)
             new_node_ids = []
-            self._inherit_mab_state_for_existing_nodes(None, root, new_node_ids=new_node_ids)
+            self._inherit_mab_state_for_existing_nodes(
+                None, root, new_node_ids=new_node_ids
+            )
             logger.info(
                 f"Generated initial outline with {len(root.get_all_nodes())} nodes"
             )
@@ -265,7 +262,7 @@ class FactStructLLMWrapper:
             )
 
             optimization_tasks.append(
-            f"""
+                f"""
             优化任务 {i}:
             - 节点: '{node.title}'
             - 上下文: {context_str}
@@ -352,7 +349,9 @@ class FactStructLLMWrapper:
             # 先继承所有现有节点的状态（通过路径匹配）
             # self._inherit_mab_state_for_existing_nodes(current_outline, new_root)
             new_node_ids = []
-            self._inherit_mab_state_for_existing_nodes(current_outline, new_root, new_node_ids=new_node_ids)
+            self._inherit_mab_state_for_existing_nodes(
+                current_outline, new_root, new_node_ids=new_node_ids
+            )
             logger.info(
                 f"Refined outline with {len(new_root.get_all_nodes())} nodes, "
                 f"{len(expanded_nodes_list)} nodes expanded, "
@@ -437,34 +436,6 @@ class FactStructLLMWrapper:
 
         return queries
 
-    # def _build_outline_tree(
-    #     self,
-    #     data: dict,
-    #     parent: OutlineNode = None,
-    #     node_counter: List[int] = None,
-    # ) -> OutlineNode:
-    #     """递归构建 OutlineNode 树"""
-    #     if node_counter is None:
-    #         node_counter = [0]
-
-    #     node_counter[0] += 1
-    #     node_id = f"node_{node_counter[0]}"
-
-    #     node = OutlineNode(
-    #         id=node_id,
-    #         title=data.get("title", "未命名节点"),
-    #         parent=parent,
-    #         children=[],
-    #     )
-
-    #     # 递归构建子节点
-    #     for child_data in data.get("children", []):
-    #         child = self._build_outline_tree(
-    #             child_data, parent=node, node_counter=node_counter
-    #         )
-    #         node.add_child(child)
-
-    #     return node
     def _build_outline_tree(
         self,
         data: dict,
@@ -480,14 +451,10 @@ class FactStructLLMWrapper:
         )
 
         for child_data in data.get("children", []):
-            child = self._build_outline_tree(
-                child_data, parent=node
-            )
+            child = self._build_outline_tree(child_data, parent=node)
             node.add_child(child)
 
         return node
-
-
 
     def _identify_expanded_nodes(
         self,
@@ -675,7 +642,6 @@ class FactStructLLMWrapper:
 
         return None
 
-
     def _inherit_mab_state_for_existing_nodes(
         self,
         old_root: OutlineNode,
@@ -704,7 +670,6 @@ class FactStructLLMWrapper:
                 new_node_ids.append(node.id)  # 收集新节点
             return
 
-
         def get_node_path(node: OutlineNode) -> str:
             """获取节点的完整路径（从根到当前节点）"""
             path_parts = []
@@ -724,8 +689,6 @@ class FactStructLLMWrapper:
             if node.title not in old_nodes_by_title:
                 old_nodes_by_title[node.title] = node
 
-
-
         def inherit_recursive(new_node: OutlineNode):
             """递归继承状态"""
             new_path = get_node_path(new_node)
@@ -735,7 +698,7 @@ class FactStructLLMWrapper:
                 old_node = old_nodes_by_path[new_path]
                 new_node.pull_count = old_node.pull_count
                 new_node.reward_history = old_node.reward_history.copy()
-                new_node.id = old_node.id#增加node_id的继承
+                new_node.id = old_node.id  # 增加node_id的继承
                 logger.debug(
                     f"State inherited for node '{new_node.title}' via path match "
                     f"(pull_count={old_node.pull_count})"
@@ -830,8 +793,6 @@ class FactStructLLMWrapper:
         )
         return True
 
-
-
     def compress_under_parent(
         self,
         outline_root: "OutlineNode",
@@ -854,8 +815,8 @@ class FactStructLLMWrapper:
             new_node_doc_mapping: {新节点ID: [文档列表]}
             merged_node_mapping: {新节点ID: [被压缩的旧节点ID列表]}
         """
-        print("len(parent_node.children)",len(parent_node.children))
-        print("child_nodes",child_nodes)
+        print("len(parent_node.children)", len(parent_node.children))
+        print("child_nodes", child_nodes)
         if not parent_node.children:
             logger.info(f"父节点 '{parent_node.title}' 没有子节点，跳过压缩")
             return outline_root, [], {}, {}
@@ -880,7 +841,11 @@ class FactStructLLMWrapper:
                         del memory.node_to_docs[child.id]
 
                 if merged_docs:
-                    merged_doc_objs = [memory.documents[doc_id] for doc_id in merged_docs if doc_id in memory.documents]
+                    merged_doc_objs = [
+                        memory.documents[doc_id]
+                        for doc_id in merged_docs
+                        if doc_id in memory.documents
+                    ]
                     memory.map_node_to_docs(parent_node.id, merged_doc_objs)
 
             logger.info(
@@ -893,7 +858,6 @@ class FactStructLLMWrapper:
                 {parent_node.id: merged_docs},
                 {parent_node.id: [child.id for child in original_children]},
             )
-
 
         # 多子节点压缩逻辑
         # 1️⃣ 构造当前大纲文本
@@ -911,11 +875,11 @@ class FactStructLLMWrapper:
                 doc_summaries = []
                 for doc in docs:
                     if doc.title:
-                        doc_summaries.append(doc.title().strip()) #doc.title.strip()
+                        doc_summaries.append(doc.title().strip())  # doc.title.strip()
                     elif doc.text:
                         doc_summaries.append(doc.text[:50].strip() + "…")
-                docs_brief = (
-                    f"{len(docs)} 篇相关文献，主题包括：" + "；".join(doc_summaries[:5])
+                docs_brief = f"{len(docs)} 篇相关文献，主题包括：" + "；".join(
+                    doc_summaries[:5]
                 )
                 if len(doc_summaries) > 5:
                     docs_brief += f" 等（共 {len(doc_summaries)} 个主题锚点）"
@@ -927,9 +891,11 @@ class FactStructLLMWrapper:
             )
 
         parent_context = parent_node.get_parent_context()
-        context_str = f"{parent_context} > {parent_node.title}" if parent_context else parent_node.title
-
-
+        context_str = (
+            f"{parent_context} > {parent_node.title}"
+            if parent_context
+            else parent_node.title
+        )
 
         # 3️⃣ 构造压缩 prompt
         prompt = f"""
@@ -1001,7 +967,6 @@ class FactStructLLMWrapper:
 
         请只输出 JSON，不要包含其他解释性文字。输出完整的修订后大纲树。"""
 
-
         try:
             logger.info(f"compress_under_parent prompt:\n{prompt}")
             messages = [HumanMessage(content=prompt)]
@@ -1015,8 +980,10 @@ class FactStructLLMWrapper:
             new_root = self._build_outline_tree(outline_data, parent=None)
             # 继承 MAB 状态
             new_node_ids = []
-            self._inherit_mab_state_for_existing_nodes(outline_root, new_root, new_node_ids=new_node_ids)
-            #原版本
+            self._inherit_mab_state_for_existing_nodes(
+                outline_root, new_root, new_node_ids=new_node_ids
+            )
+            # 原版本
             # self._inherit_mab_state_for_existing_nodes(outline_root, new_root)
 
             # 找到压缩后的父节点及其新子节点
@@ -1033,7 +1000,7 @@ class FactStructLLMWrapper:
                     if get_node_path(node) == target_path:
                         return node
                 return None
-            
+
             # 5️⃣ 找到压缩后的父节点及其新子节点
             target_path = get_node_path(parent_node)
             new_parent = find_node_by_path(new_root, target_path)
@@ -1065,18 +1032,24 @@ class FactStructLLMWrapper:
                 if merged_docs:
                     new_node_doc_mapping[child.id] = merged_docs
 
-        
-            logger.info(f"Compression success: { len(parent_node.children)} -> {len(new_children)} nodes")
-            return new_root, compressed_nodes_list, new_node_doc_mapping, merged_node_mapping
+            logger.info(
+                f"Compression success: { len(parent_node.children)} -> {len(new_children)} nodes"
+            )
+            return (
+                new_root,
+                compressed_nodes_list,
+                new_node_doc_mapping,
+                merged_node_mapping,
+            )
 
         except Exception as e:
             import traceback
+
             logger.error(f"Failed to compress under parent '{parent_node.title}': {e}")
             logger.error(traceback.format_exc())
             return outline_root, [], {}, {}
 
-
-    def flatten_children(self,parent_node, child_nodes):
+    def flatten_children(self, parent_node, child_nodes):
         """
         将 child_nodes 的子节点（孙节点）提升为 parent_node 的 children。
         如果所有 child 都没有 children，则 parent_node 变为叶子节点。
@@ -1088,7 +1061,6 @@ class FactStructLLMWrapper:
                 new_children.extend(child.children)
 
         parent_node.children = new_children  # 可能是 []，这是合法的
-
 
     def update_under_parent(
         self,
@@ -1105,21 +1077,21 @@ class FactStructLLMWrapper:
     ]:
         """
         Update 指定父节点（不同于 compression）
-        
+
         规则：
         - 若子节点数 == 0 → 允许修改父节点标题
         - 若子节点数 > 0 → 不允许改变结构，只允许更新标题/语义
         """
         logger.info(f"Running update_under_parent on '{parent_node.title}'")
         logger.info(f"Children count: {len(parent_node.children)}")
-        
+
         # ================================
         # 🟢 情况 1：没有子节点
         # ================================
         if len(parent_node.children) == 0:
-        
+
             logger.info(f"父节点 '{parent_node.title}' 没有子节点，跳过标题修改")
-            
+
             # 只更新文档映射,文档映射应该也不用，已经在外面的函数里做了
             # merged_docs = []
             # if memory:
@@ -1138,7 +1110,7 @@ class FactStructLLMWrapper:
             # merged_docs: List[FactStructDocument]
 
             # doc_ids = [doc.id for doc in merged_docs]
-            doc_ids=[]
+            doc_ids = []
             new_node_doc_mapping = {parent_node.id: doc_ids}
 
             logger.info(f"Update success: '{parent_node.title}' (no children)")
@@ -1188,12 +1160,12 @@ class FactStructLLMWrapper:
                 doc_summaries = []
                 for doc in docs:
                     if doc.title:
-                        doc_summaries.append(doc.title().strip())   # ⚠ 修正这里
+                        doc_summaries.append(doc.title().strip())  # ⚠ 修正这里
                     elif doc.text:
                         doc_summaries.append(doc.text[:50].strip() + "…")
 
-                docs_brief = (
-                    f"{len(docs)} 篇相关文献，主题包括：" + "；".join(doc_summaries[:5])
+                docs_brief = f"{len(docs)} 篇相关文献，主题包括：" + "；".join(
+                    doc_summaries[:5]
                 )
 
                 if len(doc_summaries) > 5:
@@ -1205,7 +1177,6 @@ class FactStructLLMWrapper:
             children_desc.append(
                 f"- 子节点标题: {node.title}\n  文献信息摘要: {docs_brief}"
             )
-
 
             # 3️⃣ 构造压缩 prompt
             prompt = f"""
@@ -1268,8 +1239,6 @@ class FactStructLLMWrapper:
 
             请只输出 JSON，不要包含其他解释性文字。输出完整的修订后大纲树。"""
 
-
-
         try:
             logger.info(f"update_under_parent prompt:\n{prompt}")
 
@@ -1288,6 +1257,7 @@ class FactStructLLMWrapper:
                 outline_root, new_root, new_node_ids=new_node_ids
             )
             logger.info(f"new_node_ids{new_node_ids}")
+
             # ========= 路径工具函数 =========
             def get_node_path(node):
                 path_parts = []
@@ -1302,7 +1272,6 @@ class FactStructLLMWrapper:
                     if get_node_path(node) == target_path:
                         return node
                 return None
-
 
             # ========= 找更新后的父节点 =========
             target_path = get_node_path(parent_node)
@@ -1337,12 +1306,11 @@ class FactStructLLMWrapper:
                 merged_docs = []
                 for old_id in merged_source_ids:
                     merged_docs.extend(memory.node_to_docs.get(old_id, []))
-                
+
                 # all_docs = merged_docs + new_doc_ids
-                if merged_docs:#all_docs:
+                if merged_docs:  # all_docs:
                     new_node_doc_mapping[child.id] = merged_docs
                     # new_node_doc_mapping[child.id] = all_docs
-
 
             logger.info(
                 f"Update success: {len(old_child_ids)} -> {len(new_children)} nodes under '{parent_node.title}'"
@@ -1355,18 +1323,90 @@ class FactStructLLMWrapper:
                 updated_node_mapping,
             )
 
-
-
         except Exception as e:
             import traceback
-            logger.error(
-                f"Failed to update under parent '{parent_node.title}': {e}"
-            )
+
+            logger.error(f"Failed to update under parent '{parent_node.title}': {e}")
             logger.error(traceback.format_exc())
             return outline_root, [], {}, {}
 
+    def generate_observation(self, document: FactStructDocument) -> Optional[dict]:
+        """
+        为单个文档生成 Observation 结构（单次 LLM 调用）
 
+        参数:
+            document: FactStructDocument 实例
 
+        返回:
+            observation dict，如果失败返回 None
+        """
+
+        if not document.text:
+            logger.warning(f"Document {document.id} has empty text.")
+            return None
+
+        prompt = f"""
+        请对以下文章进行高密度信息抽象，生成 Observation 结构。
+
+        目标：
+        - 提炼核心逻辑
+        - 保留高信息密度内容
+        - 删除背景与叙述
+        - 仅保留可决策信息
+
+        关键要求：
+
+        1. 输出必须是合法 JSON
+        2. 只能输出 JSON
+        3. 不允许添加解释性文字
+        4. 所有输出必须为高度概括表达
+        5. 每条不超过 50 字
+        6. 不允许出现原文完整句子
+        7. 必须抽取所有重要数字信息
+        8. 必须抽取所有对比关系
+        9. 必须抽取明确因果关系
+        10. 不允许新增字段
+
+        输出格式必须严格如下：
+
+        {{
+            "topic": "文章核心主题抽象",
+            "points": [
+                "信息单元1",
+                "信息单元2",
+                "信息单元3"
+            ]
+        }}
+
+        points 规则：
+        - 每条必须是独立信息单元
+        - 优先数字、比例、阶段、结构模型
+        - 优先明确结论
+        - 不允许空泛表达
+        - 至少输出 5 条
+
+        文章内容如下：
+        --------------------
+        {document.text}
+        """
+
+        try:
+            messages = [HumanMessage(content=prompt)]
+            response = self.llm.invoke(messages)
+            content = response.content.strip()
+
+            # 尝试解析 JSON
+            observation = json.loads(content)
+
+            return observation
+
+        except json.JSONDecodeError:
+            logger.error(f"Invalid JSON returned for document {document.id}")
+            return None
+
+        except Exception as e:
+            logger.error(f"Failed to generate observation for {document.id}: {e}")
+            return None
 
 
 if __name__ == "__main__":
@@ -1396,7 +1436,7 @@ if __name__ == "__main__":
         title="中性粒细胞募集机制研究",
         text="急性期中性粒细胞通过趋化因子被募集到缺血区域。",
         embedding=None,
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
 
     doc2 = FactStructDocument(
@@ -1406,7 +1446,7 @@ if __name__ == "__main__":
         title="血脑屏障破坏机制",
         text="促炎因子释放导致血脑屏障通透性增加。",
         embedding=None,
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
 
     doc3 = FactStructDocument(
@@ -1416,9 +1456,8 @@ if __name__ == "__main__":
         title="炎症与神经损伤",
         text="炎症反应加剧脑水肿与神经损伤。",
         embedding=None,
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
-
 
     # -----------------------
     # 2️⃣ 构造真实 Outline
@@ -1428,7 +1467,7 @@ if __name__ == "__main__":
         title="中性粒细胞在脑缺血中的作用",
         pull_count=2,
         reward_history=[0.8, 0.9],
-        word_limit=500
+        word_limit=500,
     )
 
     acute = OutlineNode(
@@ -1436,7 +1475,7 @@ if __name__ == "__main__":
         title="中性粒细胞在脑缺血急性期的作用",
         pull_count=1,
         reward_history=[0.7],
-        word_limit=300
+        word_limit=300,
     )
 
     n3 = OutlineNode(
@@ -1444,30 +1483,29 @@ if __name__ == "__main__":
         title="中性粒细胞的募集与激活机制",
         pull_count=0,
         reward_history=[],
-        word_limit=100
+        word_limit=100,
     )
     n4 = OutlineNode(
         id="node_3",
         title="促炎因子释放与血-脑屏障破坏",
         pull_count=0,
         reward_history=[],
-        word_limit=100
+        word_limit=100,
     )
     n5 = OutlineNode(
         id="node_4",
         title="炎症反应对脑水肿与神经损伤的影响",
         pull_count=0,
         reward_history=[],
-        word_limit=100
+        word_limit=100,
     )
     n6 = OutlineNode(
         id="node_5",
         title="中性粒细胞在神经修复中的潜在作用",
         pull_count=0,
         reward_history=[],
-        word_limit=100
+        word_limit=100,
     )
-
 
     acute.add_child(n3)
     acute.add_child(n4)
@@ -1485,7 +1523,7 @@ if __name__ == "__main__":
 
     print("\n--- BEFORE ---")
     # print(root.to_text_tree())
-    print(root.to_text_tree(include_word_limit=True,include_mab_state=True))
+    print(root.to_text_tree(include_word_limit=True, include_mab_state=True))
     print("Memory node_to_docs:", memory.node_to_docs)
 
     # -----------------------
@@ -1495,6 +1533,7 @@ if __name__ == "__main__":
     # === LLM ===
     from src.config.agents import AGENT_LLM_MAP
     from src.llms.llm import get_llm_by_type
+
     llm_type = AGENT_LLM_MAP.get("outline", "basic")
     llm = get_llm_by_type(llm_type)
 
@@ -1538,60 +1577,115 @@ if __name__ == "__main__":
     # print("\n✅ Tree structure valid.")
     # print("========== END DEBUG ==========")
 
-
     # -----------------------
     # 5️⃣ 测试 update_under_parent
     # -----------------------
 
-    print("\n========== TEST UPDATE ==========")
+    # print("\n========== TEST UPDATE ==========")
 
-    # 构造新增文档（模拟 retrieval 新结果）
-    from datetime import datetime
+    # # 构造新增文档（模拟 retrieval 新结果）
+    # from datetime import datetime
 
-    new_doc = FactStructDocument(
-        id="doc_4",
-        cite_id="CIT004",
+    # new_doc = FactStructDocument(
+    #     id="doc_4",
+    #     cite_id="CIT004",
+    #     source_type="journal",
+    #     title="急性期炎症级联反应研究",
+    #     text="中性粒细胞释放NETs并激活炎症级联反应。",
+    #     embedding=None,
+    #     timestamp=datetime.now()
+    # )
+
+    # # 注意：update 版本不应该直接改 memory
+    # # 只传入 parent + memory + 由函数返回 new_doc_map
+
+    # new_root, updated_list, new_doc_map, updated_node_map = wrapper.update_under_parent(
+    #     outline_root=root,
+    #     parent_node=acute,      # 测试有子节点情况
+    #     child_nodes=acute.children,
+    #     memory=memory,
+    # )
+
+    # print("\n--- AFTER UPDATE STRUCTURE ---")
+    # print(new_root.to_text_tree(include_word_limit=True, include_mab_state=True))
+
+    # print("\nUpdated list:")
+    # for p, children in updated_list:
+    #     print("Parent:", p.title)
+    #     print("Children:", [c.title for c in children])
+
+    # print("\nNew node doc mapping:", new_doc_map)
+    # print("Updated node mapping:", updated_node_map)
+
+    # print("\n========== TEST UPDATE (NO CHILDREN) ==========")
+
+    # leaf_node = n6   # node_6 没有子节点
+
+    # new_root2, updated_list2, new_doc_map2, updated_node_map2 = wrapper.update_under_parent(
+    #     outline_root=new_root,
+    #     parent_node=leaf_node,
+    #     child_nodes=[],
+    #     memory=memory,
+    # )
+
+    # print("\n--- AFTER UPDATE (NO CHILDREN) ---")
+    # print(new_root2.to_text_tree(include_word_limit=True, include_mab_state=True))
+
+    # print("\nNew node doc mapping:", new_doc_map2)
+    # print("Updated node mapping:", updated_node_map2)
+
+    print("\n========== TEST OBSERVATION ==========")
+
+    # -----------------------
+    # 1️⃣ 初始化 LLM
+    # -----------------------
+    llm_type = AGENT_LLM_MAP.get("outline", "basic")
+    llm = get_llm_by_type(llm_type)
+
+    wrapper = FactStructLLMWrapper(llm)
+
+    # -----------------------
+    # 2️⃣ 构造测试文档
+    # -----------------------
+    doc1 = FactStructDocument(
+        id="doc_obs_1",
+        cite_id="CIT_OBS_001",
         source_type="journal",
-        title="急性期炎症级联反应研究",
-        text="中性粒细胞释放NETs并激活炎症级联反应。",
+        title="推动文明互鉴 促进人类进步(和音)",
+        text="""
+        全球文明倡议倡导尊重世界文明多样性、弘扬全人类共同价值、重视文明传承和创新、加强国际人文交流合作,为不同文明包容共存、交流互鉴注入动力,也为以文明对话应对时代之变提供智慧启迪      打开联合国新设立的文明对话国际日专题网页,9幅照片展现不同文明各美其美、美美与共的图景。“对话有助于汇聚国际社会的力量,巩固世界各国人民和平、信任共处的传统。”图片注脚上的话,表明中国倡导设立文明对话国际日的初衷。      2023年3月15日,习近平主席在中国共产党与世界政党高层对话会上提出全球文明倡议,向世界发出深入推动文明交流互鉴、促进人类社会文明进步的真挚呼吁。全球文明倡议倡导尊重世界文明多样性、弘扬全人类共同价值、重视文明传承和创新、加强国际人文交流合作,为不同文明包容共存、交流互鉴注入动力,也为以文明对话应对时代之变提供智慧启迪。去年,中国提出的设立“文明对话国际日”决议在第七十八届联合国大会协商一致通过,充分表明全球文明倡议顺应时代潮流、契合时代需求,中国理念和中国方案日益成为国际共识。      全球文明倡议的深层价值,在于将文明多样性转化为人类进步的永续动力。每一种文明都延续着一个国家和民族的精神血脉,既需要薪火相传、代代守护,更需要与时俱进、勇于创新。秉持开放包容、加强文明对话,方能共同守护人类文明百花园的持久繁荣,获得进步的智识与能量。“当今世界,不同文明的理解与交流尤为重要,共同行动更是关键。”克罗地亚前总统伊沃·约西波维奇表示,全球文明倡议有力推动各国增进了解,携手迈向共同发展。      中国搭建的文明交流对话平台,成为推动人类文明进步的国际公共产品。从“读懂中国”国际会议、“良渚论坛”等对话机制汇聚全球顶尖智库智慧,到与多国互办文化旅游年、合作开展考古研究、开展经典作品互译,再到建设中希文明互鉴中心、中匈文明交流互鉴合作研究中心、雅典中国古典文明研究院....
+        """,
         embedding=None,
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
 
-    # 注意：update 版本不应该直接改 memory
-    # 只传入 parent + memory + 由函数返回 new_doc_map
-
-    new_root, updated_list, new_doc_map, updated_node_map = wrapper.update_under_parent(
-        outline_root=root,
-        parent_node=acute,      # 测试有子节点情况
-        child_nodes=acute.children,
-        memory=memory,
+    doc2 = FactStructDocument(
+        id="doc_obs_2",
+        cite_id="CIT_OBS_002",
+        source_type="journal",
+        title="丁洁:南方国家共探文明交流互鉴新路径民族_网易订阅",
+        text="""
+        来源:环球时报文明因多样而交流,因交流而互鉴,因互鉴而发展。当今时代,全球南方群体性崛起已经成为世界大变局的鲜明标志。全球南方国家有着多元多样的文明,珍视自身文化传统,但过去很长一段时间受到西方强势文化压制,没能实现平等对话。作为中国向世界提供的国际公共产品之一,全球文明倡议为全球南方国家提供了坚定文化自信自强、探索文明交流互鉴的新的现实路径。在推动全球文明对话多边机制建设方面,中国一直发挥积极引领作用。比如,第78届联合国大会去年协商一致通过中国提出的设立文明对话国际日决议,将6月10日设立为文明对话国际日。国际舆论广泛认为,文明对话国际日的设立正当其时,将在不同文明之间消除偏见误解、增进理解信任过程中发挥重要作用。类似倡议和实践表明,全球文明倡议为人类社会团结应对共同挑战注入正能量,符合人类文明发展新趋势。尊重文化差异是文明之间交流与对话的基础。每一个国家和民族的文明都扎根于本国本民族的土壤之中。一种文明,凝聚着一个国家的非凡创造,彰显着一个民族的精神追求,有着不可替代的价值。就此而言,全球文明倡议反映了广大全球南方国家珍视本国本民族文化、实现文明平等对话的愿望和呼声,顺应了团结不同文明以及不同国家共同应对全球性挑战的需要。在百年大变局加速演进的背景下,人类应对共同挑战、迈向美好未来,尤其需要多样文明的引领和滋养,需要多元文化的智慧和启迪。要解决地缘政治、贸易争端、生态危机等多种全球性问题,重要路径之一就是加强文明之间的交流与对话。只有加强世界各国人文交流合作,探讨构建全球文明对话合作网络,不断丰富交流内容,拓展对话渠道,促进共知共识,加强包容理解,才能共同推动人类文明发展进步。在这方面,中国一直努力推动建立有效的机制平台,以使相关倡议速度更快、更加有效地变为实际行动。比如,中国近年来推动以联合国为基础的多边合作机制,提高发展中国家平等参与的机会;同时以双边关系为纽带
+        """,
+        embedding=None,
+        timestamp=datetime.now(),
     )
 
-    print("\n--- AFTER UPDATE STRUCTURE ---")
-    print(new_root.to_text_tree(include_word_limit=True, include_mab_state=True))
+    docs = [doc1, doc2]
 
-    print("\nUpdated list:")
-    for p, children in updated_list:
-        print("Parent:", p.title)
-        print("Children:", [c.title for c in children])
+    # -----------------------
+    # 3️⃣ 生成 Observation
+    # -----------------------
+    for doc in docs:
+        print(f"\n--- Generating Observation for: {doc.id} ---")
 
-    print("\nNew node doc mapping:", new_doc_map)
-    print("Updated node mapping:", updated_node_map)
+        observation = wrapper.generate_observation(doc)
 
-    print("\n========== TEST UPDATE (NO CHILDREN) ==========")
+        if observation:
+            doc.observation = observation
+            print("✅ Observation Generated:")
+            print(json.dumps(observation, indent=2, ensure_ascii=False))
+        else:
+            print("❌ Failed to generate observation")
 
-    leaf_node = n6   # node_6 没有子节点
-
-    new_root2, updated_list2, new_doc_map2, updated_node_map2 = wrapper.update_under_parent(
-        outline_root=new_root,
-        parent_node=leaf_node,
-        child_nodes=[],
-        memory=memory,
-    )
-
-    print("\n--- AFTER UPDATE (NO CHILDREN) ---")
-    print(new_root2.to_text_tree(include_word_limit=True, include_mab_state=True))
-
-    print("\nNew node doc mapping:", new_doc_map2)
-    print("Updated node mapping:", updated_node_map2)
+    print("\n========== TEST COMPLETE ==========")

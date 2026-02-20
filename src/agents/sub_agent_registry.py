@@ -59,7 +59,7 @@ sub_agents_sp_xxqg = [
     {
         "name": SubAgentType.RESEARCHER.value,
         "description": "Information collection and research",
-        "node": researcher_web_node, #researcher_xxqg_node, # 
+        "node": researcher_web_node,  # researcher_xxqg_node, #
     },
     {
         "name": SubAgentType.REPORTER.value,
@@ -84,7 +84,7 @@ sub_agents_factstruct = [
     {
         "name": SubAgentType.RESEARCHER.value,
         "description": "Information collection and research",
-        "node": researcher_web_node, #researcher_xxqg_node, # 
+        "node": researcher_web_node,  # researcher_xxqg_node, #
     },
     {
         "name": SubAgentType.REPORTER.value,
@@ -92,6 +92,7 @@ sub_agents_factstruct = [
         "node": reporter_factstruct_node,
     },
 ]
+
 
 def get_sub_agents_by_global_type(graph_type: str):
     """

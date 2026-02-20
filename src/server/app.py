@@ -40,7 +40,6 @@ from src.server.rag_request import (
 from src.tools import VolcengineTTS
 from src.utils.reference_utils import global_reference_map
 
-
 app = FastAPI(
     title="DeerFlow API",
     description="API for Deer",
@@ -391,7 +390,7 @@ async def _astream_workflow_generator_sp(
             }
             yield _make_event("node_status", current_node_state)
 
-        #第一个元素是 AIMessageChunk太多了，影响阅读
+        # 第一个元素是 AIMessageChunk太多了，影响阅读
         if isinstance(event_data, (tuple, list)) and len(event_data) > 0:
             if isinstance(event_data[0], AIMessageChunk):
                 # 跳过日志

@@ -113,9 +113,9 @@ class CentralAgent:
         logger.info("中枢Agent正在进行决策...")
         start_time = datetime.now()
 
-        #增加 SOP 部分，用于加入 decision 模块
-        #SOP改成中文，SOP应该要的是抽象的。不能写是outline，replanner，具体谁来生成是让 CentralAgent 自己找
-        DECISION_SOP_FactStruct = '''### 执行流程指南（Execution Workflow Guidelines）
+        # 增加 SOP 部分，用于加入 decision 模块
+        # SOP改成中文，SOP应该要的是抽象的。不能写是outline，replanner，具体谁来生成是让 CentralAgent 自己找
+        DECISION_SOP_FactStruct = """### 执行流程指南（Execution Workflow Guidelines）
 
         你正在一个具有明确执行流程的多智能体系统中工作。
         你的职责是**严格遵循以下流程推进任务直至完成**，仅在任务复杂度或信息缺失确有必要时，才允许插入额外步骤。
@@ -178,9 +178,9 @@ class CentralAgent:
 
         你的目标是：  
         在严格遵循上述流程的前提下，确保任务在逻辑上完整、准备充分，并实现多智能体之间的高效协同执行。
-        '''
+        """
 
-        DECISION_SOP_SP = '''### 执行流程指南（Execution Workflow Guidelines）
+        DECISION_SOP_SP = """### 执行流程指南（Execution Workflow Guidelines）
 
         你正在一个具有明确执行流程的多智能体系统中运行。
         你的职责是**严格按照以下流程推进任务直至完成**，仅在任务复杂度提升或信息确实缺失时，才允许插入额外步骤。
@@ -242,11 +242,10 @@ class CentralAgent:
 
         你的目标是：  
         在严格遵循上述执行流程的前提下，确保任务在逻辑上完整、准备充分，并实现多智能体之间的高效、协调执行。
-        '''
+        """
 
-
-        graph_format=config["configurable"]["graph_format"]
-        if graph_format=="FactStruct":
+        graph_format = config["configurable"]["graph_format"]
+        if graph_format == "FactStruct":
             state["sop"] = DECISION_SOP_FactStruct
             logger.info(f"使用 FactStruct的 SOP")
         else:
@@ -257,7 +256,6 @@ class CentralAgent:
         messages = self._build_decision_prompt(state, config)
         # logger.debug(f"决策prompt: {messages}")
 
-
         # 获取LLM决策并处理异常
         try:
             llm = get_llm_by_type(
@@ -267,10 +265,10 @@ class CentralAgent:
                 method="json_mode",
             )
             response = llm.invoke(messages)
-            
+
             # 解析决策结果
             action = CentralAgentAction(response.action)
-            reasoning = response.reasoning.replace('[STYLE_ROLE]','')
+            reasoning = response.reasoning.replace("[STYLE_ROLE]", "")
             params = response.params or {}
             instruction = response.instruction or self.action_instructions.get(
                 action, ""
@@ -339,7 +337,7 @@ class CentralAgent:
             格式化的提示词消息列表
         """
         messages_history = state.get("messages", [])
-        SOP=state.get("sop",None)
+        SOP = state.get("sop", None)
         converted_messages = []
         for msg in messages_history:
             if isinstance(msg, (HumanMessage, AIMessage)):
@@ -367,7 +365,7 @@ class CentralAgent:
             **context,
             **config,
             "available_actions": ", ".join([a.value for a in action_options]),
-            "SOP":SOP,
+            "SOP": SOP,
         }
         return apply_prompt_template(
             "central_agent", state, extra_context=context_with_actions
@@ -728,7 +726,7 @@ class CentralAgent:
                 goto="reporter",
             )
         logger.info(f"final_report: {final_report}")
-        
+
         session_id = config["configurable"]["thread_id"]
         # global_reference_map.save_session(session_id)
         # 构建执行摘要（包含完整记忆栈历史）
@@ -738,7 +736,9 @@ class CentralAgent:
                 entry.to_dict() for entry in self.memory_stack.get_all()
             ],
             "final_report": final_report,
-            "research": global_reference_map.get_session_ref_map(session_id),#state.get("data_collections", []),
+            "research": global_reference_map.get_session_ref_map(
+                session_id
+            ),  # state.get("data_collections", []),
             "completion_time": datetime.now().isoformat(),
             "statistics": global_statistics.get_statistics(),
         }

@@ -6,8 +6,6 @@ from sentence_transformers import CrossEncoder
 from typing import Union, List, Dict, Any
 
 
-
-
 def filter_content_by_relevant_docs(
     content: str,
     relevant_docs: Union[List[Any], Dict[str, Dict]],
@@ -41,7 +39,7 @@ def filter_content_by_relevant_docs(
             citeid2doc[cite_id] = {
                 "cite_id": cite_id,
                 "id": cite_id_str,
-                "text": doc.get("content", "")
+                "text": doc.get("content", ""),
             }
 
     # 情况 B：原来的 FactStructDocument list
@@ -54,7 +52,7 @@ def filter_content_by_relevant_docs(
             citeid2doc[doc.cite_id] = {
                 "cite_id": doc.cite_id,
                 "id": getattr(doc, "id", None),
-                "text": getattr(doc, "text", "")
+                "text": getattr(doc, "text", ""),
             }
 
     else:
@@ -65,7 +63,7 @@ def filter_content_by_relevant_docs(
     # -----------------------------
     supported_statements = []
 
-    sentences = re.split(r'(?<=[。！?])', content)
+    sentences = re.split(r"(?<=[。！?])", content)
     sentences = [s.strip() for s in sentences if s.strip()]
 
     # -----------------------------
@@ -92,28 +90,24 @@ def filter_content_by_relevant_docs(
 
             # NLI 推理
             scores = semantic_cls.predict([(premise, hypothesis)])[0]
-            label_mapping = ['contradiction', 'entailment', 'neutral']
+            label_mapping = ["contradiction", "entailment", "neutral"]
             max_idx = scores.argmax()
 
-            supported_statements.append({
-                "statement": sentence,
-                "doc_id": doc["cite_id"],
-                "doc_uid": doc["id"],
-                "nli_label": label_mapping[max_idx],
-                "nli_score": float(scores[max_idx])
-            })
+            supported_statements.append(
+                {
+                    "statement": sentence,
+                    "doc_id": doc["cite_id"],
+                    "doc_uid": doc["id"],
+                    "nli_label": label_mapping[max_idx],
+                    "nli_score": float(scores[max_idx]),
+                }
+            )
 
     return supported_statements
 
 
-
-
-
-#根据蕴涵模型结果，对生成文章进行处理
-def mark_content_with_support(
-    content: str,
-    nli_results: list
-):
+# 根据蕴涵模型结果，对生成文章进行处理
+def mark_content_with_support(content: str, nli_results: list):
     """
     根据 NLI 结果，按 citation 级别标注不被支持的引用为【?】
     """
@@ -128,14 +122,14 @@ def mark_content_with_support(
         sentence = r["statement"]
         cite_id = r["doc_id"]
         # is_supported = (r["nli_label"] == "蕴涵")
-        is_supported = (r["nli_label"] == "entailment")
+        is_supported = r["nli_label"] == "entailment"
 
         # 同一个 citation 只要有一次蕴涵，就算支持
         prev = sentence2cite_support[sentence].get(cite_id, False)
         sentence2cite_support[sentence][cite_id] = prev or is_supported
 
     # -------- Step 2: 按句子重写 content --------
-    sentences = re.split(r'(?<=[。！?])', content)
+    sentences = re.split(r"(?<=[。！?])", content)
     sentences = [s for s in sentences if s.strip()]
 
     new_sentences = []
@@ -160,15 +154,11 @@ def mark_content_with_support(
         def replace_cite(match):
             cite_id = int(match.group(1))
             if cite_support.get(cite_id, False):
-                return match.group(0)   # 保留原引用，如【37】
+                return match.group(0)  # 保留原引用，如【37】
             else:
                 return "【?】"
 
-        marked = re.sub(
-            r"[【\[](\d+)[】\]]",
-            replace_cite,
-            sent
-        )
+        marked = re.sub(r"[【\[](\d+)[】\]]", replace_cite, sent)
 
         new_sentences.append(marked)
 
@@ -176,13 +166,11 @@ def mark_content_with_support(
     return "".join(new_sentences) + ref_content
 
 
-
-
 def repair_unknown_citations(
     content: str,
     relevant_docs: Union[List[Any], Dict[str, Dict]],
     semantic_cls,
-    entail_threshold: float = 1
+    entail_threshold: float = 1,
 ):
     """
     修复 content 中的【？】：
@@ -210,10 +198,7 @@ def repair_unknown_citations(
             except ValueError:
                 continue
 
-            citeid2doc[cid] = {
-                "cite_id": cid,
-                "text": doc.get("content", "")
-            }
+            citeid2doc[cid] = {"cite_id": cid, "text": doc.get("content", "")}
 
     # list 结构（FactStructDocument）
     elif isinstance(relevant_docs, list):
@@ -223,7 +208,7 @@ def repair_unknown_citations(
 
             citeid2doc[int(doc.cite_id)] = {
                 "cite_id": int(doc.cite_id),
-                "text": getattr(doc, "text", "")
+                "text": getattr(doc, "text", ""),
             }
 
     else:
@@ -232,7 +217,7 @@ def repair_unknown_citations(
     # --------------------------------
     # 1️⃣ 句子切分
     # --------------------------------
-    sentences = re.split(r'(?<=[。！？])', content)
+    sentences = re.split(r"(?<=[。！？])", content)
     sentences = [s for s in sentences if s.strip()]
 
     new_sentences = []
@@ -252,11 +237,7 @@ def repair_unknown_citations(
         )
 
         # hypothesis：去掉【？】
-        hypothesis = re.sub(
-            r"[【\[]\s*[？?]\s*[】\]]",
-            "",
-            sentence
-        ).strip()
+        hypothesis = re.sub(r"[【\[]\s*[？?]\s*[】\]]", "", sentence).strip()
 
         newly_supported = []
 
@@ -281,31 +262,15 @@ def repair_unknown_citations(
         # 4️⃣ 回填或删除【？】
         # --------------------------------
         if newly_supported:
-            cite_str = "".join(
-                f"【{cid}】" for cid in sorted(set(newly_supported))
-            )
-            repaired = re.sub(
-                r"[【\[]\s*[？?]\s*[】\]]",
-                cite_str,
-                sentence
-            )
+            cite_str = "".join(f"【{cid}】" for cid in sorted(set(newly_supported)))
+            repaired = re.sub(r"[【\[]\s*[？?]\s*[】\]]", cite_str, sentence)
             new_sentences.append(repaired)
         else:
-            cleaned = re.sub(
-                r"[【\[]\s*[？?]\s*[】\]]",
-                "",
-                sentence
-            )
+            cleaned = re.sub(r"[【\[]\s*[？?]\s*[】\]]", "", sentence)
             new_sentences.append(cleaned)
 
     # return "".join(new_sentences)
     return "".join(new_sentences) + ref_content
-
-
-
-
-
-
 
 
 def main():
@@ -322,9 +287,8 @@ def main():
             timestamp=datetime(2025, 12, 13, 13, 15, 12, 426772),
             embedding=None,
             url="https://xuewen.cnki.net/CJFD-FSYF198003005.html",
-            title="石油磺酸钡与防锈油-《腐蚀与防护》1980年03期-中国知网"
+            title="石油磺酸钡与防锈油-《腐蚀与防护》1980年03期-中国知网",
         ),
-
         FactStructDocument(
             id="doc_-456049905913296104_39",
             cite_id=39,
@@ -333,9 +297,8 @@ def main():
             timestamp=datetime(2025, 12, 13, 13, 15, 12, 426781),
             embedding=None,
             url="https://www.360docs.net/doc/b55862025.html",
-            title="金属清洗剂 - 360文档中心"
+            title="金属清洗剂 - 360文档中心",
         ),
-
         FactStructDocument(
             id="doc_1414329639007991770_37",
             cite_id=37,
@@ -344,49 +307,39 @@ def main():
             timestamp=datetime(2025, 12, 13, 13, 15, 12, 426753),
             embedding=None,
             url="http://www.zzhailong.cn/page105?product_id=191",
-            title="石油磺酸钠"
-        )
+            title="石油磺酸钠",
+        ),
     ]
 
-
     # ===================================================
-    #造蕴涵模型
+    # 造蕴涵模型
     # nli_model_path="/data1/Yangzb/Model/nlp_structbert_nli_chinese-tiny"
     # semantic_cls = pipeline(
     #     Tasks.nli,
     #     nli_model_path,
     #     model_revision='master'
     # )
-    semantic_cls = CrossEncoder(
-        "/data1/Yangzb/Model/nli-deberta-v3-small"
-    )
+    semantic_cls = CrossEncoder("/data1/Yangzb/Model/nli-deberta-v3-small")
 
-    #这个是判断引用和句子的关系
+    # 这个是判断引用和句子的关系
     supported = filter_content_by_relevant_docs(
-        content=content,
-        relevant_docs=relevant_docs,
-        semantic_cls=semantic_cls
+        content=content, relevant_docs=relevant_docs, semantic_cls=semantic_cls
     )
 
     print()
     print()
     print(supported)
-    new_content = mark_content_with_support(
-        content=content,
-        nli_results=supported
-    )
+    new_content = mark_content_with_support(content=content, nli_results=supported)
     print()
     print()
     print(new_content)
 
-    repair_content=repair_unknown_citations(
-        content=new_content,
-        relevant_docs=relevant_docs,
-        semantic_cls=semantic_cls
+    repair_content = repair_unknown_citations(
+        content=new_content, relevant_docs=relevant_docs, semantic_cls=semantic_cls
     )
 
     print()
-    print() 
+    print()
     print(repair_content)
 
 

@@ -22,6 +22,8 @@ from ..graph.types import State
 import re
 import json
 import traceback
+
+
 class BatchMAB:
     """
     批量-信息觅食多臂老虎机（Batch-IF-MAB）算法
@@ -94,9 +96,9 @@ class BatchMAB:
         replan_result=None,
         factstruct_outline=None,
         factstruct_memory=None,
-        config:RunnableConfig=None,
+        config: RunnableConfig = None,
     ) -> Tuple[OutlineNode, Memory]:
-        
+
         # """
         # 运行 Batch-MAB 算法
         # 参数:
@@ -105,16 +107,16 @@ class BatchMAB:
         # 返回:
         #     (outline_root, memory): 最终大纲根节点和记忆模块
         # """
-        
+
         logger.info(f"Starting Batch-MAB with query: {initial_query}")
 
-        #初始化
-        if factstruct_outline==None:
+        # 初始化
+        if factstruct_outline == None:
             # --- 初始化阶段 ---
             # 1. 初始检索与大纲生成
             if initial_docs is None:
                 logger.info("Performing initial search...")
-                initial_docs = self.search_engine(initial_query, k=5,config=config)
+                initial_docs = self.search_engine(initial_query, k=5, config=config)
 
             # 嵌入初始文档
             initial_docs_with_embed = self.embedder.embed_docs(initial_docs)
@@ -124,11 +126,11 @@ class BatchMAB:
 
             # 生成初始大纲（LLM Call #1）
             logger.info("Generating initial outline...")
-            
+
             outline_root = self.llm_wrapper.generate_initial_outline(
                 initial_query,
                 initial_docs_with_embed,
-                central_guidance,#感觉plan_text就是第一次的 feedback
+                central_guidance,  # 感觉plan_text就是第一次的 feedback
                 replan_result=replan_result,
             )
             logger.info(f"outline_root:{outline_root}")
@@ -190,8 +192,9 @@ class BatchMAB:
 
             # 并行执行检索（按照 proposal 要求实现真正的并行检索）
             logger.info(f"Performing parallel search for {len(queries)} queries...")
-            new_docs_list = self._parallel_search(queries, k=3,config=config)
-            #在这里补一个吧
+            new_docs_list = self._parallel_search(queries, k=3, config=config)
+            # 这个地方要加一下。总结更新
+            new_docs_list = self.batch_generate_observations(new_docs_list)
 
             # 预处理新文档（嵌入）
             new_docs_list_with_embed = []
@@ -258,7 +261,7 @@ class BatchMAB:
                     )
                 )
                 logger.info(f"expanded_nodes_list{expanded_nodes_list}")
-                
+
                 # --- (已修正) 关键的状态继承步骤 ---
                 # 遍历那些刚刚被扩展的节点 (从叶子节点变成了内部节点)
                 # expanded_nodes_list 格式: [(parent_node, [new_child_node_1, ...]), ...]
@@ -344,7 +347,6 @@ class BatchMAB:
 
         return outline_root, self.memory
 
-
     def run_initialization(
         self,
         query: str,
@@ -353,7 +355,8 @@ class BatchMAB:
         instruction=None,
         initial_docs=None,
         k: int = 5,
-        config: RunnableConfig=None,
+        observation_text=None,
+        config: RunnableConfig = None,
     ):
         """
         初始化 FactStruct：检索 → 向量化 → 存储 → 生成初始大纲
@@ -369,10 +372,19 @@ class BatchMAB:
             if not all(isinstance(doc, FactStructDocument) for doc in initial_docs):
                 logger.info(f"initial_docs before:{initial_docs}")
                 logger.info(f"Type of initial_docs: {type(initial_docs)}")
-                #这个地方要加一下。总结更新
                 initial_docs = self.wrap_raw_docs_to_factstruct(initial_docs)
-                logger.info(f"initial_docs after:{initial_docs}")
 
+            # 这个地方要加一下。总结更新
+            # 1️⃣ 先保存老版本
+            old_initial_docs = initial_docs
+            initial_docs = self.batch_generate_observations(
+                [initial_docs], observation_text=observation_text
+            )
+            if initial_docs and len(initial_docs) > 0:
+                initial_docs = initial_docs[0]
+            else:
+                initial_docs = old_initial_docs
+            logger.info(f"initial_docs after:{initial_docs}")
 
         # --- Step 2: 向量化 ---
         initial_docs_with_embed = self.embedder.embed_docs(initial_docs)
@@ -395,17 +407,8 @@ class BatchMAB:
         # --- Step 5: 文档绑定 ---
         self.memory.map_node_to_docs(outline_root.id, initial_docs_with_embed)
         logger.info(f"self.memory.node_to_docs{self.memory.node_to_docs}")
-        
-        #感觉这个地方需要思考一下，初始化的文档是归谁的，现在是放到了 Root 上
-        #我觉得确实不能给子节点，否则文档覆盖率这个东西就不太行了
-        #初始化的节点是否需要给上，奖励如果不给奖励的话，一开始的大纲扩展就只会在第一层进行扩展
-        #那这么说，finish 是不是要多一个 保证大家的reward 都不是零才好结束。
-        #expansion的 reward 更新包括两个地方，一个是检索文档的更新，一个是子节点的生成
-        #compassion的 reward的更新包括两个地方，一个是select node需要计算 reward但是不更新。 另一个是新的节点的生成，这个应该是用parent 的 node 就可以了
-        #updat 的 reward的更新包括两个地方，一个是
+
         return outline_root, self.memory, initial_docs
-
-
 
     def run_expansion(
         self,
@@ -418,10 +421,10 @@ class BatchMAB:
         """
         执行 Batch-MAB 驱动的大纲扩展
         """
-       # 总迭代次数计数器
+        # 总迭代次数计数器
         t = 0
-        self.max_iterations=max_iterations
-        self.batch_size=batch_size
+        self.max_iterations = max_iterations
+        self.batch_size = batch_size
         # --- 迭代循环（Batch-MAB 过程）---
         num_rounds = math.ceil(self.max_iterations / self.batch_size)
         logger.info(
@@ -461,9 +464,10 @@ class BatchMAB:
 
             # 并行执行检索（按照 proposal 要求实现真正的并行检索）
             logger.info(f"Performing parallel search for {len(queries)} queries...")
-            new_docs_list = self._parallel_search(queries, k=3,config=config)
-            #在这里补一个吧
-            
+            new_docs_list = self._parallel_search(queries, k=3, config=config)
+            # 这个地方要加一下。总结更新
+            new_docs_list = self.batch_generate_observations(new_docs_list)
+            initial_docs = self.batch_generate_observations(new_docs_list)
             # 预处理新文档（嵌入）
             new_docs_list_with_embed = []
             for docs in new_docs_list:
@@ -529,7 +533,7 @@ class BatchMAB:
                     )
                 )
                 logger.info(f"expanded_nodes_list{expanded_nodes_list}")
-                
+
                 # --- (已修正) 关键的状态继承步骤 ---
                 # 遍历那些刚刚被扩展的节点 (从叶子节点变成了内部节点)
                 # expanded_nodes_list 格式: [(parent_node, [new_child_node_1, ...]), ...]
@@ -616,9 +620,6 @@ class BatchMAB:
 
         return outline_root, self.memory
 
-
-
-
     def run_compression(
         self,
         outline_root,
@@ -654,8 +655,6 @@ class BatchMAB:
 
         parents = list(parent_to_children.keys())  # 现在是 OutlineNode 对象
 
-
-
         # 2️⃣ Batch-MAB 主循环（每轮只压一个 parent）
         # while t < max_merges:
         ucb_scores = []
@@ -666,14 +665,14 @@ class BatchMAB:
             if current_parent is None:
                 logger.warning(f"Parent {parent.id} not found in new tree, skipping")
                 continue
-            parent=current_parent
+            parent = current_parent
             children = parent_to_children.get(parent, [])
-            
+
             # 子节点相关性（是否适合压）
             cohesion = self.compute_children_cohesion(parent, children)
             logger.info(f"parent:{parent},cohesion{cohesion}")
             # exploration / exploitation
-            t_current = 0 + 1#暂时先这么写
+            t_current = 0 + 1  # 暂时先这么写
             if parent.pull_count == 0:
                 exploration = float("inf")
                 avg_reward = 0.0
@@ -682,8 +681,10 @@ class BatchMAB:
                 exploration = math.sqrt(2 * math.log(t_current) / parent.pull_count)
 
             # ✅ Compression 专用 UCB
-            parent_depth=parent.get_depth()
-            ucb_score = cohesion - (avg_reward + exploration)+parent_depth#加个深度，要不 root 容易被选，再加个文档数吧
+            parent_depth = parent.get_depth()
+            ucb_score = (
+                cohesion - (avg_reward + exploration) + parent_depth
+            )  # 加个深度，要不 root 容易被选，再加个文档数吧
             ucb_scores.append((ucb_score, parent))
 
         if not ucb_scores:
@@ -697,20 +698,22 @@ class BatchMAB:
         children = parent_to_children.get(parent, [])
 
         logger.info(
-            f"Compressing under parent '{parent.title}' "
-            f"(children={len(children)})"
+            f"Compressing under parent '{parent.title}' " f"(children={len(children)})"
         )
 
         try:
             # 4️⃣ 调用 LLM 做结构压缩
             logger.info(f"compress_under_parent的parent{parent}")
-            outline_root, compressed_nodes_list, new_node_doc_mapping, merged_node_mapping = (
-                self.llm_wrapper.compress_under_parent(
-                    outline_root=outline_root,
-                    parent_node=parent,
-                    child_nodes=children,
-                    memory=memory,
-                )
+            (
+                outline_root,
+                compressed_nodes_list,
+                new_node_doc_mapping,
+                merged_node_mapping,
+            ) = self.llm_wrapper.compress_under_parent(
+                outline_root=outline_root,
+                parent_node=parent,
+                child_nodes=children,
+                memory=memory,
             )
             logger.info(f"compressed_nodes_list{compressed_nodes_list}")
             logger.info(f"new_node_doc_mapping{new_node_doc_mapping}")
@@ -721,7 +724,6 @@ class BatchMAB:
                     child.pull_count = parent_node.pull_count
                     child.reward_history = list(parent_node.reward_history)
 
-
             # --- 6️⃣ reward 更新和Memory 更新（Compression 专用逻辑）---
             parent.pull_count += 1
             logger.info(
@@ -730,10 +732,10 @@ class BatchMAB:
             )
             # merged_node_mapping: { new_node_id: [old_node_id1, old_node_id2, ...] }
 
-
-            #先删除，后增加，被修改的都是 new_memory
+            # 先删除，后增加，被修改的都是 new_memory
             # new_memory=memory
             import copy
+
             new_memory = copy.deepcopy(memory)
             # compression_node_number=
             # --- 删除被压缩节点的文档映射（非常重要）---
@@ -744,7 +746,7 @@ class BatchMAB:
                         logger.debug(
                             f"Removed document mapping for compressed node '{old_id}'"
                         )
-            
+
             # --- 增加新节点的文档映射（非常重要）---
             for new_node_id, old_node_ids in merged_node_mapping.items():
                 merged_docs = []
@@ -771,8 +773,8 @@ class BatchMAB:
             return
 
         # t += 1
-        memory=new_memory
-        outline_root=outline_root
+        memory = new_memory
+        outline_root = outline_root
 
         # 7️⃣ 检查终止条件，这个地方是不对的
         # current_leaf_count = len(outline_root.get_leaf_nodes())
@@ -782,12 +784,9 @@ class BatchMAB:
         #     break
 
         logger.info(
-            f"Compression finished:"
-            f"total_nodes={len(outline_root.get_all_nodes())}"
+            f"Compression finished:" f"total_nodes={len(outline_root.get_all_nodes())}"
         )
         return outline_root, new_memory
-
-
 
     def run_update(
         self,
@@ -798,13 +797,13 @@ class BatchMAB:
     ):
         """
         执行大纲节点更新（单次更新，类似 Compression + Expansion，但不迭代）
-        
+
         参数:
             outline_root: 当前大纲根节点
             memory: 当前 Memory 对象
             update_candidates: 待更新的节点列表
             config: RunnableConfig 配置对象
-        
+
         返回:
             更新后的 outline_root 和 memory
         """
@@ -850,9 +849,9 @@ class BatchMAB:
                 exploration = math.sqrt(2 * math.log(t_current) / parent.pull_count)
 
             # ✅ update 专用 UCB
-            parent_depth=parent.get_depth()#加个深度
-            parent_doc_num=len(memory.get_docs_by_node(parent))#加个文档数
-            ucb_score = avg_reward + exploration+parent_depth-parent_doc_num
+            parent_depth = parent.get_depth()  # 加个深度
+            parent_doc_num = len(memory.get_docs_by_node(parent))  # 加个文档数
+            ucb_score = avg_reward + exploration + parent_depth - parent_doc_num
             ucb_scores.append((ucb_score, parent))
 
         if not ucb_scores:
@@ -866,10 +865,10 @@ class BatchMAB:
         # ==========================================
         # 🔍 3. 批量检索（拉动摇臂）
         # ==========================================
-        if len(children)==0:
+        if len(children) == 0:
             selected_nodes = children
         else:
-            selected_nodes=[parent]
+            selected_nodes = [parent]
         # selected_nodes=[parent]
 
         logger.info("Batch generating queries...")
@@ -878,7 +877,8 @@ class BatchMAB:
         logger.info(f"Performing parallel search for {len(queries)} queries...")
         logger.info(f"Performing parallel search for {queries}")
         new_docs_list = self._parallel_search(queries, k=3, config=config)
-        #算了还是在这里补一个吧
+        # 这个地方要加一下。总结更新
+        new_docs_list = self.batch_generate_observations(new_docs_list)
 
         # 文档嵌入
         new_docs_list_with_embed = []
@@ -923,23 +923,23 @@ class BatchMAB:
             memory.store_docs(new_docs)
             memory.map_node_to_docs(node.id, new_docs)
 
-
-
-
-
-
-        logger.info(f"Updating under parent '{parent.title}' (children={len(children)})")
+        logger.info(
+            f"Updating under parent '{parent.title}' (children={len(children)})"
+        )
 
         try:
             # 4️⃣ 调用 LLM 更新操作
             logger.info(f"update_under_parent 的 parent: {parent}")
-            outline_root, updated_nodes_list, new_node_doc_mapping, updated_node_mapping = (
-                self.llm_wrapper.update_under_parent(
-                    outline_root=outline_root,
-                    parent_node=parent,
-                    child_nodes=children,
-                    memory=memory,
-                )
+            (
+                outline_root,
+                updated_nodes_list,
+                new_node_doc_mapping,
+                updated_node_mapping,
+            ) = self.llm_wrapper.update_under_parent(
+                outline_root=outline_root,
+                parent_node=parent,
+                child_nodes=children,
+                memory=memory,
             )
 
             logger.info(f"updated_nodes_list: {updated_nodes_list}")
@@ -966,7 +966,9 @@ class BatchMAB:
                 for old_id in old_node_ids:
                     if old_id in new_memory.node_to_docs:
                         del new_memory.node_to_docs[old_id]
-                        logger.debug(f"Removed document mapping for updated node '{old_id}'")
+                        logger.debug(
+                            f"Removed document mapping for updated node '{old_id}'"
+                        )
 
             # 8️⃣ 增加新节点的文档映射
             for new_node_id, old_node_ids in updated_node_mapping.items():
@@ -981,17 +983,48 @@ class BatchMAB:
 
                 if updated_docs:
                     new_memory.map_node_to_docs(new_node_id, updated_docs)
-                    logger.debug(f"New node '{new_node_id}' mapped to {len(updated_docs)} documents")
+                    logger.debug(
+                        f"New node '{new_node_id}' mapped to {len(updated_docs)} documents"
+                    )
 
         except Exception as e:
             tb_str = traceback.format_exc()
-            logger.error(f"Update failed under parent '{parent.title}': {e}\nTraceback:\n{tb_str}")
+            logger.error(
+                f"Update failed under parent '{parent.title}': {e}\nTraceback:\n{tb_str}"
+            )
             return outline_root, memory
 
         logger.info(f"Update finished: total nodes={len(outline_root.get_all_nodes())}")
 
         return outline_root, new_memory
 
+    def batch_generate_observations(
+        self,
+        document_groups: List[List[FactStructDocument]],
+        observation_text=None,
+    ) -> List[List[FactStructDocument]]:
+        """
+        为文档二维列表生成 observation
+        每个文档单独调用 LLM
+        """
+
+        for group in document_groups:
+            for doc in group:
+
+                # 已有 observation 则跳过
+                if getattr(doc, "observation", None):
+                    continue
+                if observation_text == None:
+                    observation = self.llm_wrapper.generate_observation(doc)
+                else:
+                    observation = observation_text
+
+                if observation:
+                    doc.observation = observation
+                else:
+                    logger.warning(f"Observation failed for {doc.id}")
+
+        return document_groups
 
     def _select_top_k_nodes(
         self,
@@ -1034,7 +1067,7 @@ class BatchMAB:
         self,
         queries: List[str],
         k: int = 3,
-        config:RunnableConfig=None,
+        config: RunnableConfig = None,
     ) -> List[List[FactStructDocument]]:
         """
         并行执行检索
@@ -1058,7 +1091,7 @@ class BatchMAB:
         ) as executor:
             # 提交所有任务
             future_to_index = {
-                executor.submit(self.search_engine, query, k,config): i
+                executor.submit(self.search_engine, query, k, config): i
                 for i, query in enumerate(queries)
             }
 
@@ -1089,9 +1122,8 @@ class BatchMAB:
                         "query": queries[index],
                         "exception": str(e),
                         "traceback": tb,
-                        "docs": []
+                        "docs": [],
                     }
-
 
         return results
 
@@ -1124,6 +1156,7 @@ class BatchMAB:
                         # 如果 JSONDecodeError，尝试解析到最后一个 JSON 对象
                         # 这里简单方法：用 eval 安全子集
                         import ast
+
                         content_list = ast.literal_eval(content_str)
 
                     # 4️⃣ 找到 raw_results
@@ -1162,8 +1195,6 @@ class BatchMAB:
             wrapped.append(doc)
 
         return wrapped
-    
-
 
     def compute_children_cohesion(
         self,
@@ -1213,9 +1244,6 @@ class BatchMAB:
         return float(cohesion)
 
 
-
-
-
 def cosine_similarity(vec1, vec2):
     vec1 = np.array(vec1)
     vec2 = np.array(vec2)
@@ -1245,8 +1273,9 @@ if __name__ == "__main__":
     from langchain_core.runnables import RunnableConfig
     from src.factstruct.embedder import Embedder
     from src.factstruct.batch_mab import BatchMAB
+
     # from src.search.adapter import create_search_engine_adapter  # 如果有的话
-    
+
     print("========== START BATCH-MAB COMPRESSION DEBUG ==========")
 
     # -----------------------
@@ -1256,22 +1285,31 @@ if __name__ == "__main__":
 
     # 测试文档
     doc1 = FactStructDocument(
-        id="doc_1", cite_id="CIT001", source_type="journal",
+        id="doc_1",
+        cite_id="CIT001",
+        source_type="journal",
         title="中性粒细胞募集机制研究",
         text="急性期中性粒细胞通过趋化因子被募集到缺血区域。",
-        embedding=None, timestamp=datetime.now()
+        embedding=None,
+        timestamp=datetime.now(),
     )
     doc2 = FactStructDocument(
-        id="doc_2", cite_id="CIT002", source_type="journal",
+        id="doc_2",
+        cite_id="CIT002",
+        source_type="journal",
         title="血脑屏障破坏机制",
         text="促炎因子释放导致血脑屏障通透性增加。",
-        embedding=None, timestamp=datetime.now()
+        embedding=None,
+        timestamp=datetime.now(),
     )
     doc3 = FactStructDocument(
-        id="doc_3", cite_id="CIT003", source_type="journal",
+        id="doc_3",
+        cite_id="CIT003",
+        source_type="journal",
         title="炎症与神经损伤",
         text="炎症反应加剧脑水肿与神经损伤。",
-        embedding=None, timestamp=datetime.now()
+        embedding=None,
+        timestamp=datetime.now(),
     )
 
     # -----------------------
@@ -1279,7 +1317,7 @@ if __name__ == "__main__":
     # -----------------------
     # root = OutlineNode(id="node_0", title="中性粒细胞在脑缺血中的作用", pull_count=2, reward_history=[0.8, 0.9], word_limit=500)
     # acute = OutlineNode(id="node_1", title="中性粒细胞在脑缺血急性期的作用", pull_count=1, reward_history=[0.7], word_limit=300)
-    
+
     # n2 = OutlineNode(id="node_2", title="中性粒细胞的募集与激活机制", pull_count=0, reward_history=[], word_limit=100)
     # n3 = OutlineNode(id="node_3", title="促炎因子释放与血-脑屏障破坏", pull_count=0, reward_history=[], word_limit=100)
     # n4 = OutlineNode(id="node_4", title="炎症反应对脑水肿与神经损伤的影响", pull_count=0, reward_history=[], word_limit=100)
@@ -1290,7 +1328,7 @@ if __name__ == "__main__":
     # acute.add_child(n4)
     # acute.add_child(n5)
     # root.add_child(acute)
-    
+
     # -----------------------
     # 2️⃣ 构造 Outline（多 parent 测试）
     # -----------------------
@@ -1300,30 +1338,38 @@ if __name__ == "__main__":
         title="中性粒细胞在脑缺血中的作用",
         pull_count=0,
         reward_history=[],
-        word_limit=500
+        word_limit=500,
     )
 
     # ===== Parent A（高 reward，不应该被选）=====
-    acute_A = OutlineNode(id="node_1",
+    acute_A = OutlineNode(
+        id="node_1",
         title="中性粒细胞在脑缺血急性炎症阶段的分子机制",
         # pull_count=5,reward_history=[0.9, 0.88, 0.92, 0.91, 0.87],
-        pull_count=1,reward_history=[0.9],
-        word_limit=300
+        pull_count=1,
+        reward_history=[0.9],
+        word_limit=300,
     )
 
-    A1 = OutlineNode(id="node_2",
+    A1 = OutlineNode(
+        id="node_2",
         title="中性粒细胞募集的趋化因子调控机制",
-        pull_count=0,reward_history=[]
+        pull_count=0,
+        reward_history=[],
     )
 
-    A2 = OutlineNode(id="node_3",
+    A2 = OutlineNode(
+        id="node_3",
         title="中性粒细胞激活后的促炎信号级联反应",
-        pull_count=0,reward_history=[]
+        pull_count=0,
+        reward_history=[],
     )
 
-    A3 = OutlineNode(id="node_4",
+    A3 = OutlineNode(
+        id="node_4",
         title="中性粒细胞诱导的血脑屏障通透性改变",
-        pull_count=0,reward_history=[]
+        pull_count=0,
+        reward_history=[],
     )
 
     # acute_A.add_child(A1)
@@ -1331,26 +1377,34 @@ if __name__ == "__main__":
     # acute_A.add_child(A3)
 
     # ===== Parent B（低 reward，应该被选）=====
-    acute_B = OutlineNode(id="node_5",
+    acute_B = OutlineNode(
+        id="node_5",
         title="急性缺血性脑卒中中中性粒细胞介导的炎症损伤",
-        pull_count=1,reward_history=[0.1],word_limit=300
+        pull_count=1,
+        reward_history=[0.1],
+        word_limit=300,
     )
 
-    B1 = OutlineNode(id="node_6",
+    B1 = OutlineNode(
+        id="node_6",
         title="中性粒细胞介导的急性炎症反应机制",
-        pull_count=0,reward_history=[]
+        pull_count=0,
+        reward_history=[],
     )
 
-    B2 = OutlineNode(id="node_7",
+    B2 = OutlineNode(
+        id="node_7",
         title="急性期中性粒细胞释放炎症因子的机制",
-        pull_count=0,reward_history=[]
+        pull_count=0,
+        reward_history=[],
     )
 
-    B3 = OutlineNode(id="node_8",
+    B3 = OutlineNode(
+        id="node_8",
         title="中性粒细胞在急性脑缺血炎症级联中的作用",
-        pull_count=0,reward_history=[]
+        pull_count=0,
+        reward_history=[],
     )
-
 
     acute_B.add_child(B1)
     acute_B.add_child(B2)
@@ -1358,9 +1412,6 @@ if __name__ == "__main__":
 
     root.add_child(acute_A)
     root.add_child(acute_B)
-
-
-
 
     # # -----------------------
     # # 3️⃣ 构建节点-文档映射
@@ -1412,7 +1463,6 @@ if __name__ == "__main__":
         ),
     ]
 
-
     # Parent A
     # memory.map_node_to_docs("node_2", [docs[0]])
     # memory.map_node_to_docs("node_3", [docs[1]])
@@ -1423,15 +1473,12 @@ if __name__ == "__main__":
     memory.map_node_to_docs("node_7", [docs[1]])
     memory.map_node_to_docs("node_8", [docs[0], docs[1]])
 
-
-
     # -----------------------
     # 4️⃣ 初始化 LLM Wrapper
     # -----------------------
     llm_type = AGENT_LLM_MAP.get("outline", "basic")
     llm = get_llm_by_type(llm_type)
     wrapper = FactStructLLMWrapper(llm)
-
 
     # -----------------------
     # 5️⃣ 初始化 Embedder + LLM + BatchMAB（仿真实系统）
@@ -1456,18 +1503,16 @@ if __name__ == "__main__":
     print(root.to_text_tree(include_word_limit=True, include_mab_state=True))
     print("Memory:", memory.node_to_docs)
     wrapper._inherit_mab_state_for_existing_nodes(old_root=None, new_root=root)
-    
+
     # === Batch-MAB ===
     batch_mab = BatchMAB(
         llm_wrapper=wrapper,
         embedder=embedder,
         search_engine=search_engine,
         max_iterations=4,
-        memory=memory,        # ⭐ 关键：把你构造的 memory 传进去
+        memory=memory,  # ⭐ 关键：把你构造的 memory 传进去
         batch_size=2,
     )
-
-
 
     # # -----------------------
     # # 6️⃣ 执行 run_compression
@@ -1514,20 +1559,16 @@ if __name__ == "__main__":
     print("Memory:", memory.node_to_docs)
 
     # update_candidates = [A1, A2, A3, B1, B2, B3]
-    update_candidates = [acute_A,B1, B2, B3]
+    update_candidates = [acute_A, B1, B2, B3]
 
     # config = RunnableConfig()
-    config = {
-        "configurable": {
-            "thread_id": "debug-session"
-        }
-    }
-    
+    config = {"configurable": {"thread_id": "debug-session"}}
+
     new_root, new_memory = batch_mab.run_update(
         outline_root=root,
         memory=memory,
         update_candidates=update_candidates,
-        config=config
+        config=config,
     )
 
     print("\n--- AFTER UPDATE ---")
@@ -1537,7 +1578,3 @@ if __name__ == "__main__":
     validate_tree(new_root)
     print("\n✅ Tree structure valid.")
     print("========== END UPDATE DEBUG ==========")
-
-
-
-

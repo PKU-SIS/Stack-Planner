@@ -15,9 +15,9 @@ class ResearcherAgentSP(CommonReactAgent):
 
     def __init__(self, *args, **kwargs):
         agent_type = kwargs.pop("agent_type", "default_agent")
-        print("agent_type",agent_type)
+        print("agent_type", agent_type)
         config = kwargs.pop("config", None)
-        default_tools = kwargs.pop("default_tools", []) #default_tools
+        default_tools = kwargs.pop("default_tools", [])  # default_tools
         """Initialize the ResearcherAgent with additional attributes."""
         configurable = Configuration.from_runnable_config(config)
         mcp_servers = {}
@@ -152,9 +152,7 @@ class ResearcherAgentSP(CommonReactAgent):
         result = await self.ainvoke(
             input=agent_input, config={"recursion_limit": recursion_limit}
         )
-        logger.info(
-            f"{self.agent_name.capitalize()} result: {result}"
-        )
+        logger.info(f"{self.agent_name.capitalize()} result: {result}")
         # Process the result
         response_content = result["messages"][-1].content
         logger.debug(
@@ -162,7 +160,7 @@ class ResearcherAgentSP(CommonReactAgent):
         )
 
         logger.info(f"Task execution completed by {self.agent_name}")
-        #todo
+        # todo
         # response_content = modify_reference_mark(response_content)
         # 后续goto操作在subagentmanager处理
         return Command(

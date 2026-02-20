@@ -21,7 +21,13 @@ from .nodes import (
     researcher_xxqg_node,
 )
 
-from .sp_nodes import central_agent_node, perception_node, outline_node,outline_node_factstruct,reporter_factstruct_node
+from .sp_nodes import (
+    central_agent_node,
+    perception_node,
+    outline_node,
+    outline_node_factstruct,
+    reporter_factstruct_node,
+)
 from src.agents.sub_agent_registry import get_sub_agents_by_global_type
 
 
@@ -134,12 +140,14 @@ def get_next_perception(state: State) -> str:
     else:
         return "outline"
 
+
 def get_next_outline(state: State) -> str:
     wait_stage = state.get("wait_stage", "")
     if wait_stage == "outline":
         return "human_feedback"
     else:
         return "central_agent"
+
 
 def get_next_feedback(state: State) -> str:
     wait_stage = state.get("wait_stage", "")
@@ -149,6 +157,7 @@ def get_next_feedback(state: State) -> str:
         return "outline"
     else:
         return "central_agent"
+
 
 def _build_graph_sp_xxqg():
     """
@@ -165,7 +174,7 @@ def _build_graph_sp_xxqg():
     # 不要问卷了
     # builder.add_node("perception", perception_node)
     builder.add_node("central_agent", central_agent_node)
-    #注释outline
+    # 注释outline
     # builder.add_node("outline", outline_node)
 
     # 添加sub agent
@@ -182,13 +191,13 @@ def _build_graph_sp_xxqg():
 
     # 感知层，包括search before plan、human in the loop
 
-    #原有流程
+    # 原有流程
     # builder.add_edge(START, "outline")
     # builder.add_edge("outline", "central_agent")
     # builder.add_edge("central_agent", "zip_data")
-    
-    #动态SOP流程
-    builder.add_edge(START,  "central_agent")
+
+    # 动态SOP流程
+    builder.add_edge(START, "central_agent")
     builder.add_edge("central_agent", "zip_data")
 
     # 后处理部分
@@ -208,7 +217,6 @@ def _build_graph_FactStruct():
 
     builder = StateGraph(State)
 
-
     builder.add_node("central_agent", central_agent_node)
     # builder.add_node("outline_factstruct", outline_node_factstruct)#变成子 agent
 
@@ -217,18 +225,17 @@ def _build_graph_FactStruct():
     for sub_agent in sub_agents:
         builder.add_node(sub_agent["name"], sub_agent["node"])
 
-    # builder.add_node("reporter", reporter_factstruct_node) 
+    # builder.add_node("reporter", reporter_factstruct_node)
 
     # 下面这些暂时没有算sub agent
     builder.add_node("zip_data", zip_data)
 
     # 感知层，包括search before plan、human in the loop
 
-    #原有 workflow
+    # 原有 workflow
     # builder.add_edge(START, "outline_factstruct")
     # builder.add_edge("outline_factstruct", "central_agent")
     # builder.add_edge("central_agent","zip_data")
-
 
     # 动态 SOP WorkFlow
     builder.add_edge(START, "central_agent")
@@ -263,7 +270,7 @@ _GRAPH_BUILDER_CLASS_MAP = {
     "sp": None,
     "xxqg": None,
     "sp_xxqg": sp_xxqg_graph_builder,
-    "FactStruct":FactStruct_graph_builder
+    "FactStruct": FactStruct_graph_builder,
 }
 
 _GRAPH_CLASS_MAP = {

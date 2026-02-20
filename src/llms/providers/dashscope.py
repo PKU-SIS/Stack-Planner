@@ -1,6 +1,7 @@
 # Standard library imports
 from typing import Any, Dict, Iterator, List, Mapping, Optional, Type, Union, cast
 import re
+
 # Third-party imports
 import openai
 from langchain_core.callbacks import CallbackManagerForLLMRun
@@ -24,6 +25,7 @@ from langchain_openai.chat_models.base import (
     warnings,
 )
 from src.utils.logger import logger
+
 
 def _convert_delta_to_message_chunk(
     delta_dict: Mapping[str, Any], default_class: Type[BaseMessageChunk]

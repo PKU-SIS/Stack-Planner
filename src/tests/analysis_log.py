@@ -1,7 +1,7 @@
 import re
 
 # LOG_FILE = "/data1/Yangzb/Wenzhi/Stack-Planner/logs/20250923190428.log"
-LOG_FILE="/data1/Yangzb/Wenzhi/Stack-Planner/logs/Satastic/20250926114820.log"
+LOG_FILE = "/data1/Yangzb/Wenzhi/Stack-Planner/logs/Satastic/20250926114820.log"
 # 匹配模式
 request_start_pattern = "request param details: messages=[ChatMessage"
 request_end_pattern = "任务完成，报告已保存:"

@@ -6,7 +6,6 @@ from .types import State
 from src.utils.logger import logger
 from src.utils.statistics import global_statistics
 
-
 # -------------------------
 # 全局实例与节点定义
 # -------------------------
@@ -76,6 +75,7 @@ async def researcher_xxqg_node(state: State, config: RunnableConfig) -> Command:
     _check_agents_initialized()
     return await sub_agent_manager.execute_xxqg_researcher(state, config)
 
+
 async def researcher_web_node(state: State, config: RunnableConfig) -> Command:
     """研究Agent节点处理函数"""
     _check_agents_initialized()
@@ -93,6 +93,7 @@ async def perception_node(state: State, config: RunnableConfig) -> Command:
     _check_agents_initialized()
     return await sub_agent_manager.execute_perception(state, config)
 
+
 async def outline_node(state: State, config: RunnableConfig) -> Command:
     """大纲生成节点处理函数"""
     _check_agents_initialized()
@@ -103,4 +104,3 @@ async def outline_node_factstruct(state: State, config: RunnableConfig) -> Comma
     """factstruct大纲生成节点处理函数"""
     _check_agents_initialized()
     return await sub_agent_manager.execute_outline_factstruct(state, config)
-

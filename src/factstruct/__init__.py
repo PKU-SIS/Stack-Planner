@@ -24,7 +24,12 @@ from .integration import (
     dict_to_memory,
     visualize_outline_with_citations,
 )
-from .cite_verify import filter_content_by_relevant_docs,mark_content_with_support,repair_unknown_citations
+from .cite_verify import (
+    filter_content_by_relevant_docs,
+    mark_content_with_support,
+    repair_unknown_citations,
+)
+
 __all__ = [
     "OutlineNode",
     "FactStructDocument",

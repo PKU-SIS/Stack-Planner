@@ -19,11 +19,25 @@ from src.utils.logger import logger
 from src.utils.statistics import global_statistics
 from src.utils.reference_utils import global_reference_map
 from ..graph.types import State
-from src.factstruct import FactStructLLMWrapper, BatchMAB, OutlineNode, create_search_engine_adapter,Embedder,outline_node_to_dict,memory_to_dict,Memory,outline_node_to_markdown
+from src.factstruct import (
+    FactStructLLMWrapper,
+    BatchMAB,
+    OutlineNode,
+    create_search_engine_adapter,
+    Embedder,
+    outline_node_to_dict,
+    memory_to_dict,
+    Memory,
+    outline_node_to_markdown,
+)
 import re
-from src.memory import MemoryStack, MemoryStackEntry#加一个 Memory 吧，要不 decision 做不了
+from src.memory import (
+    MemoryStack,
+    MemoryStackEntry,
+)  # 加一个 Memory 吧，要不 decision 做不了
 
 from src.utils.statistics import global_statistics, timed_step
+
 
 # -------------------------
 # 核心枚举定义
@@ -31,10 +45,9 @@ from src.utils.statistics import global_statistics, timed_step
 class OutlineTool(Enum):
     INITIALIZATION = "initialization"
     EXPANDATION = "expandation"
-    REDUCTION = "compression"       
-    UPDATE = "update"            
+    REDUCTION = "compression"
+    UPDATE = "update"
     FINISH = "finish"
-
 
 
 # -------------------------
@@ -45,14 +58,14 @@ class OutlineTool(Enum):
 class OutlineToolDecision:
     """Outline Agent 的决策结果"""
 
-    tool: OutlineTool                 # 使用的工具
-    reasoning: str                    # 为什么这么做
+    tool: OutlineTool  # 使用的工具
+    reasoning: str  # 为什么这么做
     params: Optional[Dict[str, Any]]  # 工具参数（各 tool 自己解释）
 
 
-
-#不知道为啥要两个，那就实现成两个吧
+# 不知道为啥要两个，那就实现成两个吧
 from pydantic import BaseModel
+
 
 class OutlineToolDecision_Base(BaseModel):
     tool: Literal[
@@ -66,51 +79,47 @@ class OutlineToolDecision_Base(BaseModel):
     params: Optional[Dict[str, Any]] = None
 
 
-
-
-
 class OutlineAgent:
     """
     大纲Agent核心类，负责大纲决策与任务编排
     """
-    
+
     def __init__(
         self,
         initial_query: str,
         central_guidance: str | None = None,
         state: State | None = None,
-        llm=None,#这三个就是 None
+        llm=None,  # 这三个就是 None
         search_engine=None,
         embedder=None,
-        max_trys: int = 5,#这两个是默认参数
+        max_trys: int = 5,  # 这两个是默认参数
     ):
-        #处理上游输入信息
+        # 处理上游输入信息
         # --- Core task signal ---
         self.initial_query = initial_query
         # --- High-level planning signals ---
         self.central_guidance = central_guidance
         logger.info(f"self.central_guidance是否正确存储{self.central_guidance}")
         self.replan_result = state.get("replan_result")
-        self.total_word_limit = state.get("total_word_limit",5000)
-        
-        
-        #处理当前状态，这玩意是不是应该放到 decision 里面也要啊
+        self.total_word_limit = state.get("total_word_limit", 5000)
+
+        # 处理当前状态，这玩意是不是应该放到 decision 里面也要啊
         # --- Current outline state ---
         self.factstruct_outline = state.get("factstruct_outline")
         self.factstruct_memory = state.get("factstruct_memory")
         # if self.factstruct_memory==None:#初始化一下，后面再考虑重复调用，先跑起来再说,把 init 改为调用 batchmabMemroy 封装到里面
         #     self.factstruct_memory = Memory(embedding_dim=embedder.get_embedding_dim())
-            
+
         self.outline_feedback = state.get("outline_feedback")
         self.max_trys = max_trys
 
-        
         # === Search Engine ===
-        self.search_engine = (search_engine or create_search_engine_adapter())
+        self.search_engine = search_engine or create_search_engine_adapter()
 
         # === Embedder（重资源，只初始化一次）===
-        self.embedder = (embedder or Embedder(model_name="../../Model/MiniLM/all-MiniLM-L6-v2"))
-
+        self.embedder = embedder or Embedder(
+            model_name="../../Model/MiniLM/all-MiniLM-L6-v2"
+        )
 
         # === LLM ===
         if llm is None:
@@ -118,10 +127,9 @@ class OutlineAgent:
             self.llm = get_llm_by_type(llm_type)
         else:
             self.llm = llm
-            
+
         self.llm_wrapper = FactStructLLMWrapper(self.llm)
-        
-        
+
         # --- Batch MAB（核心）---
         self.batch_mab = BatchMAB(
             llm_wrapper=self.llm_wrapper,
@@ -132,18 +140,17 @@ class OutlineAgent:
             batch_size=2,
         )
 
-        #记录做了啥的 Memroy stack,memory stack只能给中枢智能体用，感觉不太行。
+        # 记录做了啥的 Memroy stack,memory stack只能给中枢智能体用，感觉不太行。
         self.memory_stack = []
-        
+
         # --- Tool handlers ---
         self.tool_handlers = {
             "initialization": self._tool_initialization,
             "expandation": self._tool_expansion,
-            "compression": self._tool_compress,   # 新增
-            "update": self._tool_update,        # 新增
+            "compression": self._tool_compress,  # 新增
+            "update": self._tool_update,  # 新增
             "finish": self._tool_finish,
         }
-
 
     async def execute(self, state: State, config: RunnableConfig) -> Command:
         """
@@ -151,19 +158,23 @@ class OutlineAgent:
         decision → tool → state update → until finish
         """
         logger.info("OutlineAgent 执行开始")
-        #万一有报错信息
+        # 万一有报错信息
         last_decision = None
         last_error = None
 
         for step in range(self.max_trys):
-            logger.info(f"OutlineAgent Step {step + 1}/{self.max_trys}")#一共迭代了多少步
+            logger.info(
+                f"OutlineAgent Step {step + 1}/{self.max_trys}"
+            )  # 一共迭代了多少步
 
             try:
                 # === 1. 决策 ===
                 decision = self.make_decision(state, config)
                 last_decision = decision
                 self.memory_stack.append(decision)
-                logger.info(f"OutlineAgent Decision: {decision.tool} | {decision.reasoning}")
+                logger.info(
+                    f"OutlineAgent Decision: {decision.tool} | {decision.reasoning}"
+                )
 
                 # === 2. 执行工具 ===
                 # command = await self.execute_tool(decision, state, config)
@@ -172,12 +183,12 @@ class OutlineAgent:
                 # === 3. 合并 state ===
                 if command and command.update:
                     state.update(command.update)
-                
+
                 # === 4. 是否完成 ===
                 if decision.tool == "finish":
                     logger.info("OutlineAgent 收到 finish 指令，退出循环")
                     break
-                
+
             except Exception as e:
                 import traceback
 
@@ -192,11 +203,10 @@ class OutlineAgent:
         factstruct_outline = state.get("factstruct_outline")
         factstruct_memory = state.get("factstruct_memory")
         report_outline = state.get("report_outline")
-        if not report_outline: #没有大纲的情况下要反馈
+        if not report_outline:  # 没有大纲的情况下要反馈
             report_outline = "大纲未完成生成（OutlineAgent 未正常 finish）"
             state["report_outline"] = report_outline
-  
-            
+
         return Command(
             update={
                 "factstruct_outline": state.get("factstruct_outline"),
@@ -204,10 +214,6 @@ class OutlineAgent:
                 "report_outline": state.get("report_outline"),
             }
         )
-
-
-
-
 
     def make_decision(
         self, state: State, config: RunnableConfig, retry_count: int = 0
@@ -225,20 +231,19 @@ class OutlineAgent:
         max_retries = 3
         logger.info("Outline Agent进行决策...")
         start_time = datetime.now()
-        #整理当前状态
+        # 整理当前状态
         decision_state = self._compute_decision_state(state)
-        
+
         # 构建决策prompt
-        messages = self._build_decision_prompt(state,config,decision_state)
+        messages = self._build_decision_prompt(state, config, decision_state)
         # messages = self._build_decision_prompt(state, config)
         logger.debug(f"outline 决策prompt: {messages}")
-
 
         try:
             llm = get_llm_by_type(
                 AGENT_LLM_MAP.get("outline", "default")
             ).with_structured_output(
-                OutlineToolDecision_Base,   # ✅ 给 LLM 用的 schema
+                OutlineToolDecision_Base,  # ✅ 给 LLM 用的 schema
                 method="json_mode",
             )
 
@@ -283,7 +288,6 @@ class OutlineAgent:
                 params=None,
             )
 
-
     def _compute_decision_state(self, state: State) -> Dict[str, Any]:
         outline = state.get("factstruct_outline")
         outline_exists = outline is not None
@@ -301,7 +305,6 @@ class OutlineAgent:
             leaf_count = 0
             max_depth = 0
             total_planned_words = 0
-
 
         total_word_limit = state.get("total_word_limit", 5000)
 
@@ -326,16 +329,18 @@ class OutlineAgent:
                 large_nodes.append(node)
         small_ratio = len(small_nodes) / leaf_count if leaf_count > 0 else 0
 
-
         # ---------- 文档分布分析 ----------
         # 找出所有缺文献的叶子节点
         uncovered_leaf_nodes = [
-            node for node in leaf_nodes
+            node
+            for node in leaf_nodes
             if not getattr(self.factstruct_memory, "node_to_docs", {}).get(node.id)
         ]
         logger.info(f"uncovered_leaf_nodes{uncovered_leaf_nodes}")
         # 叶子节点覆盖率（可选，用于简单统计）
-        leaf_coverage_ratio = 1 - len(uncovered_leaf_nodes) / len(leaf_nodes) if leaf_nodes else 0
+        leaf_coverage_ratio = (
+            1 - len(uncovered_leaf_nodes) / len(leaf_nodes) if leaf_nodes else 0
+        )
         logger.info(f"leaf_coverage_ratio{leaf_coverage_ratio}")
 
         # ----------- 决策建议，根据 prompt 规则生成下一步建议 -------------
@@ -351,7 +356,7 @@ class OutlineAgent:
                 "说明部分章节负担过重，需要进一步拆分细化章节结构，"
                 "应调用 expandation 工具。"
             )
-            
+
         elif small_ratio >= 1 / 3:
             suggestion = (
                 f"当前 outline_exists={outline_exists}，leaf_node_count={leaf_count}，"
@@ -361,7 +366,7 @@ class OutlineAgent:
                 "并通过可能的叶子节点列表来控制压缩强度。"
             )
 
-        elif leaf_coverage_ratio<0.9:
+        elif leaf_coverage_ratio < 0.9:
             # 有具体未覆盖的节点 → update
             missing_ids = [node.id for node in uncovered_leaf_nodes]
             suggestion = (
@@ -391,12 +396,10 @@ class OutlineAgent:
             "estimated_words": total_planned_words,  # ← 真实字数
             "total_word_limit": total_word_limit,
             "uncovered_leaf_nodes": uncovered_leaf_nodes,  # 具体哪些节点没覆盖
-            "leaf_coverage_ratio": leaf_coverage_ratio,    # 简单统计，可供参考
+            "leaf_coverage_ratio": leaf_coverage_ratio,  # 简单统计，可供参考
             "has_expandation_history": has_expandation,
             "next_step_suggestion": suggestion,
         }
-
-
 
     def _build_decision_prompt(
         self,
@@ -408,32 +411,32 @@ class OutlineAgent:
         构建 Outline Agent 的决策 prompt
         """
 
-        history_decision = [
-            f"工具：{e.tool.value if hasattr(e.tool, 'value') else e.tool} | 推理：{e.reasoning} | 参数：{None if isinstance(e.params, list) and len(e.params) == 0 else e.params}"
-            for e in self.memory_stack
-        ] if self.memory_stack else None
+        history_decision = (
+            [
+                f"工具：{e.tool.value if hasattr(e.tool, 'value') else e.tool} | 推理：{e.reasoning} | 参数：{None if isinstance(e.params, list) and len(e.params) == 0 else e.params}"
+                for e in self.memory_stack
+            ]
+            if self.memory_stack
+            else None
+        )
 
         logger.info(f"history_decision记录{history_decision}")
-        
-        #改一下大纲的格式吧
-        factstruct_outline=state.get("factstruct_outline",None)
+
+        # 改一下大纲的格式吧
+        factstruct_outline = state.get("factstruct_outline", None)
         if factstruct_outline:
-            outline_response = factstruct_outline.to_text_tree(
-                include_word_limit=True
-            )
+            outline_response = factstruct_outline.to_text_tree(include_word_limit=True)
             logger.info(f"是否可以做成功格式转化outline_response{outline_response}")
         else:
-            outline_response=None
+            outline_response = None
         context = {
             # 必须项
             "user_query": state.get("initial_query"),
-
             # 可选项（prompt 里有 if 判断）
             "central_guidance": self.central_guidance,
-            "decision_state": decision_state,#这个是直接传给了 Prompt
-            
+            "decision_state": decision_state,  # 这个是直接传给了 Prompt
             "factstruct_outline": outline_response,
-            "total_word_limit": state.get("total_word_limit",5000),
+            "total_word_limit": state.get("total_word_limit", 5000),
             "outline_feedback": state.get("outline_feedback"),
             "history_decision": history_decision,
         }
@@ -442,13 +445,11 @@ class OutlineAgent:
         context = {**context, **config}
         logger.info(f"Context:\n{context}")
 
-
         return apply_prompt_template(
-            "outline_decision",   # ✅ 对应 src/prompts/outline_decision.md
+            "outline_decision",  # ✅ 对应 src/prompts/outline_decision.md
             state,
             extra_context=context,
         )
-
 
     def execute_tool(
         self,
@@ -466,7 +467,7 @@ class OutlineAgent:
         if not handler:
             error_msg = f"未知 outline tool: {tool_name}"
             logger.error(error_msg)
-            #这个地方要不要这么跳，还不一定，还需要再看一看
+            # 这个地方要不要这么跳，还不一定，还需要再看一看
             return Command(
                 update={
                     "messages": [
@@ -480,17 +481,13 @@ class OutlineAgent:
                 goto="central_agent",
             )
 
-
-        logger.info(
-            f"Outline Agent 执行工具: {tool_name}, params={decision.params}"
-        )
+        logger.info(f"Outline Agent 执行工具: {tool_name}, params={decision.params}")
 
         return handler(
             decision=decision,
             state=state,
             config=config,
         )
-
 
     def _tool_initialization(
         self,
@@ -504,18 +501,18 @@ class OutlineAgent:
         logger.info("Outline Tool: initialization")
 
         initial_query = state["initial_query"]
-        central_guidance = self.central_guidance#state.get("central_guidance")
+        central_guidance = self.central_guidance  # state.get("central_guidance")
         # replan_result = state.get("replan_result",None)
-        replan_result=None
+        replan_result = None
         factstruct_outline = state.get("factstruct_outline")
         # initial_docs = state.get("initial_docs") #暂时不要
         initial_docs = state.get("data_collections", None)
+        # observation_text = state.get("observation", None)
         # initial_docs = None
-        
-        
-        #提取decision当中的参数
+
+        # 提取decision当中的参数
         params = decision.params or {}
-        instruction=params.get("instruction",None)
+        instruction = params.get("instruction", None)
 
         # 已有 outline，不应再次初始化
         if factstruct_outline is not None:
@@ -527,7 +524,7 @@ class OutlineAgent:
             )
 
         try:
-            outline_root, memory,initial_docs= self.batch_mab.run_initialization(
+            outline_root, memory, initial_docs = self.batch_mab.run_initialization(
                 query=initial_query,
                 central_guidance=central_guidance,
                 replan_result=replan_result,
@@ -536,7 +533,7 @@ class OutlineAgent:
                 config=config,
             )
 
-            #字数规划
+            # 字数规划
             total_word_limit = state.get("total_word_limit", 5000)
             if total_word_limit > 0:
                 logger.info(f"检测到字数限制 {total_word_limit}，执行字数规划...")
@@ -556,13 +553,12 @@ class OutlineAgent:
             )
         except Exception as e:
             import traceback
+
             logger.error("Outline initialization failed")
             logger.error(traceback.format_exc())
 
             return Command(
-                update={
-                    "outline_feedback": f"Outline initialization failed: {str(e)}"
-                }
+                update={"outline_feedback": f"Outline initialization failed: {str(e)}"}
             )
 
     def _tool_expansion(
@@ -576,12 +572,11 @@ class OutlineAgent:
         """
         logger.info(f"Outline Tool: expansion | reasoning={decision.reasoning}")
 
-
         outline_root = state.get("factstruct_outline")
         memory = state.get("factstruct_memory")
         logger.info(f"用于写代码的case outline_root{outline_root}")
         logger.info(f"用于写代码的case memory{memory}")
-        #错误排查，防止没初始化
+        # 错误排查，防止没初始化
         if outline_root is None or memory is None:
             logger.warning("Expansion skipped: outline or memory missing")
             return Command(
@@ -590,15 +585,19 @@ class OutlineAgent:
                 }
             )
 
-
-
-        #提取 decision 参数
+        # 提取 decision 参数
         params = decision.params or {}
-        max_iterations = params.get("max_iterations",state.get("factstruct_max_iterations", 4),)
-        batch_size = params.get("batch_size",state.get("factstruct_batch_size", 2),)
-        logger.info(f"Expansion params resolved: max_iterations={max_iterations}, batch_size={batch_size}")
-        
-        
+        max_iterations = params.get(
+            "max_iterations",
+            state.get("factstruct_max_iterations", 4),
+        )
+        batch_size = params.get(
+            "batch_size",
+            state.get("factstruct_batch_size", 2),
+        )
+        logger.info(
+            f"Expansion params resolved: max_iterations={max_iterations}, batch_size={batch_size}"
+        )
 
         try:
             # === 调用算法层 ===
@@ -613,8 +612,8 @@ class OutlineAgent:
             logger.info(
                 f"Outline expanded: {len(outline_root.get_all_nodes())} nodes total"
             )
-            
-            #字数规划
+
+            # 字数规划
             total_word_limit = state.get("total_word_limit", 5000)
             if total_word_limit > 0:
                 logger.info(f"检测到字数限制 {total_word_limit}，执行字数规划...")
@@ -623,8 +622,11 @@ class OutlineAgent:
                 )
                 # outline_response = outline_root.to_text_tree(
 
-            #最后返回
-            logger.info(f"FactStruct Stage 1 完成: "f"{len(outline_root.get_all_nodes())} 个节点")
+            # 最后返回
+            logger.info(
+                f"FactStruct Stage 1 完成: "
+                f"{len(outline_root.get_all_nodes())} 个节点"
+            )
 
             return Command(
                 update={
@@ -636,16 +638,13 @@ class OutlineAgent:
 
         except Exception as e:
             import traceback
+
             logger.error("Outline expansion failed")
             logger.error(traceback.format_exc())
 
             return Command(
-                update={
-                    "outline_feedback": f"Outline expansion failed: {str(e)}"
-                }
+                update={"outline_feedback": f"Outline expansion failed: {str(e)}"}
             )
-
-
 
     def _tool_compress(
         self,
@@ -675,12 +674,12 @@ class OutlineAgent:
         merge_candidates = params.get("merge_candidates", [])
         # max_merges = params.get("max_merges", 1)
         # target_leaf_count = params.get("target_leaf_count",2)
-        
+
         merge_candidates_raw = merge_candidates
         resolved = []
 
         if not merge_candidates_raw:
-            merge_candidates=resolved
+            merge_candidates = resolved
 
         for item in merge_candidates_raw:
             # 已经是 OutlineNode
@@ -696,7 +695,7 @@ class OutlineAgent:
             else:
                 logger.warning(f"Merge candidate id '{node_id}' not found in outline")
 
-        merge_candidates=resolved
+        merge_candidates = resolved
 
         logger.info(
             "Compress params resolved: "
@@ -705,7 +704,6 @@ class OutlineAgent:
             # f"target_leaf_count={target_leaf_count}"
         )
 
-        
         try:
             # 调用 batch_mab 压缩算法（后续实现）
             outline_root, memory = self.batch_mab.run_compression(
@@ -720,9 +718,13 @@ class OutlineAgent:
             # 字数规划（可选）
             total_word_limit = state.get("total_word_limit", 5000)
             if total_word_limit > 0:
-                outline_root = self.execute_word_planning(outline_root, total_word_limit)
+                outline_root = self.execute_word_planning(
+                    outline_root, total_word_limit
+                )
 
-            logger.info(f"Outline compressed: {len(outline_root.get_all_nodes())} nodes total")
+            logger.info(
+                f"Outline compressed: {len(outline_root.get_all_nodes())} nodes total"
+            )
 
             return Command(
                 update={
@@ -734,15 +736,13 @@ class OutlineAgent:
 
         except Exception as e:
             import traceback
+
             logger.error("Outline compression failed")
             logger.error(traceback.format_exc())
             return Command(
-                update={
-                    "outline_feedback": f"Outline compression failed: {str(e)}"
-                }
+                update={"outline_feedback": f"Outline compression failed: {str(e)}"}
             )
 
-    
     def _tool_update(
         self,
         decision: OutlineToolDecision,
@@ -771,8 +771,8 @@ class OutlineAgent:
         # batch_size = params.get("batch_size", state.get("factstruct_batch_size", 2))
         # uncovered_leaf_nodes = params.get("uncovered_leaf_nodes", [])  # 需要微调的叶子节点
         # logger.info(f"Update params resolved: max_iterations={max_iterations}, batch_size={batch_size}, uncovered_leaf_nodes={uncovered_leaf_nodes}")
-        update_candidates=params.get("update_candidates","无指令")
-        
+        update_candidates = params.get("update_candidates", "无指令")
+
         # ================================
         # 0️⃣ 解析 update_candidates
         # ================================
@@ -792,16 +792,14 @@ class OutlineAgent:
             if node:
                 resolved.append(node)
             else:
-                logger.warning(
-                    f"Update candidate id '{node_id}' not found in outline"
-                )
+                logger.warning(f"Update candidate id '{node_id}' not found in outline")
 
         update_candidates = resolved
 
-        logger.info(f"Update params resolved: update_candidates={len(update_candidates)}" )
+        logger.info(
+            f"Update params resolved: update_candidates={len(update_candidates)}"
+        )
 
-        
-        
         try:
             # 调用 batch_mab 更新算法（后续实现）
             outline_root, memory = self.batch_mab.run_update(
@@ -814,9 +812,13 @@ class OutlineAgent:
             # 字数规划（可选）
             total_word_limit = state.get("total_word_limit", 5000)
             if total_word_limit > 0:
-                outline_root = self.execute_word_planning(outline_root, total_word_limit)
+                outline_root = self.execute_word_planning(
+                    outline_root, total_word_limit
+                )
 
-            logger.info(f"Outline updated: {len(outline_root.get_all_nodes())} nodes total")
+            logger.info(
+                f"Outline updated: {len(outline_root.get_all_nodes())} nodes total"
+            )
 
             return Command(
                 update={
@@ -828,20 +830,12 @@ class OutlineAgent:
 
         except Exception as e:
             import traceback
+
             logger.error("Outline update failed")
             logger.error(traceback.format_exc())
             return Command(
-                update={
-                    "outline_feedback": f"Outline update failed: {str(e)}"
-                }
+                update={"outline_feedback": f"Outline update failed: {str(e)}"}
             )
-
-
-
-
-
-
-
 
     def _tool_finish(
         self,
@@ -856,7 +850,7 @@ class OutlineAgent:
 
         outline_root = state.get("factstruct_outline")
         memory = state.get("factstruct_memory")
-        total_word_limit = state.get("total_word_limit",5000)
+        total_word_limit = state.get("total_word_limit", 5000)
 
         # === 兜底处理 ===
         if outline_root is None:
@@ -883,9 +877,7 @@ class OutlineAgent:
 
         # === 构建给 LLM 的总结 prompt（可选，但很有价值）===
         try:
-            llm = get_llm_by_type(
-                AGENT_LLM_MAP.get("outline", "default")
-            )
+            llm = get_llm_by_type(AGENT_LLM_MAP.get("outline", "default"))
 
             context_lines = []
 
@@ -898,7 +890,9 @@ class OutlineAgent:
             if total_word_limit:
                 context_lines.append(f"目标总字数限制：{total_word_limit}")
 
-            context_block = "\n".join(context_lines) if context_lines else "（无额外上下文）"
+            context_block = (
+                "\n".join(context_lines) if context_lines else "（无额外上下文）"
+            )
 
             summary_prompt = [
                 {
@@ -934,20 +928,15 @@ class OutlineAgent:
 
         except Exception as e:
             logger.warning(f"Finish summary LLM failed: {e}")
-            finish_summary = (
-                "大纲结构已生成，节点层级完整，可进入内容生成阶段。"
-            )
+            finish_summary = "大纲结构已生成，节点层级完整，可进入内容生成阶段。"
 
         # === 写回 state（这是 CentralAgent 最关心的部分）===
         return Command(
             update={
-                "report_outline": outline_text,              # ✅ 给 reporter / central
-                "outline_feedback": finish_summary,           # ✅ 决策级总结
+                "report_outline": outline_text,  # ✅ 给 reporter / central
+                "outline_feedback": finish_summary,  # ✅ 决策级总结
             }
         )
-
-
-
 
     @timed_step("execute_word_planning")
     def execute_word_planning(

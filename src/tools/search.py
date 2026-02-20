@@ -10,6 +10,7 @@ from src.config import SearchEngine, SELECTED_SEARCH_ENGINE
 from src.tools.tavily_search.tavily_search_results_with_images import (
     TavilySearchResultsWithImages,
 )
+
 # from src.tools.bocha_search import BoChaSearchResults
 from src.tools.bocha_search.bocha_search_sp import BoChaSearchResults
 from src.tools.decorators import create_logged_tool
@@ -17,7 +18,7 @@ from src.utils.reference_utils import global_reference_map
 
 # Create logged versions of the search tools
 LoggedTavilySearch = create_logged_tool(TavilySearchResultsWithImages)
-LoggedBoChaSearch = create_logged_tool(BoChaSearchResults)#要加的BoCha
+LoggedBoChaSearch = create_logged_tool(BoChaSearchResults)  # 要加的BoCha
 LoggedDuckDuckGoSearch = create_logged_tool(DuckDuckGoSearchResults)
 LoggedBraveSearch = create_logged_tool(BraveSearch)
 LoggedArxivSearch = create_logged_tool(ArxivQueryRun)
@@ -33,9 +34,9 @@ def get_web_search_tool(max_search_results: int):
             include_images=True,
             include_image_descriptions=True,
         )
-    #给BoCha加一个Web搜索、对应的接口实现还没做
+    # 给BoCha加一个Web搜索、对应的接口实现还没做
     elif SELECTED_SEARCH_ENGINE == SearchEngine.BOCHA.value:
-        return LoggedBoChaSearch(name="web_search",max_results=max_search_results)
+        return LoggedBoChaSearch(name="web_search", max_results=max_search_results)
     elif SELECTED_SEARCH_ENGINE == SearchEngine.DUCKDUCKGO.value:
         return LoggedDuckDuckGoSearch(name="web_search", max_results=max_search_results)
     elif SELECTED_SEARCH_ENGINE == SearchEngine.BRAVE_SEARCH.value:
@@ -63,10 +64,8 @@ if __name__ == "__main__":
     # results = LoggedDuckDuckGoSearch(
     #     name="web_search", max_results=3, output_format="list"
     # )
-    #到时候看看输出的东西对不对
-    tool = LoggedBoChaSearch(
-        name="web_search", max_results=3, output_format="list"
-    )
+    # 到时候看看输出的东西对不对
+    tool = LoggedBoChaSearch(name="web_search", max_results=3, output_format="list")
 
     print("工具名称:", tool.name)
     print("工具描述:", tool.description)

@@ -2,28 +2,31 @@ import json
 import requests
 import aiohttp
 
+
 class WebSearcher:
     def __init__(self, api_key: str, url: str):
         self.api_key = api_key
         self.url = url
 
     def search(self, query: str, count: int = 10) -> list[dict]:
-        
+
         url = self.url
 
-        payload = json.dumps({
-            "query": query,
-            "freshness": "noLimit",
-            "summary": True,
-            "count": count,
-            "page": 1,
-        })
+        payload = json.dumps(
+            {
+                "query": query,
+                "freshness": "noLimit",
+                "summary": True,
+                "count": count,
+                "page": 1,
+            }
+        )
 
         headers = {
-            'Authorization': f'Bearer {self.api_key}',
-            'Content-Type': 'application/json'
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
         }
-        print("headers",headers)
+        print("headers", headers)
         response = requests.request("POST", url, headers=headers, data=payload)
         response.raise_for_status()
 
@@ -31,11 +34,11 @@ class WebSearcher:
 
         return [
             {
-                "link": result["url"], 
-                "title": result.get("name"), 
-                "snippet": result.get("summary")
+                "link": result["url"],
+                "title": result.get("name"),
+                "snippet": result.get("summary"),
             }
-            for result in results.get("webpage", [])[:count]  
+            for result in results.get("webpage", [])[:count]
         ]
 
     async def search_async(self, query: str, count: int = 10) -> list[dict]:
@@ -47,8 +50,8 @@ class WebSearcher:
             "page": 1,
         }
         headers = {
-            'Authorization': f'Bearer {self.api_key}',
-            'Content-Type': 'application/json'
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
         }
         async with aiohttp.ClientSession() as session:
             async with session.post(self.url, headers=headers, json=payload) as resp:
@@ -57,11 +60,11 @@ class WebSearcher:
                 results = self._parse_response(data)
                 return [
                     {
-                        "link": result["url"], 
-                        "title": result.get("name"), 
-                        "snippet": result.get("summary")
+                        "link": result["url"],
+                        "title": result.get("name"),
+                        "snippet": result.get("summary"),
                     }
-                    for result in results.get("webpage", [])[:count]  
+                    for result in results.get("webpage", [])[:count]
                 ]
 
     @staticmethod
@@ -81,7 +84,8 @@ class WebSearcher:
                             "summary": item.get("summary", ""),
                             "siteName": item.get("siteName", ""),
                             "siteIcon": item.get("siteIcon", ""),
-                            "datePublished": item.get("datePublished", "") or item.get("dateLastCrawled", ""),
+                            "datePublished": item.get("datePublished", "")
+                            or item.get("dateLastCrawled", ""),
                         }
                         for item in webPages["value"]
                     ]

@@ -9,7 +9,7 @@ from langchain.tools import BaseTool
 
 from src.utils.reference_utils import global_reference_map
 
-from src.tools.bocha_search.web_search_en import WebSearcherEnglish   # 👈 正确
+from src.tools.bocha_search.web_search_en import WebSearcherEnglish  # 👈 正确
 
 from src.utils.logger import logger
 
@@ -52,8 +52,7 @@ class BoChaSearchResults(BaseTool):
         """Use the BoCha search tool synchronously."""
         logger.debug(f"config:{config}")
         session_id = config["configurable"]["thread_id"]
-        
-        
+
         try:
             searcher = self._get_searcher()
             raw_results = searcher.search(query, self.max_results)
@@ -65,21 +64,26 @@ class BoChaSearchResults(BaseTool):
         cleaned_results = self._clean_results(raw_results)
 
         logger.info(f"BoCha搜索完成: 找到 {len(cleaned_results)} 个结果")
-        
-        
+
         if session_id is None:
             logger.error("session_id is None in config")
             return cleaned_results, {"raw_results": raw_results}
-        ids = global_reference_map.add_references(session_id,cleaned_results)
+        ids = global_reference_map.add_references(session_id, cleaned_results)
         if not ids or not cleaned_results:
             logger.warning("ids or cleaned_results is empty, returning empty result")
             return cleaned_results, {"raw_results": raw_results}
 
         # 先把cleaned_results按ids升序排序
         # ["【文档x】name\ncontent\n",...]
-        ids , cleaned_results = zip(*sorted(zip(ids, cleaned_results)))
-        rename_docs = [{"url":"【链接" + str(doc_id) + "】" + doc.get("url", ""), "content": doc.get("content", "")} for doc_id, doc in zip(ids, cleaned_results)]    
-            
+        ids, cleaned_results = zip(*sorted(zip(ids, cleaned_results)))
+        rename_docs = [
+            {
+                "url": "【链接" + str(doc_id) + "】" + doc.get("url", ""),
+                "content": doc.get("content", ""),
+            }
+            for doc_id, doc in zip(ids, cleaned_results)
+        ]
+
         return rename_docs, {"raw_results": raw_results}
 
     # ---------------------- Async Search ----------------------
@@ -91,10 +95,10 @@ class BoChaSearchResults(BaseTool):
         run_manager: Optional[AsyncCallbackManagerForToolRun] = None,
     ) -> Tuple[Union[List[Dict], str], Dict]:
         """Use the BoCha search tool asynchronously."""
-        
+
         logger.debug(f"config:{config}")
-        session_id = config["configurable"]["thread_id"]        
-        
+        session_id = config["configurable"]["thread_id"]
+
         try:
             searcher = self._get_searcher()
             raw_results = await searcher.search_async(query, self.max_results)
@@ -110,16 +114,22 @@ class BoChaSearchResults(BaseTool):
         if session_id is None:
             logger.error("session_id is None in config")
             return cleaned_results, {"raw_results": raw_results}
-        ids = global_reference_map.add_references(session_id,cleaned_results)
+        ids = global_reference_map.add_references(session_id, cleaned_results)
         if not ids or not cleaned_results:
             logger.warning("ids or cleaned_results is empty, returning empty result")
             return cleaned_results, {"raw_results": raw_results}
 
         # 先把cleaned_results按ids升序排序
         # ["【文档x】name\ncontent\n",...]
-        ids , cleaned_results = zip(*sorted(zip(ids, cleaned_results)))
-        rename_docs = [{"url":"【链接" + str(doc_id) + "】" + doc.get("url", ""), "content": doc.get("content", "")} for doc_id, doc in zip(ids, cleaned_results)]    
-            
+        ids, cleaned_results = zip(*sorted(zip(ids, cleaned_results)))
+        rename_docs = [
+            {
+                "url": "【链接" + str(doc_id) + "】" + doc.get("url", ""),
+                "content": doc.get("content", ""),
+            }
+            for doc_id, doc in zip(ids, cleaned_results)
+        ]
+
         return rename_docs, {"raw_results": raw_results}
 
     # ---------------------- Result Processing ----------------------

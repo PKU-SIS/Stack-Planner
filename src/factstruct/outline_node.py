@@ -7,6 +7,7 @@ OutlineNode: 大纲树节点数据结构
 from dataclasses import dataclass, field
 from typing import Optional, List, ClassVar
 
+
 @dataclass
 class OutlineNode:
     """
@@ -20,6 +21,7 @@ class OutlineNode:
         pull_count: 该节点被"拉动"（检索）的次数（用于 MAB 算法）
         reward_history: 该节点获得的奖励历史记录
     """
+
     _next_node_id: ClassVar[int] = 0
     id: str
     title: str
@@ -35,17 +37,17 @@ class OutlineNode:
         for child in self.children:
             if child.parent != self:
                 child.parent = self
-    #增加hash 代码
+
+    # 增加hash 代码
     def __hash__(self):
         return hash(self.id)
 
-    #新增编码代码
+    # 新增编码代码
     @classmethod
     def allocate_id(cls) -> str:
         node_id = cls._next_node_id
         cls._next_node_id += 1
         return f"node_{node_id}"
-
 
     def is_leaf(self) -> bool:
         """判断是否为叶子节点"""
@@ -99,12 +101,11 @@ class OutlineNode:
             return 0.0
         return sum(self.reward_history) / len(self.reward_history)
 
-
     def to_text_tree(
-        self, 
-        indent: int = 0, 
+        self,
+        indent: int = 0,
         include_word_limit: bool = False,
-        include_mab_state: bool = False
+        include_mab_state: bool = False,
     ) -> str:
         """
         将节点树转换为文本格式（用于 LLM 提示）
@@ -123,12 +124,16 @@ class OutlineNode:
             parts.append(f"[{self.word_limit}字]")
 
         if include_mab_state:
-            parts.append(f"(pull_count={self.pull_count}, reward_history={self.reward_history})")
+            parts.append(
+                f"(pull_count={self.pull_count}, reward_history={self.reward_history})"
+            )
 
         result = f"{prefix}- " + " ".join(parts) + "\n"
 
         for child in self.children:
-            result += child.to_text_tree(indent + 1, include_word_limit, include_mab_state)
+            result += child.to_text_tree(
+                indent + 1, include_word_limit, include_mab_state
+            )
 
         return result
 
