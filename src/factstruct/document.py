@@ -54,6 +54,7 @@ class FactStructDocument:
             "timestamp": self.timestamp.isoformat(),
             "url": self.url,
             "title": self.title,
+            "observation": self.observation,
         }
 
     @classmethod
@@ -67,4 +68,5 @@ class FactStructDocument:
             timestamp=datetime.fromisoformat(data["timestamp"]),
             url=data.get("url"),
             title=data.get("title"),
+            observation=data.get("observation"),
         )

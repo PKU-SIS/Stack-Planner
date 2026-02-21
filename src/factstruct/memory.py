@@ -63,6 +63,7 @@ class Memory:
         new_count = 0
         for doc in docs:
             if doc.id not in self.documents:
+                # logger.info(f"store_docs里面的doc{doc.observation}")
                 self.documents[doc.id] = doc
                 self.doc_ids_list.append(doc.id)
                 new_count += 1

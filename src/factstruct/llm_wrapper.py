@@ -90,7 +90,8 @@ class FactStructLLMWrapper:
             parts.append("## 大纲智能体指导\n")
             parts.append(instruction + "\n")
 
-        parts.append("""
+        parts.append(
+            """
         ## 生成要求（非常重要）
 
         1. **这是初始化阶段，只生成最小可用的大纲骨架**
@@ -114,7 +115,8 @@ class FactStructLLMWrapper:
             }
         ]
         }
-        """)
+        """
+        )
 
         prompt = "\n".join(parts)
         logger.info(f"大纲初始输入 prompt:{prompt}")

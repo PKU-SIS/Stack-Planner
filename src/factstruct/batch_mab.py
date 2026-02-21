@@ -408,6 +408,7 @@ class BatchMAB:
         self.memory.map_node_to_docs(outline_root.id, initial_docs_with_embed)
         logger.info(f"self.memory.node_to_docs{self.memory.node_to_docs}")
 
+        # logger.info(f"batch mab initialzation memory.documents{self.memory.documents}")
         return outline_root, self.memory, initial_docs
 
     def run_expansion(
@@ -464,14 +465,15 @@ class BatchMAB:
 
             # 并行执行检索（按照 proposal 要求实现真正的并行检索）
             logger.info(f"Performing parallel search for {len(queries)} queries...")
-            new_docs_list = self._parallel_search(queries, k=3, config=config)
+            new_docs_list = self._parallel_search(queries, k=6, config=config)
             # 这个地方要加一下。总结更新
             new_docs_list = self.batch_generate_observations(new_docs_list)
-            initial_docs = self.batch_generate_observations(new_docs_list)
+            # new_docs_list = self.batch_generate_observations(new_docs_list)
             # 预处理新文档（嵌入）
             new_docs_list_with_embed = []
             for docs in new_docs_list:
                 docs_with_embed = self.embedder.embed_docs(docs)
+                # logger.info(f"docs_with_embe{docs_with_embed}")
                 new_docs_list_with_embed.append(docs_with_embed)
 
             # 4. 批量计算并记录"奖励"
@@ -481,7 +483,7 @@ class BatchMAB:
             for i, node in enumerate(selected_nodes):
                 t += 1  # 增加全局迭代计数器
                 new_docs = new_docs_list_with_embed[i]
-
+                logger.info(f"new_docs observation{new_docs[0].observation}")
                 # 计算奖励
                 # 生成节点嵌入：使用节点标题和父节点上下文
                 node_text = node.title
@@ -515,6 +517,7 @@ class BatchMAB:
                 node_doc_pairs_for_refine.append((node, new_docs))
 
                 # 5. 更新记忆库
+                # logger.info(f"5. 更新记忆库new_docs observation{new_docs[0].observation}")
                 self.memory.store_docs(new_docs)
                 self.memory.map_node_to_docs(node.id, new_docs)
 
@@ -618,6 +621,7 @@ class BatchMAB:
         except Exception as e:
             logger.warning(f"无法可视化大纲树: {e}")
 
+        # logger.info(f"batch mab expansion memory.documents{self.memory.documents}")
         return outline_root, self.memory
 
     def run_compression(
@@ -876,7 +880,7 @@ class BatchMAB:
 
         logger.info(f"Performing parallel search for {len(queries)} queries...")
         logger.info(f"Performing parallel search for {queries}")
-        new_docs_list = self._parallel_search(queries, k=3, config=config)
+        new_docs_list = self._parallel_search(queries, k=6, config=config)
         # 这个地方要加一下。总结更新
         new_docs_list = self.batch_generate_observations(new_docs_list)
 

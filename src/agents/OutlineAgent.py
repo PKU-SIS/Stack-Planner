@@ -158,6 +158,8 @@ class OutlineAgent:
         decision → tool → state update → until finish
         """
         logger.info("OutlineAgent 执行开始")
+        # if self.factstruct_memory:
+        #     logger.info(f"self.factstruct_memory.documents{self.factstruct_memory.documents}")
         # 万一有报错信息
         last_decision = None
         last_error = None
@@ -532,6 +534,7 @@ class OutlineAgent:
                 initial_docs=initial_docs,
                 config=config,
             )
+            # logger.info(f"initialization memory.documents{memory.documents}")
 
             # 字数规划
             total_word_limit = state.get("total_word_limit", 5000)
@@ -621,6 +624,7 @@ class OutlineAgent:
                     outline_root, total_word_limit
                 )
                 # outline_response = outline_root.to_text_tree(
+            # logger.info(f"expansion memory.documents{memory.documents}")
 
             # 最后返回
             logger.info(
