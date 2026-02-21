@@ -21,6 +21,15 @@ from src.prompts.central_decision import Decision, DelegateParams
 
 from ..graph.types import State
 
+# ZX 新增 在文件顶部的导入部分添加
+from src.utils.outline_parser import (
+    parse_outline,
+    get_next_chapter_index,
+    is_all_chapters_researched,
+    get_chapter_task_description
+)
+
+
 # from .SubAgentConfig import get_sub_agents_by_global_type
 
 
@@ -51,6 +60,7 @@ class CentralDecision:
         default_factory=dict
     )  # 动作参数=>delegate有参数
     instruction: Optional[str] = None  # 动作对应的指令说明
+    state_updates: Optional[Dict[str, Any]] = None  # ZX 🆕 新增：状态更新
 
 
 class CentralAgent:
@@ -297,6 +307,62 @@ class CentralAgent:
             instruction = response.instruction or self.action_instructions.get(
                 action, ""
             )
+
+            # ZX 🆕 新增：段落循环研究逻辑
+            # 检查是否需要进入段落研究模式
+            outline = state.get("report_outline", "")
+            current_chapter_index = state.get("current_chapter_index", 0)
+
+            # 初始化 state_updates
+            state_updates = None
+
+            # 判断条件：
+            # 1. 大纲已确认（outline 不为空）
+            # 2. 当前决策是 DELEGATE researcher（LLM 决定要研究）
+            # 3. 还有未研究的段落
+            if outline and action == CentralAgentAction.DELEGATE:
+                agent_type = params.get("agent_type", "") if isinstance(params, dict) else getattr(params, "agent_type",
+                                                                                                   "")
+
+                if agent_type == "researcher":
+                    chapters = parse_outline(outline)
+
+                    # 检查是否还有未研究的段落
+                    if current_chapter_index < len(chapters):
+                        # 获取当前段落信息
+                        current_chapter = chapters[current_chapter_index]
+                        task_description = get_chapter_task_description(current_chapter, current_chapter_index)
+
+                        logger.info(f"📂 段落研究进度: {current_chapter_index + 1}/{len(chapters)}")
+                        logger.info(f"📝 当前段落: 第{current_chapter['number']}章 - {current_chapter['title']}")
+
+                        # 更新 params 中的任务描述
+                        if isinstance(params, dict):
+                            params["task_description"] = task_description
+                        else:
+                            params.task_description = task_description
+
+                        # 🆕 设置 state_updates（将通过 Command 传递）
+                        state_updates = {"current_chapter_index": current_chapter_index + 1}
+
+                        # 修改 reasoning
+                        reasoning = f"按段落研究模式：研究第 {current_chapter_index + 1}/{len(chapters)} 章: {current_chapter['title']}"
+
+                    else:
+                        # 所有段落都已研究完毕，应该调用 Reporter
+                        logger.info("✅ 所有段落研究完成，准备调用 Reporter")
+                        action = CentralAgentAction.DELEGATE
+                        reasoning = "所有段落的研究已完成，开始生成报告"
+                        if isinstance(params, dict):
+                            params["agent_type"] = "reporter"
+                            params["task_description"] = "根据所有段落的研究结果，生成完整报告"
+                        else:
+                            params.agent_type = "reporter"
+                            params.task_description = "根据所有段落的研究结果，生成完整报告"
+
+                        # 重置索引，以防后续需要重新研究
+                        state_updates = {"current_chapter_index": 0}
+
             if state.get("locale") == None:
                 locale = response.locale or "zh-CN"
                 # 将 locale 添加到 state
@@ -317,6 +383,7 @@ class CentralAgent:
                 reasoning=reasoning,
                 params=params,
                 instruction=instruction,
+                state_updates=state_updates,  # ZX 🆕 传递状态更新
             )
 
         except Exception as e:
@@ -436,7 +503,29 @@ class CentralAgent:
                 goto="central_agent",
             )
 
-        return handler(decision, state, config)
+        # return handler(decision, state, config)
+
+        # ZX 🆕 新增
+        # 执行 handler
+        result = handler(decision, state, config)
+
+        # 🆕 如果决策中有状态更新，创建新的 Command 对象
+        if hasattr(decision, 'state_updates') and decision.state_updates:
+            # 合并状态更新
+            merged_update = {}
+            if result.update:
+                merged_update.update(result.update)  # 先复制原有的 update
+            merged_update.update(decision.state_updates)  # 再让 state_updates 覆盖
+
+            logger.debug(f"状态更新已合并: {decision.state_updates}")
+
+            # 🔧 创建新的 Command 对象（因为 Command 是 frozen 的）
+            return Command(
+                update=merged_update,
+                goto=result.goto,
+            )
+
+        return result
 
     def _handle_think(
         self, decision: CentralDecision, state: State, config: RunnableConfig
@@ -648,10 +737,15 @@ class CentralAgent:
         self, decision: CentralDecision, state: State, config: RunnableConfig
     ) -> Command:
         """处理委派动作，调度子Agent执行专项任务"""
-        agent_type = decision.params.agent_type
-        task_description = decision.params.task_description
-        # agent_type = decision.agent_type
-        # task_description = decision.task_description or "未指定任务"
+        # 检查 decision.params 的类型
+        if isinstance(decision.params, dict):
+            # 如果是字典，直接访问
+            agent_type = decision.params.get("agent_type")
+            task_description = decision.params.get("task_description", "")
+        else:
+            # 如果是 DelegateParams 对象，使用属性访问
+            agent_type = decision.params.agent_type
+            task_description = decision.params.task_description or ""
 
         # 验证子Agent类型有效性
         if not agent_type or agent_type not in self.available_sub_agents:
@@ -718,6 +812,11 @@ class CentralAgent:
                     delegation_context[key] = value
 
         logger.info(f"central_delegate: 委派{agent_type}执行: {task_description}")
+
+        # ZX 🆕 新增
+        # 🆕 获取当前段落索引，确保状态传递
+        current_chapter_index = state.get("current_chapter_index", 0)
+
         return Command(
             update={
                 "messages": [
@@ -732,62 +831,94 @@ class CentralAgent:
                     [entry.to_dict() for entry in self.memory_stack.get_all()]
                 ),
                 "locale": state.get("locale"),
+                "current_chapter_index": current_chapter_index,  # 🆕 确保状态传递
                 **({"hitl_feedback": ""} if clear_hitl_feedback else {}),
             },
             goto=agent_type,
         )
 
     def _handle_finish(
-        self, decision: CentralDecision, state: State, config: RunnableConfig
+            self, decision: CentralDecision, state: State, config: RunnableConfig
     ) -> Command:
         """处理完成动作，生成最终报告并结束任务"""
         logger.info("中枢Agent完成任务...")
 
         final_report = state.get("final_report", None)
+
+        # 🆕 新增：检查用户是否已明确确认
+        hitl_feedback = state.get("hitl_feedback", "")
+        user_confirmed = (
+                hitl_feedback and
+                str(hitl_feedback).upper().startswith(("[SKIP]", "[END]", "[FINISH]"))
+        )
+
+        # 🆕 关键修改：优先检查用户确认状态
         if not final_report:
-            logger.info("未找到最终报告，委派Reporter Agent生成报告...")
+            if user_confirmed:
+                # 用户已确认但没有报告 -> 记录警告并强制结束
+                logger.warning("用户已确认完成，但未找到最终报告。强制结束任务以避免死循环。")
+                logger.warning(f"hitl_feedback: {hitl_feedback}")
 
-            # 记录委派动作到记忆栈
-            memory_entry = MemoryStackEntry(
-                timestamp=datetime.now().isoformat(),
-                action="delegate",
-                agent_type="reporter",
-                content="未生成最终报告，委派Reporter Agent生成最终报告",
-            )
-            self.memory_stack.push(memory_entry)
+                # 强制结束，避免死循环
+                return Command(
+                    update={
+                        "messages": [
+                            AIMessage(
+                                content="用户已确认完成，任务结束",
+                                name="central_agent",
+                            )
+                        ],
+                        "current_node": "central_agent",
+                    },
+                    goto="zip_data",  # 直接结束
+                )
+            else:
+                # 用户未确认且没有报告 -> 正常委派 reporter
+                logger.info("未找到最终报告，委派Reporter Agent生成报告...")
 
-            # 构建Reporter执行上下文
-            delegation_context = {
-                "task_description": "根据所有收集到的信息生成完整的最终报告",
-                "agent_type": "reporter",
-                "memory_context": self.memory_stack.get_summary(
-                    include_full_history=True
-                ),
-                "original_query": state.get("user_query", ""),
-                "report_type": "final_report",
-                "execution_history": [
-                    entry.to_dict() for entry in self.memory_stack.get_all()
-                ],
-            }
+                # 记录委派动作到记忆栈
+                memory_entry = MemoryStackEntry(
+                    timestamp=datetime.now().isoformat(),
+                    action="delegate",
+                    agent_type="reporter",
+                    content="未生成最终报告，委派Reporter Agent生成最终报告",
+                )
+                self.memory_stack.push(memory_entry)
 
-            logger.info("central_delegate_reporter: 委派Reporter Agent生成最终报告")
-            return Command(
-                update={
-                    "messages": [
-                        AIMessage(
-                            content="委派Reporter Agent生成最终报告",
-                            name="central_delegate_reporter",
-                        )
-                    ],
-                    "delegation_context": delegation_context,
-                    "current_node": "central_agent",
-                    "memory_stack": json.dumps(
-                        [entry.to_dict() for entry in self.memory_stack.get_all()]
+                # 构建Reporter执行上下文
+                delegation_context = {
+                    "task_description": "根据所有收集到的信息生成完整的最终报告",
+                    "agent_type": "reporter",
+                    "memory_context": self.memory_stack.get_summary(
+                        include_full_history=True
                     ),
-                    "pending_finish": True,  # 标记等待报告完成后再finish
-                },
-                goto="reporter",
-            )
+                    "original_query": state.get("user_query", ""),
+                    "report_type": "final_report",
+                    "execution_history": [
+                        entry.to_dict() for entry in self.memory_stack.get_all()
+                    ],
+                }
+
+                logger.info("central_delegate_reporter: 委派Reporter Agent生成最终报告")
+                return Command(
+                    update={
+                        "messages": [
+                            AIMessage(
+                                content="委派Reporter Agent生成最终报告",
+                                name="central_delegate_reporter",
+                            )
+                        ],
+                        "delegation_context": delegation_context,
+                        "current_node": "central_agent",
+                        "memory_stack": json.dumps(
+                            [entry.to_dict() for entry in self.memory_stack.get_all()]
+                        ),
+                        "pending_finish": True,  # 标记等待报告完成后再finish
+                    },
+                    goto="reporter",
+                )
+
+        # 有报告，正常结束流程
         logger.info(f"final_report: {final_report}")
 
         # 构建执行摘要（包含完整记忆栈历史）

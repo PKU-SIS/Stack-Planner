@@ -30,6 +30,7 @@ from ..config import SELECTED_SEARCH_ENGINE, SearchEngine
 from src.utils.statistics import global_statistics, timed_step
 import re
 
+from typing import Dict, List
 
 # -------------------------
 # 子Agent管理模块
@@ -102,16 +103,18 @@ class SubAgentManager:
             )
 
         # 记录到中枢Agent记忆栈
+        # ZX 修改 关键：content 必须包含"第X章"字样，以便 Reporter 提取
         memory_entry = MemoryStackEntry(
             timestamp=datetime.now().isoformat(),
             action="delegate",
             agent_type="researcher",
-            content=f"研究任务: {task_description}",
+            content=task_description,  # 直接使用任务描述（已包含"第X章"）
             result={
                 "observations": result_observations,
-                # "data_collections": result_data_collections,
+                "data_collections": result_data_collections,  # 🆕 建议保留
             },
         )
+
         self.central_agent.memory_stack.push(memory_entry)
 
         logger.info("研究任务完成，返回中枢Agent")
@@ -535,15 +538,35 @@ class SubAgentManager:
             "locale": state.get("locale", "zh-CN"),
         }
 
+
+        # ZX 🆕 新增 从 Memory Stack 获取章节研究数据
+        import re
+        memory_stack = self.central_agent.memory_stack
+        chapter_results = {}
+        for entry in memory_stack.get_all():
+            if entry.action == "delegate" and entry.agent_type == "researcher":
+                content = entry.content
+                chapter_num = re.search(r'第\s*(\d+)\s*章', content)
+                if chapter_num:
+                    chapter_num = chapter_num.group(1)
+                    # 🔧 修复：检查 entry.result 是否为 None
+                    if entry.result is not None:
+                        chapter_results[chapter_num] = entry.result.get("observations", [])
+                    else:
+                        logger.warning(f"章节 {chapter_num} 的研究结果为 None")
+
         context = {
             "user_query": user_query,
             "task_description": task_description,
+            "chapter_results": chapter_results,  # 🆕 添加 chapter_results
         }
+
+        logger.info(f"📊 风格切换时收集到 {len(chapter_results)} 个章节的研究数据")
 
         report = "报告生成失败: 未知错误"
         try:
             messages = apply_prompt_template(
-                "reporter_xxqg", reporter_input, extra_context=context
+                "reporter_xxqg", state, extra_context=context
             )
 
             # 添加用户约束、大纲和数据收集
@@ -746,7 +769,76 @@ class SubAgentManager:
 
         # 第一次调用：生成报告
         logger.info(f"使用风格 '{current_style}' 生成报告...")
-        final_report = self._generate_report_with_style(state, current_style)
+
+        # 新增内容 -------------------------------
+        # 从 Memory Stack 获取各段研究数据
+        memory_stack = self.central_agent.memory_stack
+        chapter_results = {}
+
+        for entry in memory_stack.get_all():
+            if entry.action == "delegate" and entry.agent_type == "researcher":
+                # 假设 entry.content 格式为 "研究第1章: 全国脱贫攻坚战重大成就概述"
+                content = entry.content
+                # 提取章节号
+                chapter_num = re.search(r'第\s*(\d+)\s*章', content)
+                if chapter_num:
+                    chapter_num = chapter_num.group(1)
+                    # 🔧 修复：检查 entry.result 是否为 None
+                    if entry.result is not None:
+                        chapter_results[chapter_num] = entry.result.get("observations", [])
+                    else:
+                        logger.warning(f"章节 {chapter_num} 的研究结果为 None")
+
+        logger.info(f"📊 收集到 {len(chapter_results)} 个章节的研究数据")
+
+        # 如果没有章节研究数据，使用传统方式生成报告
+        if not chapter_results:
+            logger.warning("未找到章节研究数据，使用传统方式生成报告")
+            # 使用 _generate_report_with_style 方法生成报告
+            final_report = self._generate_report_with_style(state, current_style)
+        else:
+            # 🆕 合并各段数据并调用 LLM 生成完整报告
+            logger.info(f"📊 收集到 {len(chapter_results)} 个章节的研究数据，开始生成报告...")
+            full_report = self._merge_chapter_results(chapter_results, state)  # 🆕 传入 state
+            final_report = full_report
+
+        # ZX 新增 🆕 确保 final_report 不为空
+        if not final_report or final_report.strip() == "":
+            logger.warning("报告内容为空，生成默认报告")
+            final_report = f"# 报告生成\n\n基于用户需求生成的报告内容。\n\n## 主题\n{state.get('user_query', '')}"
+
+        # ZX 新增 🆕 添加调试日志
+        logger.info(f"📄 final_report 长度: {len(final_report) if final_report else 0}")
+        if final_report and len(final_report) > 100:
+            logger.info(f"📄 final_report 前200字符: {final_report[:200]}")
+
+        # 在 apply_prompt_template 时传入 chapter_results
+        reporter_input = {
+            "messages": [
+                HumanMessage(
+                    content=f"# Research Requirements\n\n## User Query\n\n{state.get('user_query', '')}"
+                )
+            ],
+            "locale": state.get("locale", "zh-CN"),
+        }
+
+        context = {
+            "user_query": state.get("user_query", ""),
+            "task_description": task_description,
+            "chapter_results": chapter_results,  # 传入 chapter_results
+        }
+
+        messages = apply_prompt_template(
+            "reporter_xxqg",
+            state,
+            extra_context=context
+        )
+
+        # 新增内容结束 -----------------------------------------
+
+        # final_report = full_report  # 使用合并后的报告
+
+
 
         # 记录到中枢Agent记忆栈
         memory_entry = MemoryStackEntry(
@@ -778,6 +870,107 @@ class SubAgentManager:
             },
             goto="central_agent",  # 返回 central_agent，由其委派给 human agent
         )
+
+    # 新增函数
+    # def _merge_chapter_results(self, chapter_results: Dict[str, List[str]]) -> str:
+    #     """
+    #     合并各段研究结果生成完整报告
+    #
+    #     Args:
+    #         chapter_results: 章节研究结果字典
+    #
+    #     Returns:
+    #         完整报告
+    #     """
+    #     # 按章节号排序
+    #     sorted_chapters = sorted(chapter_results.keys(), key=lambda x: int(x))
+    #
+    #     # 生成报告
+    #     report_parts = []
+    #     for chapter_num in sorted_chapters:
+    #         observations = chapter_results[chapter_num]
+    #         if observations:
+    #             # 将观察结果合并为一个段落
+    #             chapter_content = "\n".join(observations)
+    #             report_parts.append(f"## 第 {chapter_num} 章\n\n{chapter_content}")
+    #
+    #     return "\n\n".join(report_parts)
+
+    # ZX 🆕 完全修改
+    def _merge_chapter_results(self, chapter_results: Dict[str, List[str]], state: State = None) -> str:
+        """
+        合并各段研究结果生成完整报告
+
+        Args:
+            chapter_results: 章节研究结果字典
+            state: 当前状态（用于获取用户查询等信息）
+
+        Returns:
+            完整报告
+        """
+        if not chapter_results:
+            logger.warning("章节研究结果为空，无法生成报告")
+            return ""
+
+        # 按章节号排序
+        sorted_chapters = sorted(chapter_results.keys(), key=lambda x: int(x))
+
+        # 构建研究内容摘要
+        research_summary = []
+        for chapter_num in sorted_chapters:
+            observations = chapter_results[chapter_num]
+            if observations:
+                chapter_content = "\n".join(observations)
+                research_summary.append(f"## 第 {chapter_num} 章研究结果\n\n{chapter_content}")
+
+        research_content = "\n\n".join(research_summary)
+
+        # 🆕 调用 LLM 生成最终报告
+        try:
+            user_query = state.get("user_query", "") if state else ""
+            user_dst = state.get("user_dst", "") if state else ""
+            report_outline = state.get("report_outline", "") if state else ""
+
+            prompt = f"""# 任务：根据研究结果生成完整报告
+
+    ## 用户原始需求
+    {user_query}
+
+    ## 用户补充需求
+    {user_dst}
+
+    ## 报告大纲
+    {report_outline}
+
+    ## 各章节研究结果
+    {research_content}
+
+    ---
+
+    请根据以上信息，撰写一篇完整、连贯、高质量的报告。要求：
+    1. 严格按照大纲结构组织内容
+    2. 充分利用研究结果中的信息
+    3. 保持引用编号【x】的完整性
+    4. 语言流畅、逻辑清晰
+    """
+
+            messages = [HumanMessage(content=prompt)]
+
+            llm = get_llm_by_type(AGENT_LLM_MAP.get("reporter", "default"))
+            response = llm.invoke(messages)
+
+            final_report = response.content
+            logger.info(f"📊 报告生成成功，长度: {len(final_report)}")
+
+            return final_report
+
+        except Exception as e:
+            import traceback
+            logger.error(f"报告生成失败: {str(e)}")
+            logger.error(traceback.format_exc())
+
+            # 如果 LLM 调用失败，返回原始拼接内容
+            return research_content
 
     @timed_step("execute_sp_planner")
     def execute_sp_planner(self, state: State, config: RunnableConfig) -> Command:
@@ -1309,7 +1502,45 @@ class SubAgentManager:
                 )
             elif feedback_content.upper().startswith("[SKIP]"):
                 outline_confirmed = state.get("report_outline", "")
-                logger.info(f"大纲跳过确认，使用原始大纲: {outline_confirmed}")
+
+                # ZX 🆕 新增：检查是否已有大纲
+                if not outline_confirmed:
+                    # 如果没有大纲，需要重新生成
+                    logger.warning("用户跳过大纲确认，但系统中没有大纲，将重新生成")
+
+                    # 🆕 获取 user_dst
+                    user_dst = state.get("user_dst", "")
+
+                    try:
+                        messages = [
+                                       HumanMessage(
+                                           f"##用户原始问题\n\n{user_query}\n\n##用户补充需求\n\n{user_dst}\n\n请根据以上信息，生成一个发言稿大纲。"
+                                       )
+                                   ] + apply_prompt_template("outline", state)
+                        response = outline_llm.invoke(messages)
+                        outline_confirmed = response.content
+                        outline_confirmed = repair_json_output(outline_confirmed)
+                        if "[STYLE_ROLE]" in outline_confirmed:
+                            outline_confirmed = outline_confirmed.split("[STYLE_ROLE]")[0]
+                        logger.info(f"系统生成大纲: {outline_confirmed}")
+                    except Exception as e:
+                        logger.error(f"大纲生成失败: {str(e)}")
+                        # 如果生成失败，使用硬编码的默认大纲
+                        outline_confirmed = f"""1. 引言
+                    ◦ 背景：{user_query[:100]}...
+                    ◦ 核心观点：...
+
+                    2. 主体内容
+                    ◦ 第一部分：...
+                    ◦ 第二部分：...
+
+                    3. 结论
+                    ◦ 总结与展望
+                    """
+                        logger.warning(f"使用硬编码默认大纲: {outline_confirmed}")
+
+                else:
+                    logger.info(f"大纲跳过确认，使用原始大纲: {outline_confirmed}")
 
                 return Command(
                     update={
