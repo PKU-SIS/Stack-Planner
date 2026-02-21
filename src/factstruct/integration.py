@@ -484,19 +484,11 @@ def run_factstruct_stage2(
             report_parts.append(f"{'#' * level} {node.title}\n")
 
         if node.is_leaf():
-            # relevant_docs = memory.get_docs_by_node(node.id)
             relevant_docs = []
 
             current = node
 
             while current is not None:
-                # 如果是 root 就跳过（root 没有 parent）
-                # logger.info(f"current{current}")
-                # logger.info(f"current.parent{current.parent}")
-
-                # 先看看加上的效果如何
-                # if current.parent is None:
-                #     break
 
                 docs = memory.get_docs_by_node(current.id)
                 relevant_docs.extend(docs)
@@ -522,18 +514,6 @@ def run_factstruct_stage2(
                 # logger.debug(
                 #     f"获取到 {len(relevant_docs)} 个 Stage 1 关联文档"
                 # )
-                # relevant_docs_text = "\n\n".join(
-                #     [
-                #         f"[{doc.cite_id}] 来源: {doc.source_type}\n{doc.text[:500]}..."
-                #         for idx, doc in enumerate(relevant_docs)
-                #     ]
-                # )
-                # relevant_docs_text = "\n\n".join(
-                #     [
-                #         f"[{doc.cite_id}] 来源: {doc.source_type}\n{doc.observation}..."
-                #         for idx, doc in enumerate(relevant_docs)
-                #     ]
-                # )
                 relevant_docs_text = "\n\n".join(
                     [
                         f"[{doc.cite_id}] 来源: {doc.source_type}\n"
@@ -542,7 +522,6 @@ def run_factstruct_stage2(
                     ]
                 )
 
-                # logger.info(f"relevant_docs_text :{relevant_docs_text }")
                 logger.info(f"relevant_docs :{relevant_docs}")
             progress_context = get_progress_context(
                 path_stack, will_complete_chapters, next_chapter
