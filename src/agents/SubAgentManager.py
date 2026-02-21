@@ -36,6 +36,8 @@ from typing import Dict, Any
 import json
 from src.utils.reference_utils import global_reference_map, process_final_report
 
+from typing import Dict, List
+
 
 # -------------------------
 # 子Agent管理模块
@@ -108,16 +110,18 @@ class SubAgentManager:
             )
 
         # 记录到中枢Agent记忆栈
+        # ZX 修改 关键：content 必须包含"第X章"字样，以便 Reporter 提取
         memory_entry = MemoryStackEntry(
             timestamp=datetime.now().isoformat(),
             action="delegate",
             agent_type="researcher",
-            content=f"研究任务: {task_description}",
+            content=task_description,  # 直接使用任务描述（已包含"第X章"）
             result={
                 "observations": result_observations,
-                # "data_collections": result_data_collections,
+                "data_collections": result_data_collections,  # 🆕 建议保留
             },
         )
+
         self.central_agent.memory_stack.push(memory_entry)
 
         logger.info("研究任务完成，返回中枢Agent")
@@ -529,83 +533,83 @@ class SubAgentManager:
         # 用词可带有鲁迅的语感，如"诸君""呐喊""罢了""然而""我想"之类。
         # 保证整体风格既现代白话，又显鲁迅式锋利、冷峻、理性批判。""",
         "鲁迅": """我希望生成的文字具备鲁迅式语言风格，但精神气质必须是清醒、克制、面向行动与建设的，而非愤世嫉俗或情绪宣泄，但保持自然白话表达，可以使用少量文言。
-标题要求：文章必须包含一个标题，标题应简短有力、富隐喻或冷讽意味，可为一句或两句并列句。标题风格应与正文一致，具有鲁迅式的锋芒与余味，不得中性或平淡。标题必须使用 Markdown 一级标题格式呈现（即 # 标题），不得使用书名号、引号、括号等符号。
-重要禁止项：文中不要有"鲁迅"这个词，严禁在生成的文本中出现任何提及或引用"鲁迅"、"鲁迅先生"、"鲁迅笔下"、"他的作品"、"他的笔下的人物"等字眼的语句。文本风格应是直接的、沉浸式的鲁迅式表达，而非对鲁迅风格的引用或评论。此禁令在任何标题或正文中均适用，绝不可出现任何直接或间接的提及。
-风格应用强制要求：请确保文章的每一个自然段，乃至每一句的行文，都贯彻鲁迅式用词、句式和节奏。特别是在文章的中间部分，必须维持并强化这种尖锐、冷峻的语感。全篇保持一致的鲁迅式节奏与语气，特别在中段保持最高的语言张力与思想锋芒。
-正文开头必须紧接标题生成一个呼语（如'诸君！'），用于称呼听众。
-语言要求：
-语言应锋利而不暴戾，冷峻而不绝望；
-可讽刺现实中的迟疑、麻木与空谈，但不得否定已经发生的努力与实践成果；
-不进行无对象的咒骂，不渲染阴暗人性，不进行道德优越式指责。
-人物立场：
-叙述者不是愤怒的揭露者，而是已经在路上的实干者：
-他看见困难，也承认代价；
-他不否认曲折，但更强调“仍然要走”，世上本无路，走的人多了，便成了路；；
-他不是站在高处嘲讽，而是站在现实中判断、选择、继续前行。
-句式与节奏：
-采用短句、并列句和重复句（如"不是为了……，而是为了……"，"我们不能……再……"，"然而……"）；
-逻辑紧凑，节奏鲜明，读来有推力；
-可以用反问、讽刺、比喻、小见大，表达社会或人性的荒谬；
-可出现明显的鲁迅式呼喊与强调，如"我要说的是……"，"我们不能……"，或"人类的悲欢并不相通"式的冷峻洞察。
-情感与气质：
-不写绝望，不写崩坏，不写“无可救药”；
-允许冷静的忧虑，但结尾必须回到“继续做”“继续走”“继续承担”；
-文字有"铁屋呐喊"的张力，让读者感受到现实的紧迫与不容回避。
-目标效果：
-读来应让人感到：“这不是在喊口号，也不是在骂人，而是在提醒——事情仍要有人去做。”
-生成文字中，应多出现类似"我今日站在这里，不是为了说些空话，而是为了……"、"我们不能让那些已经站起来的人，再倒下去"这种短句反复、强调现实责任与道德选择的表达；
-用词可带有鲁迅的语感，如"诸君""呐喊""罢了""然而""我想"之类。
-保证整体风格既现代白话，又显鲁迅式锋利、冷峻、理性批判。""",
+        标题要求：文章必须包含一个标题，标题应简短有力、富隐喻或冷讽意味，可为一句或两句并列句。标题风格应与正文一致，具有鲁迅式的锋芒与余味，不得中性或平淡。标题必须使用 Markdown 一级标题格式呈现（即 # 标题），不得使用书名号、引号、括号等符号。
+        重要禁止项：文中不要有"鲁迅"这个词，严禁在生成的文本中出现任何提及或引用"鲁迅"、"鲁迅先生"、"鲁迅笔下"、"他的作品"、"他的笔下的人物"等字眼的语句。文本风格应是直接的、沉浸式的鲁迅式表达，而非对鲁迅风格的引用或评论。此禁令在任何标题或正文中均适用，绝不可出现任何直接或间接的提及。
+        风格应用强制要求：请确保文章的每一个自然段，乃至每一句的行文，都贯彻鲁迅式用词、句式和节奏。特别是在文章的中间部分，必须维持并强化这种尖锐、冷峻的语感。全篇保持一致的鲁迅式节奏与语气，特别在中段保持最高的语言张力与思想锋芒。
+        正文开头必须紧接标题生成一个呼语（如'诸君！'），用于称呼听众。
+        语言要求：
+        语言应锋利而不暴戾，冷峻而不绝望；
+        可讽刺现实中的迟疑、麻木与空谈，但不得否定已经发生的努力与实践成果；
+        不进行无对象的咒骂，不渲染阴暗人性，不进行道德优越式指责。
+        人物立场：
+        叙述者不是愤怒的揭露者，而是已经在路上的实干者：
+        他看见困难，也承认代价；
+        他不否认曲折，但更强调“仍然要走”，世上本无路，走的人多了，便成了路；；
+        他不是站在高处嘲讽，而是站在现实中判断、选择、继续前行。
+        句式与节奏：
+        采用短句、并列句和重复句（如"不是为了……，而是为了……"，"我们不能……再……"，"然而……"）；
+        逻辑紧凑，节奏鲜明，读来有推力；
+        可以用反问、讽刺、比喻、小见大，表达社会或人性的荒谬；
+        可出现明显的鲁迅式呼喊与强调，如"我要说的是……"，"我们不能……"，或"人类的悲欢并不相通"式的冷峻洞察。
+        情感与气质：
+        不写绝望，不写崩坏，不写“无可救药”；
+        允许冷静的忧虑，但结尾必须回到“继续做”“继续走”“继续承担”；
+        文字有"铁屋呐喊"的张力，让读者感受到现实的紧迫与不容回避。
+        目标效果：
+        读来应让人感到：“这不是在喊口号，也不是在骂人，而是在提醒——事情仍要有人去做。”
+        生成文字中，应多出现类似"我今日站在这里，不是为了说些空话，而是为了……"、"我们不能让那些已经站起来的人，再倒下去"这种短句反复、强调现实责任与道德选择的表达；
+        用词可带有鲁迅的语感，如"诸君""呐喊""罢了""然而""我想"之类。
+        保证整体风格既现代白话，又显鲁迅式锋利、冷峻、理性批判。""",
         "赵树理": """
-我希望你写一篇具有赵树理式风格的文字。
+        我希望你写一篇具有赵树理式风格的文字。
 
-标题要求求如下：
-- 必须生成一个标题，标题放在开头，独立一行。
-- 标题必须使用 Markdown 一级标题格式呈现（即 # 标题），不得使用书名号、引号、括号等符号。
-- 标题应带有乡土气息和讽刺意味，像村里人说的俏皮话或民间俗语，可用双关、反讽或生活化比喻。
-- 标题不宜过长，最好一句话或短语，如《谁家的锅糊了》《这买卖不亏》《要不是老张那张嘴》。
-- 标题与正文的风格要统一，读来就能听出"赵树理式说书味"。
-- 正文开头必须紧接标题生成一个呼语（如'同志们''各位朋友！'等），用于称呼听众。
-  
-风格要求如下：
-- 语言质朴、俏皮、有讽刺意味，带浓厚乡土气息。
-- 用词自然，不做作，可用"咱们""你要问我说""他那一伙""这话得好好想想"等日常口语。
-- 句式短促通俗，可用民间比喻、对话穿插叙述。
-- 整体有"说书式"的节奏感，语气平和、有观察力，体现民间智慧。
-- 文字可带幽默与讽喻，但要冷静、克制。
-- 内容上要讲一个具体的人或事，不空谈道理。
-- 每一段都要有推进，不在同一句式上来回打转，避免机械重复。
-- 每一段可有轻微转折或反思，像一个清醒的乡村叙述者慢慢讲理。
-- 叙述者口吻要像村里一个明白人，既有点打趣，又不失公道。
-- 可适当出现人物间的对话，像"老李说……""我就笑他：你这不是自找的吗？"这种自然插话，增强活气。
-- 全篇最好像是"说理带故事"，故事里有人情味，理里带一点反讽的劲。
-- 结尾要自然收束，像"话说到这儿也就明白了"那种收口，不要突兀或反复强调。
-""",
+        标题要求求如下：
+        - 必须生成一个标题，标题放在开头，独立一行。
+        - 标题必须使用 Markdown 一级标题格式呈现（即 # 标题），不得使用书名号、引号、括号等符号。
+        - 标题应带有乡土气息和讽刺意味，像村里人说的俏皮话或民间俗语，可用双关、反讽或生活化比喻。
+        - 标题不宜过长，最好一句话或短语，如《谁家的锅糊了》《这买卖不亏》《要不是老张那张嘴》。
+        - 标题与正文的风格要统一，读来就能听出"赵树理式说书味"。
+        - 正文开头必须紧接标题生成一个呼语（如'同志们''各位朋友！'等），用于称呼听众。
+        
+        风格要求如下：
+        - 语言质朴、俏皮、有讽刺意味，带浓厚乡土气息。
+        - 用词自然，不做作，可用"咱们""你要问我说""他那一伙""这话得好好想想"等日常口语。
+        - 句式短促通俗，可用民间比喻、对话穿插叙述。
+        - 整体有"说书式"的节奏感，语气平和、有观察力，体现民间智慧。
+        - 文字可带幽默与讽喻，但要冷静、克制。
+        - 内容上要讲一个具体的人或事，不空谈道理。
+        - 每一段都要有推进，不在同一句式上来回打转，避免机械重复。
+        - 每一段可有轻微转折或反思，像一个清醒的乡村叙述者慢慢讲理。
+        - 叙述者口吻要像村里一个明白人，既有点打趣，又不失公道。
+        - 可适当出现人物间的对话，像"老李说……""我就笑他：你这不是自找的吗？"这种自然插话，增强活气。
+        - 全篇最好像是"说理带故事"，故事里有人情味，理里带一点反讽的劲。
+        - 结尾要自然收束，像"话说到这儿也就明白了"那种收口，不要突兀或反复强调。
+        """,
         "侠客岛": """
-我希望这篇文字具有"侠客岛式"风格。
+        我希望这篇文字具有"侠客岛式"风格。
 
-标题要求:必须生成一个标题，标题单独成行，置于开头。标题不宜空洞或平铺，应让人"一看就像媒体评论标题"，既有理性，也有锋芒。标题与正文风格必须统一，不得割裂。标题必须使用 Markdown 一级标题格式呈现（即 # 标题），不得使用书名号、引号、括号等符号。
+        标题要求:必须生成一个标题，标题单独成行，置于开头。标题不宜空洞或平铺，应让人"一看就像媒体评论标题"，既有理性，也有锋芒。标题与正文风格必须统一，不得割裂。标题必须使用 Markdown 一级标题格式呈现（即 # 标题），不得使用书名号、引号、括号等符号。
 
-语言上，应当稳健、凝练、带有理性克制的批评与分析气质；文风应兼具媒体的客观与评论的锋锐，体现出"冷静叙事 + 犀利观点"的融合。
+        语言上，应当稳健、凝练、带有理性克制的批评与分析气质；文风应兼具媒体的客观与评论的锋锐，体现出"冷静叙事 + 犀利观点"的融合。
 
-务必保持我在提示词中指定的叙述者身份，不得擅自替换为"侠客岛""岛叔""评论员"等其他主体。
+        务必保持我在提示词中指定的叙述者身份，不得擅自替换为"侠客岛""岛叔""评论员"等其他主体。
 
-用词应体现，具备权威媒体评论的庄重感，同时不失亲切；避免空洞口号和套话，多用现实感、新闻语体、分析性句式。
+        用词应体现，具备权威媒体评论的庄重感，同时不失亲切；避免空洞口号和套话，多用现实感、新闻语体、分析性句式。
 
-语气上，应平实理智，不浮夸、不喊口号。可适度带有讽刺或反问，但要有分寸感，始终保持理性、冷静、逻辑清晰。
+        语气上，应平实理智，不浮夸、不喊口号。可适度带有讽刺或反问，但要有分寸感，始终保持理性、冷静、逻辑清晰。
 
-正文开头必须紧接标题生成一个呼语（如'同志们'等），用于称呼听众
+        正文开头必须紧接标题生成一个呼语（如'同志们'等），用于称呼听众
 
-文风要求：
+        文风要求：
 
-句式以短句和中长句结合，节奏稳健、有呼吸感；  
-描写注重事实、逻辑递进与背景铺陈，观点要自然生成于叙述之中；  
-语气要克制而有力，结尾多以总结或警醒收束，形成自然的闭合感。
+        句式以短句和中长句结合，节奏稳健、有呼吸感；  
+        描写注重事实、逻辑递进与背景铺陈，观点要自然生成于叙述之中；  
+        语气要克制而有力，结尾多以总结或警醒收束，形成自然的闭合感。
 
-气质上要体现"有理有据、有温度、有锋芒"的评论者姿态，既有大局观，又有民间温度，传达出媒体理性与现实关怀并存的特质。
+        气质上要体现"有理有据、有温度、有锋芒"的评论者姿态，既有大局观，又有民间温度，传达出媒体理性与现实关怀并存的特质。
 
-注意避免机械复述与句式雷同，应当在逻辑上自洽、在节奏上有层次感，结尾要自然收束而非突兀收尾。
-""",
+        注意避免机械复述与句式雷同，应当在逻辑上自洽、在节奏上有层次感，结尾要自然收束而非突兀收尾。
+        """,
     }
 
     def _generate_report_with_style(self, state: State, style_role: str) -> str:
@@ -628,15 +632,37 @@ class SubAgentManager:
             "locale": state.get("locale", "zh-CN"),
         }
 
+        # ZX 🆕 新增 从 Memory Stack 获取章节研究数据
+        import re
+
+        memory_stack = self.central_agent.memory_stack
+        chapter_results = {}
+        for entry in memory_stack.get_all():
+            if entry.action == "delegate" and entry.agent_type == "researcher":
+                content = entry.content
+                chapter_num = re.search(r"第\s*(\d+)\s*章", content)
+                if chapter_num:
+                    chapter_num = chapter_num.group(1)
+                    # 🔧 修复：检查 entry.result 是否为 None
+                    if entry.result is not None:
+                        chapter_results[chapter_num] = entry.result.get(
+                            "observations", []
+                        )
+                    else:
+                        logger.warning(f"章节 {chapter_num} 的研究结果为 None")
+
         context = {
             "user_query": user_query,
             "task_description": task_description,
+            "chapter_results": chapter_results,  # 🆕 添加 chapter_results
         }
+
+        logger.info(f"📊 风格切换时收集到 {len(chapter_results)} 个章节的研究数据")
 
         report = "报告生成失败: 未知错误"
         try:
             messages = apply_prompt_template(
-                "reporter_xxqg", reporter_input, extra_context=context
+                "reporter_xxqg", state, extra_context=context
             )
 
             # 添加用户约束、大纲和数据收集
@@ -841,6 +867,7 @@ class SubAgentManager:
         logger.info(f"使用风格 '{current_style}' 生成报告...")
         final_report = self._generate_report_with_style(state, current_style)
 
+        # 记录到中枢Agent记忆栈
         memory_entry = MemoryStackEntry(
             timestamp=datetime.now().isoformat(),
             action="delegate",
@@ -870,6 +897,112 @@ class SubAgentManager:
             },
             goto="central_agent",  # 返回 central_agent，由其委派给 human agent
         )
+
+        # 新增函数
+        # def _merge_chapter_results(self, chapter_results: Dict[str, List[str]]) -> str:
+        #     """
+        #     合并各段研究结果生成完整报告
+        #
+        #     Args:
+        #         chapter_results: 章节研究结果字典
+        #
+        #     Returns:
+        #         完整报告
+        #     """
+        #     # 按章节号排序
+        #     sorted_chapters = sorted(chapter_results.keys(), key=lambda x: int(x))
+        #
+        #     # 生成报告
+        #     report_parts = []
+        #     for chapter_num in sorted_chapters:
+        #         observations = chapter_results[chapter_num]
+        #         if observations:
+        #             # 将观察结果合并为一个段落
+        #             chapter_content = "\n".join(observations)
+        #             report_parts.append(f"## 第 {chapter_num} 章\n\n{chapter_content}")
+        #
+        #     return "\n\n".join(report_parts)
+
+        # ZX 🆕 完全修改
+        def _merge_chapter_results(
+            self, chapter_results: Dict[str, List[str]], state: State = None
+        ) -> str:
+            """
+            合并各段研究结果生成完整报告
+
+            Args:
+                chapter_results: 章节研究结果字典
+                state: 当前状态（用于获取用户查询等信息）
+
+            Returns:
+                完整报告
+            """
+            if not chapter_results:
+                logger.warning("章节研究结果为空，无法生成报告")
+                return ""
+
+            # 按章节号排序
+            sorted_chapters = sorted(chapter_results.keys(), key=lambda x: int(x))
+
+            # 构建研究内容摘要
+            research_summary = []
+            for chapter_num in sorted_chapters:
+                observations = chapter_results[chapter_num]
+                if observations:
+                    chapter_content = "\n".join(observations)
+                    research_summary.append(
+                        f"## 第 {chapter_num} 章研究结果\n\n{chapter_content}"
+                    )
+
+            research_content = "\n\n".join(research_summary)
+
+            # 🆕 调用 LLM 生成最终报告
+            try:
+                user_query = state.get("user_query", "") if state else ""
+                user_dst = state.get("user_dst", "") if state else ""
+                report_outline = state.get("report_outline", "") if state else ""
+
+                prompt = f"""# 任务：根据研究结果生成完整报告
+
+        ## 用户原始需求
+        {user_query}
+
+        ## 用户补充需求
+        {user_dst}
+
+        ## 报告大纲
+        {report_outline}
+
+        ## 各章节研究结果
+        {research_content}
+
+        ---
+
+        请根据以上信息，撰写一篇完整、连贯、高质量的报告。要求：
+        1. 严格按照大纲结构组织内容
+        2. 充分利用研究结果中的信息
+        3. 保持引用编号【x】的完整性
+        4. 语言流畅、逻辑清晰
+        """
+
+                messages = [HumanMessage(content=prompt)]
+
+                llm = get_llm_by_type(AGENT_LLM_MAP.get("reporter", "default"))
+                response = llm.invoke(messages)
+
+                final_report = response.content
+                logger.info(f"📊 报告生成成功，长度: {len(final_report)}")
+
+                return final_report
+
+            except Exception as e:
+                import traceback
+
+                logger.error(f"报告生成失败: {str(e)}")
+                logger.error(traceback.format_exc())
+
+                # 如果 LLM 调用失败，返回原始拼接内容
+                return research_content
 
     @timed_step("execute_test_reporter")
     def execute_test_reporter(self, state: State, config: RunnableConfig) -> Command:
@@ -1518,7 +1651,47 @@ class SubAgentManager:
                 )
             elif feedback_content.upper().startswith("[SKIP]"):
                 outline_confirmed = state.get("report_outline", "")
-                logger.info(f"大纲跳过确认，使用原始大纲: {outline_confirmed}")
+
+                # ZX 🆕 新增：检查是否已有大纲
+                if not outline_confirmed:
+                    # 如果没有大纲，需要重新生成
+                    logger.warning("用户跳过大纲确认，但系统中没有大纲，将重新生成")
+
+                    # 🆕 获取 user_dst
+                    user_dst = state.get("user_dst", "")
+
+                    try:
+                        messages = [
+                            HumanMessage(
+                                f"##用户原始问题\n\n{user_query}\n\n##用户补充需求\n\n{user_dst}\n\n请根据以上信息，生成一个发言稿大纲。"
+                            )
+                        ] + apply_prompt_template("outline", state)
+                        response = outline_llm.invoke(messages)
+                        outline_confirmed = response.content
+                        outline_confirmed = repair_json_output(outline_confirmed)
+                        if "[STYLE_ROLE]" in outline_confirmed:
+                            outline_confirmed = outline_confirmed.split("[STYLE_ROLE]")[
+                                0
+                            ]
+                        logger.info(f"系统生成大纲: {outline_confirmed}")
+                    except Exception as e:
+                        logger.error(f"大纲生成失败: {str(e)}")
+                        # 如果生成失败，使用硬编码的默认大纲
+                        outline_confirmed = f"""1. 引言
+                    ◦ 背景：{user_query[:100]}...
+                    ◦ 核心观点：...
+
+                    2. 主体内容
+                    ◦ 第一部分：...
+                    ◦ 第二部分：...
+
+                    3. 结论
+                    ◦ 总结与展望
+                    """
+                        logger.warning(f"使用硬编码默认大纲: {outline_confirmed}")
+
+                else:
+                    logger.info(f"大纲跳过确认，使用原始大纲: {outline_confirmed}")
 
                 return Command(
                     update={

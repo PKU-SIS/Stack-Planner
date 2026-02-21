@@ -42,3 +42,9 @@ class State(MessagesState):
 
     # ZB V1.1相关字段
     sop: str = None
+
+    # ZX 新增：段落研究进度追踪
+    current_chapter_index: int = 0  # 当前研究到哪个段落（从0开始）
+    chapter_research_status: dict = (
+        None  # 段落研究状态 {"1": "done", "2": "pending", ...}
+    )
