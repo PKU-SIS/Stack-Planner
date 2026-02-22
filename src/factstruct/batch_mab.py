@@ -817,11 +817,30 @@ class BatchMAB:
         logger.info("Running outline update")
 
         # 1️⃣ 按父节点分组（从叶子节点回溯）
+        # parent_to_children = {}
+        # for node in update_candidates:
+        #     if node.parent:
+        #         parent = node.parent
+        #         parent_to_children.setdefault(parent, []).append(node)
+        # 1️⃣ 按父节点分组（从叶子节点回溯）
         parent_to_children = {}
+
         for node in update_candidates:
             if node.parent:
                 parent = node.parent
                 parent_to_children.setdefault(parent, []).append(node)
+
+        # 2️⃣ 优先过滤掉 root
+        non_root_parents = {
+            p: children
+            for p, children in parent_to_children.items()
+            if p.id != outline_root.id
+        }
+
+        # 3️⃣ 如果存在非 root parent，就用它们
+        if non_root_parents:
+            parent_to_children = non_root_parents
+        # 否则保留 root（作为 fallback）
 
         logger.info(f"可更新父节点数量: {len(parent_to_children)}")
         logger.info("父节点列表:")
@@ -855,7 +874,8 @@ class BatchMAB:
             # ✅ update 专用 UCB
             parent_depth = parent.get_depth()  # 加个深度
             parent_doc_num = len(memory.get_docs_by_node(parent))  # 加个文档数
-            ucb_score = avg_reward + exploration + parent_depth - parent_doc_num
+            ucb_score = avg_reward + exploration + 10 * parent_depth - parent_doc_num
+            logger.info(f"parent_iter.id,ucb_score{parent_iter.id},{ucb_score}")
             ucb_scores.append((ucb_score, parent))
 
         if not ucb_scores:
@@ -863,6 +883,7 @@ class BatchMAB:
             return outline_root, memory
 
         # 3️⃣ 选择最“安全更新”的父节点
+        logger.info(f"ucb_scores{ucb_scores}")
         ucb_scores.sort(key=lambda x: x[0], reverse=True)
         parent = ucb_scores[0][1]
         children = parent_to_children.get(parent, [])

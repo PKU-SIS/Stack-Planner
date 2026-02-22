@@ -132,6 +132,11 @@ Below is the complete outline structure for the entire article:
 
 {{ progress_context }}
 
+
+## Evidence-Based Draft:
+{{draft_content}}
+
+
 **Writing Guidelines:**
 - You are writing content for the section(s) indicated in the progress context above.
 - Reference the full outline to understand your position in the overall article structure.

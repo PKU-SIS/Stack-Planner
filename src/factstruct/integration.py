@@ -23,7 +23,7 @@ from .memory import Memory
 from datetime import datetime
 from src.utils.reference_utils import global_reference_map
 from langchain_core.runnables import RunnableConfig
-
+from langchain_core.messages import HumanMessage, SystemMessage
 import re
 from collections import defaultdict
 import json
@@ -469,6 +469,131 @@ def run_factstruct_stage2(
 
         return "\n".join(context_lines)
 
+    # def generate(
+    #     node: OutlineNode,
+    #     level: int = 1,
+    #     will_complete_chapters: list = None,
+    #     next_chapter: str = None,
+    #     semantic_cls=None,
+    # ):
+    #     logger.debug(f"正在生成子章节: {node.title}（ID: {node.id}）")
+    #     path_stack[-1].append(node.title)
+    #     if level <= 6:
+    #         report_parts.append(f"{'#' * level} {node.title}\n")
+    #     if node.is_leaf():
+    #         relevant_docs = []
+    #         current = node
+    #         while current is not None:
+    #             docs = memory.get_docs_by_node(current.id)
+    #             relevant_docs.extend(docs)
+    #             current = current.parent
+    #         # 处理字数限制
+    #         word_limit = None  # 是零就不处理
+    #         logger.info(f"node{node}")
+    #         logger.info(
+    #             f"node.word_limit = {node.word_limit}, type = {type(node.word_limit)}"
+    #         )
+    #         logger.info(f"relevant_docs{relevant_docs}")
+    #         if (
+    #             isinstance(node.word_limit, int) and node.word_limit > 0
+    #         ):  # 是正整数就处理
+    #             word_limit = node.word_limit
+    #         if not relevant_docs:
+    #             logger.warning(f"节点 '{node.title}' (ID: {node.id}) 未找到关联文档")
+    #             relevant_docs_text = "（无相关资料）"
+    #         else:
+    #             # logger.debug(
+    #             #     f"获取到 {len(relevant_docs)} 个 Stage 1 关联文档"
+    #             # )
+    #             relevant_docs_text = "\n\n".join(
+    #                 [
+    #                     f"[{doc.cite_id}] 来源: {doc.source_type}\n"
+    #                     f"{(doc.observation if getattr(doc, 'observation', None) else (doc.text[:500] if doc.text else ''))}..."
+    #                     for doc in relevant_docs
+    #                 ]
+    #             )
+    #             logger.info(f"relevant_docs :{relevant_docs}")
+    #         progress_context = get_progress_context(
+    #             path_stack, will_complete_chapters, next_chapter
+    #         )
+    #         completed_content = "".join(report_parts).strip()
+    #         if not completed_content:
+    #             completed_content = "（尚未生成任何内容）"
+    #         temp_state = {
+    #             "messages": [],
+    #             "user_query": user_query,
+    #             "full_outline": full_outline,
+    #             "progress_context": progress_context,
+    #             "completed_content": completed_content,
+    #             "reference_materials": relevant_docs_text,
+    #             "locale": locale,
+    #             "word_limit": word_limit,  # 词数限制
+    #         }
+    #         try:
+    #             messages = apply_prompt_template(
+    #                 "reporter_factstruct",
+    #                 temp_state,
+    #                 extra_context={
+    #                     "user_query": user_query,
+    #                     "full_outline": full_outline,
+    #                     "progress_context": progress_context,
+    #                     "completed_content": completed_content,
+    #                     "reference_materials": relevant_docs_text,
+    #                     "locale": locale,
+    #                     "word_limit": word_limit,  # 词数限制
+    #                 },
+    #             )
+    #             logger.info(f"messages:{messages}")
+    #             response = llm.invoke(messages)
+    #             content = response.content.strip()
+    #             report_parts.append(f"{content}\n")
+    #             logger.debug(f"  生成了 {len(content)} 个字符")
+    #             # 如果没文档就不做引用检查了，后面再考虑上文的引用
+    #             if not relevant_docs:
+    #                 logger.warning(
+    #                     f"节点 '{node.title}' (ID: {node.id}) 未找到关联文档，不进行引用检查"
+    #                 )
+    #             else:
+    #                 logger.info(f"content :{content}")
+    #                 logger.info(f"relevant_docs:{relevant_docs}")
+    #                 # 这个是判断引用和句子的关系
+    #                 supported = filter_content_by_relevant_docs(
+    #                     content=content,
+    #                     relevant_docs=relevant_docs,
+    #                     semantic_cls=semantic_cls,
+    #                 )
+    #                 logger.info(f"supported :{supported}")
+    #                 # 这个是把关系应用到生成文章上
+    #                 new_content = mark_content_with_support(
+    #                     content=content, nli_results=supported
+    #                 )
+    #                 logger.info(f"new_content :{new_content}")
+    #                 # 这个是把错误引用进行处理的
+    #                 content = repair_unknown_citations(
+    #                     content=new_content,
+    #                     relevant_docs=relevant_docs,
+    #                     semantic_cls=semantic_cls,
+    #                 )
+    #                 logger.info(f"content :{content}")
+    #         except Exception as e:
+    #             logger.error(f"  生成失败: {str(e)}")
+    #     if node.children:
+    #         path_stack.append([])
+    #         for i, child in enumerate(node.children):
+    #             if i == len(node.children) - 1:
+    #                 child_will_complete = will_complete_chapters + [node.title]
+    #                 child_next_chapter = next_chapter
+    #             else:
+    #                 child_will_complete = []
+    #                 child_next_chapter = node.children[i + 1].title
+    #             generate(
+    #                 child,
+    #                 level + 1,
+    #                 child_will_complete,
+    #                 child_next_chapter,
+    #                 semantic_cls=semantic_cls,
+    #             )
+    #         path_stack.pop()
     def generate(
         node: OutlineNode,
         level: int = 1,
@@ -485,38 +610,22 @@ def run_factstruct_stage2(
 
         if node.is_leaf():
             relevant_docs = []
-
             current = node
-
             while current is not None:
-
                 docs = memory.get_docs_by_node(current.id)
                 relevant_docs.extend(docs)
-
                 current = current.parent
 
-            # 处理字数限制
-            word_limit = None  # 是零就不处理
-            logger.info(f"node{node}")
-            logger.info(
-                f"node.word_limit = {node.word_limit}, type = {type(node.word_limit)}"
-            )
-            logger.info(f"relevant_docs{relevant_docs}")
-            if (
-                isinstance(node.word_limit, int) and node.word_limit > 0
-            ):  # 是正整数就处理
-                word_limit = node.word_limit
-
+            # 进行文档凝练的自由创作
+            # 不考虑上下文连贯，不考虑大纲，不考虑 report 自己的 prompt，不考虑文本限制
+            # 处理文档
             if not relevant_docs:
                 logger.warning(f"节点 '{node.title}' (ID: {node.id}) 未找到关联文档")
                 relevant_docs_text = "（无相关资料）"
             else:
-                # logger.debug(
-                #     f"获取到 {len(relevant_docs)} 个 Stage 1 关联文档"
-                # )
                 relevant_docs_text = "\n\n".join(
                     [
-                        f"[{doc.cite_id}] 来源: {doc.source_type}\n"
+                        f"引用号:[{doc.cite_id}] 来源: {doc.title}\n"
                         f"{(doc.observation if getattr(doc, 'observation', None) else (doc.text[:500] if doc.text else ''))}..."
                         for doc in relevant_docs
                     ]
@@ -526,6 +635,48 @@ def run_factstruct_stage2(
             progress_context = get_progress_context(
                 path_stack, will_complete_chapters, next_chapter
             )
+
+            prompt = f"""
+            你是一个严谨的学术助手。
+
+            根据以下文献资料，围绕主题“{node.title}”整合所有事实信息。
+
+            要求：
+            1. 每个句子必须有文献支持
+            2. 每个陈述后必须使用数字型引用格式，如【1】【2】【3】
+            3. 引用编号必须对应下方文献资料的顺序编号
+            4. 不允许编造信息
+            5. 不做风格润色，只做事实整合
+
+            文献资料（按编号顺序排列）：
+            {relevant_docs_text}
+
+            请输出整合后的事实草稿：
+            """
+            draft_prompt = [HumanMessage(content=prompt)]
+            logger.info(f"草稿messages:{draft_prompt}")
+            draft_response = llm.invoke(draft_prompt)
+            draft_content = draft_response.content.strip()
+
+            logger.info(
+                f"草稿结果开始开始开始标志标志标志{draft_content}草稿结果结束结束结束标志标志标志"
+            )
+
+            # 处理字数限制
+            word_limit = None  # 是零就不处理
+            logger.info(f"node{node}")
+            logger.info(
+                f"node.word_limit = {node.word_limit}, type = {type(node.word_limit)}"
+            )
+            # logger.info(f"relevant_docs{relevant_docs}")
+            logger.info(
+                f"支撑文档开始开始开始标志标志标志{relevant_docs}支撑文档结束结束结束标志标志标志"
+            )
+
+            if (
+                isinstance(node.word_limit, int) and node.word_limit > 0
+            ):  # 是正整数就处理
+                word_limit = node.word_limit
 
             completed_content = "".join(report_parts).strip()
             if not completed_content:
@@ -537,7 +688,8 @@ def run_factstruct_stage2(
                 "full_outline": full_outline,
                 "progress_context": progress_context,
                 "completed_content": completed_content,
-                "reference_materials": relevant_docs_text,
+                # "reference_materials": relevant_docs_text,
+                "draft_content": draft_content,
                 "locale": locale,
                 "word_limit": word_limit,  # 词数限制
             }
@@ -551,16 +703,24 @@ def run_factstruct_stage2(
                         "full_outline": full_outline,
                         "progress_context": progress_context,
                         "completed_content": completed_content,
-                        "reference_materials": relevant_docs_text,
+                        # "reference_materials": relevant_docs_text,
+                        "draft_content": draft_content,
                         "locale": locale,
                         "word_limit": word_limit,  # 词数限制
                     },
                 )
-                logger.info(f"messages:{messages}")
+                # logger.info(f"正文messages:{messages}")
+                logger.info(
+                    f"迁移输入开始开始开始标志标志标志{messages}迁移输入结束结束结束标志标志标志"
+                )
+
                 response = llm.invoke(messages)
                 content = response.content.strip()
                 report_parts.append(f"{content}\n")
                 logger.debug(f"  生成了 {len(content)} 个字符")
+                logger.info(
+                    f"迁移输出开始开始开始标志标志标志{content}迁移输出结束结束结束标志标志标志"
+                )
 
                 # 如果没文档就不做引用检查了，后面再考虑上文的引用
                 if not relevant_docs:
