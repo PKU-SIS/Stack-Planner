@@ -1,6 +1,3 @@
-# Copyright (c) 2025 Bytedance Ltd. and/or its affiliates
-# SPDX-License-Identifier: MIT
-
 from typing import Literal
 
 # Define available LLM types
@@ -20,6 +17,7 @@ AGENT_LLM_MAP: dict[str, LLMType] = {
     "central_agent": "basic",
     "researcher_xxqg": "basic",
     "researcher_xxqg_demo": "basic",
+    "researcher_web": "basic",
     "replanner": "basic",
     "perception": "basic",
     "outline": "basic",

@@ -1,6 +1,3 @@
-# Copyright (c) 2025 Bytedance Ltd. and/or its affiliates
-# SPDX-License-Identifier: MIT
-
 import base64
 import json
 from math import log
@@ -90,7 +87,7 @@ async def chat_stream(request: ChatRequest):
     if thread_id == "__default__":
         thread_id = str(uuid4())
     return StreamingResponse(
-        _astream_workflow_generator(
+        _astream_workflow_generator_sp(
             request.model_dump()["messages"],
             thread_id,
             request.resources,
@@ -102,6 +99,7 @@ async def chat_stream(request: ChatRequest):
             request.mcp_settings,
             request.enable_background_investigation,
             request.knowledge_base_name,
+            request.graph_format,
         ),
         media_type="text/event-stream",
     )
@@ -400,6 +398,7 @@ async def _astream_workflow_generator_sp(
         "user_query": clean_user_query,
         "current_style": style_role,
         "data_collections": [],
+        "skip_perception": True,
     }
     if not auto_accepted_plan and interrupt_feedback:
         if interrupt_feedback.startswith("["):

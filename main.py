@@ -1,6 +1,3 @@
-# Copyright (c) 2025 Bytedance Ltd. and/or its affiliates
-# SPDX-License-Identifier: MIT
-
 """
 Entry point script for the DeerFlow project.
 """
@@ -132,7 +129,7 @@ if __name__ == "__main__":
         "--graph-format",
         type=str,
         default="sp",
-        choices=["sp", "xxqg", "sp_xxqg", "base"],
+        choices=["sp", "xxqg", "sp_xxqg", "base", "FactStruct", "sp_test"],
         help="Graph format to use (default: 'sp')",
     )
 

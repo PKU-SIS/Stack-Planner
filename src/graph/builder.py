@@ -1,6 +1,3 @@
-# Copyright (c) 2025 Bytedance Ltd. and/or its affiliates
-# SPDX-License-Identifier: MIT
-
 from langgraph.graph import StateGraph, START, END
 from langgraph.checkpoint.memory import MemorySaver
 from src.utils.logger import logger
@@ -220,6 +217,39 @@ def _build_graph_sp_xxqg():
     return builder
 
 
+def _build_graph_sp_test():
+    """
+    构建多Agent系统状态图，定义系统状态转移逻辑
+
+    Returns:
+        编译后的状态图对象
+    """
+    from langgraph.graph import StateGraph, START, END
+
+    builder = StateGraph(State)
+
+    # 添加center planner agent
+    builder.add_node("central_agent", central_agent_node)
+
+    # 添加sub agent
+    sub_agents = get_sub_agents_by_global_type("sp_test")
+
+    for sub_agent in sub_agents:
+        builder.add_node(sub_agent["name"], sub_agent["node"])
+
+    # 下面这些暂时没有算sub agent
+    builder.add_node("zip_data", zip_data)
+
+    # 动态SOP流程
+    builder.add_edge(START, "central_agent")
+    builder.add_edge("central_agent", "zip_data")
+
+    # 后处理部分
+    builder.add_edge("zip_data", END)
+
+    return builder
+
+
 # 生成最终的多Agent系统图
 base_graph = build_graph()
 sp_graph = build_multi_agent_graph()
@@ -237,12 +267,14 @@ def build_graph_with_memory_from_builder(builder):
 
 
 sp_xxqg_graph_builder = _build_graph_sp_xxqg()
+sp_test_graph_builder = _build_graph_sp_test()
 
 
 _GRAPH_BUILDER_CLASS_MAP = {
     "base": None,
     "sp": None,
     "xxqg": None,
+    "sp_test": sp_test_graph_builder,
     "sp_xxqg": sp_xxqg_graph_builder,
 }
 
@@ -250,6 +282,7 @@ _GRAPH_CLASS_MAP = {
     "base": {"memory": None, "no_memory": base_graph},
     "sp": {"memory": None, "no_memory": sp_graph},
     "xxqg": {"memory": None, "no_memory": xxqg_graph},
+    "sp_test": {"memory": None, "no_memory": sp_test_graph_builder.compile()},
     "sp_xxqg": {"memory": None, "no_memory": sp_xxqg_graph_builder.compile()},
 }
 
@@ -270,7 +303,7 @@ def get_graph_by_format(graph_format: str, with_memory: bool = False):
 
     graph_builder = _GRAPH_BUILDER_CLASS_MAP[graph_format]
     if with_memory:
-        if graph_format != "sp_xxqg":
+        if graph_format != "sp_xxqg" and graph_format != "sp_test":
             logger.error("Memory功能目前仅支持 sp_xxqg 图格式")
             return _GRAPH_CLASS_MAP[graph_format]["no_memory"]
         else:

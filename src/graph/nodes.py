@@ -1,6 +1,3 @@
-# Copyright (c) 2025 Bytedance Ltd. and/or its affiliates
-# SPDX-License-Identifier: MIT
-
 import json
 from src.utils.logger import logger
 import os
@@ -720,7 +717,7 @@ async def _execute_agent_step(
         )
 
     # Invoke the agent
-    default_recursion_limit = 25
+    default_recursion_limit = 100  # 25
     try:
         env_value_str = os.getenv("AGENT_RECURSION_LIMIT", str(default_recursion_limit))
         parsed_limit = int(env_value_str)
@@ -886,6 +883,20 @@ async def researcher_xxqg_node(
     return await research_agent.execute_agent_step(state)
 
 
+async def researcher_web_node(
+    state: State, config: RunnableConfig
+) -> Command[Literal["research_team"]]:
+    """Researcher node that do research"""
+    logger.info("Researcher node is researching.")
+
+    tools = [get_web_search_tool(configurable.max_search_results)]
+    logger.info(f"Researcher tools: {tools}")
+    research_agent = ResearcherAgent(
+        config=config, agent_type="researcher_web", default_tools=tools
+    )
+    return await research_agent.execute_agent_step(state)
+
+
 async def coder_node(
     state: State, config: RunnableConfig
 ) -> Command[Literal["research_team"]]:
@@ -960,15 +971,15 @@ def zip_data(state: State, config: RunnableConfig):
     }
 
     # Generate filename with current timestamp
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"./reports/report_{timestamp}.json"
+    # timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    # filename = f"./reports/report_{timestamp}.json"
 
     # Save data as JSON
-    with open(filename, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=4)
+    # with open(filename, "w", encoding="utf-8") as f:
+    #     json.dump(data, f, ensure_ascii=False, indent=4)
     session_id = config["configurable"]["thread_id"]
     global_reference_map.save_session(session_id)
     ref_map = global_reference_map.get_session_ref_map(session_id)
-    logger.debug(f"Report saved to {filename}")
-    logger.debug(f"Reference map:{ref_map}")
+    # logger.debug(f"Report saved to {filename}")
+    # logger.debug(f"Reference map:{ref_map}")
     return Command(update={"ref_map": ref_map})

@@ -180,6 +180,8 @@ If the **current action** is **Decision**, determine the next step as follows.
 }
 ```
 
+{% if need_human_interaction %}
+
 ### 🔴 CRITICAL: Human Agent Delegation Guidance
 
 Human Agent is a **sub-agent** responsible for collecting human input (form filling, outline confirmation, report feedback, etc.).
@@ -230,7 +232,7 @@ Check the `human_interaction_type` field and delegate accordingly:
   "locale": "zh-CN"
 }
 ```
-
+{% endif %}
 ---
 
 ### Decision Requirements

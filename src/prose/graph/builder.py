@@ -1,6 +1,3 @@
-# Copyright (c) 2025 Bytedance Ltd. and/or its affiliates
-# SPDX-License-Identifier: MIT
-
 import asyncio
 from src.utils.logger import logger
 from langgraph.graph import END, START, StateGraph
