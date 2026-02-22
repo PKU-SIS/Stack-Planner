@@ -1,0 +1,1 @@
+python evaluation/Test_SP/test_factstruct.py --skip_exist --infer_num 1 --output_path evaluation/deep_research_bench/data/test_data/raw_data/SP.jsonl

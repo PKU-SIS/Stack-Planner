@@ -69,13 +69,25 @@ sub_agents_sp_xxqg = [
 ]
 
 
+sub_agents_sp_test = [
+    {
+        "name": SubAgentType.OUTLINE.value,
+        "description": "Generate a structured content outline after the overall plan is finalized. This agent designs and adjusts the hierarchical structure of the report, including section titles and logical organization. It does NOT generate full text content or conduct research, and should be used only after task planning is complete.",
+        "node": outline_node,
+    },
+    {
+        "name": SubAgentType.RESEARCHER.value,
+        "description": "Information collection and research",
+        "node": researcher_web_node,  # researcher_xxqg_node, #
+    },
+    {
+        "name": SubAgentType.REPORTER.value,
+        "description": "Result organization and report generation",
+        "node": reporter_xxqg_node,
+    },
+]
+
 sub_agents_factstruct = [
-    # {
-    #     "name": SubAgentType.PLANNER.value,
-    #     # 将问题拆解成方便处理的子任务，来更好的指导任务规划
-    #     "description": "Decompose search problems into manageable subtasks to better guide research step. Don't contain any requirements about report writing in task description, this agent can only handle **search steps planning**. You MUST and Only use it at the beginning of the task.",
-    #     "node": sp_planner_node,
-    # },
     {
         "name": SubAgentType.OUTLINE.value,
         "description": "Generate or refine a structured content outline after the overall plan is finalized. This agent designs and adjusts the hierarchical structure of the report, including section titles, logical organization, and approximate word allocation. It does NOT generate full text content or conduct research, and should be used only after task planning is complete.",
@@ -106,6 +118,8 @@ def get_sub_agents_by_global_type(graph_type: str):
         return sub_agents_sp
     elif graph_type == "sp_xxqg":
         return sub_agents_sp_xxqg
+    elif graph_type == "sp_test":
+        return sub_agents_sp_test
     elif graph_type == "FactStruct":
         return sub_agents_factstruct
     else:
