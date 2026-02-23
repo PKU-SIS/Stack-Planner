@@ -4,70 +4,81 @@ import os
 
 
 def extract_all_between(text, start_marker, end_marker):
-    """
-    提取所有 start_marker 和 end_marker 之间的内容
-    """
     pattern = re.compile(
         re.escape(start_marker) + r"(.*?)" + re.escape(end_marker),
         re.DOTALL,
     )
-    return [match.strip() for match in pattern.findall(text)]
+    matches = pattern.findall(text)
+    return [m.strip() for m in matches]
+
+
+def safe_get(lst, idx):
+    if idx < len(lst):
+        return lst[idx]
+    return ""
 
 
 def parse_single_log(log_path):
     with open(log_path, "r", encoding="utf-8") as f:
         content = f.read()
 
-    # 1️⃣ 草稿输入
-    draft_inputs = extract_all_between(
+    user_queries = extract_all_between(
         content,
-        "草稿结果开始开始开始标志标志标志",
-        "草稿结果结束结束结束标志标志标志",
+        "----=====USER_QUERY_START=====----",
+        "----=====USER_QUERY_END=====----",
     )
 
-    # 2️⃣ 迁移输入（real_input）
-    real_inputs = extract_all_between(
+    outlines = extract_all_between(
         content,
-        "迁移输入开始开始开始标志标志标志",
-        "迁移输入结束结束结束标志标志标志",
+        "----=====OUTLINE_START=====----",
+        "----=====OUTLINE_END=====----",
     )
 
-    # 3️⃣ 迁移输出（model_output）
-    model_outputs = extract_all_between(
+    node_ids = extract_all_between(
         content,
-        "迁移输出开始开始开始标志标志标志",
-        "迁移输出结束结束结束标志标志标志",
+        "----=====NODE_ID_START=====----",
+        "----=====NODE_ID_END=====----",
     )
 
-    # 4️⃣ 支撑文档
-    docs_list = extract_all_between(
+    parent_node_ids = extract_all_between(
         content,
-        "支撑文档开始开始开始标志标志标志",
-        "支撑文档结束结束结束标志标志标志",
+        "----=====PARENT_NODE_ID_START=====----",
+        "----=====PARENT_NODE_ID_END=====----",
     )
 
-    print(f"\n📄 {log_path}")
-    print("draft:", len(draft_inputs))
-    print("real_input:", len(real_inputs))
-    print("output:", len(model_outputs))
-    print("docs:", len(docs_list))
-
-    sample_count = min(
-        len(draft_inputs),
-        len(real_inputs),
-        len(model_outputs),
-        len(docs_list),
+    support_docs = extract_all_between(
+        content,
+        "----=====SUPPORT_DOCS_START=====----",
+        "----=====SUPPORT_DOCS_END=====----",
     )
 
-    # dataset = []
-    # for i in range(sample_count):
-    #     dataset.append({
-    #         "source_log": os.path.basename(log_path),
-    #         "input": draft_inputs[i],
-    #         "real_input": real_inputs[i],
-    #         "output": model_outputs[i],
-    #         "doc": docs_list[i],
-    #     })
+    step1_inputs = extract_all_between(
+        content,
+        "----=====STEP1_INPUT_START=====----",
+        "----=====STEP1_INPUT_END=====----",
+    )
+
+    step1_outputs = extract_all_between(
+        content,
+        "----=====STEP1_OUTPUT_START=====----",
+        "----=====STEP1_OUTPUT_END=====----",
+    )
+
+    step2_inputs = extract_all_between(
+        content,
+        "----=====STEP2_INPUT_START=====----",
+        "----=====STEP2_INPUT_END=====----",
+    )
+
+    step2_outputs = extract_all_between(
+        content,
+        "----=====STEP2_OUTPUT_START=====----",
+        "----=====STEP2_OUTPUT_END=====----",
+    )
+
+    # 以 step1_output 数量为主
+    sample_count = len(step1_outputs)
+
     dataset = []
     base_name = os.path.splitext(os.path.basename(log_path))[0]
 
@@ -77,16 +88,24 @@ def parse_single_log(log_path):
         dataset.append(
             {
                 "id": sample_id,
-                "source_log": os.path.basename(log_path),
-                "index_in_file": i + 1,
-                "input": draft_inputs[i],
-                "real_input": real_inputs[i],
-                "output": model_outputs[i],
-                "doc": docs_list[i],
+                "user_query": safe_get(user_queries, i),
+                "outline": safe_get(outlines, i),
+                "node_id": safe_get(node_ids, i),
+                "parent_node_id": safe_get(parent_node_ids, i),
+                "support_docs": safe_get(support_docs, i),
+                "step1_input": safe_get(step1_inputs, i),
+                "step1_output": safe_get(step1_outputs, i),
+                "step2_input": safe_get(step2_inputs, i),
+                "step2_output": safe_get(step2_outputs, i),
+                # 先不解析，统一填 None
+                "step3_input": "None",
+                "step3_output": "None",
+                "step4_style": "None",
+                "step4_output": "None",
             }
         )
-    print(f"✅ 本文件提取 {len(dataset)} 条")
 
+    print(f"✅ {log_path} 提取 {len(dataset)} 条样本")
     return dataset
 
 
@@ -107,17 +126,17 @@ def parse_multiple_logs(log_paths):
 
 if __name__ == "__main__":
 
-    # 🔥 在这里填你要解析的 log 文件
     log_files = [
-        "logs/20260222115328.log",
-        # 你后面可以继续加
-        # "logs/20260222103000.log",
-        # "logs/20260222120000.log",
+        # "logs/20260222115328.log",
+        "logs/20260223000906.log",
+        "logs/20260223002342.log",
     ]
 
     dataset = parse_multiple_logs(log_files)
 
     output_path = "evaluation/Reference/datasets/parsed_dataset.json"
+
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(dataset, f, ensure_ascii=False, indent=2)
