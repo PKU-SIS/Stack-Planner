@@ -31,6 +31,8 @@ from src.tools.get_docs_info import search_docs_with_ref
 from ..graph.types import State
 from ..config import SELECTED_SEARCH_ENGINE, SearchEngine
 from src.utils.statistics import global_statistics, timed_step
+from src.utils.outline_parser import parse_outline, get_chapter_task_description
+
 import re
 from typing import Dict, Any
 import json
@@ -616,8 +618,27 @@ class SubAgentManager:
         delegation_context = state.get("delegation_context", {})
         task_description = delegation_context.get("task_description", "生成最终报告")
 
-        # 构建精简的 reporter 输入，只包含必要信息
-        # 避免传入完整 state["messages"]（包含大量 central agent 调度信息）
+        # 1. 优先从 delegation_context 获取风格
+        style_from_context = delegation_context.get("style", "")
+        if style_from_context and style_from_context != "政策研究报告":
+            style_role = style_from_context
+            logger.info(f"🎨 从 delegation_context 获取风格: {style_role}")
+
+        # 2. 使用 ROLE_CONSTRAINTS 获取风格约束
+        constraint = self.ROLE_CONSTRAINTS.get(style_role, "")
+
+        # 3. 根据风格类型设置约束
+        if constraint:
+            # 风格在 ROLE_CONSTRAINTS 中，使用预定义风格
+            logger.info(f"🎨 使用预定义风格: {style_role}")
+            logger.info(f"🎨 风格约束长度: {len(constraint)} 字符")
+            logger.info(f"🎨 风格约束预览: {constraint[:200]}...")
+        else:
+            # 风格不在 ROLE_CONSTRAINTS 中，直接使用风格文本
+            constraint = style_role
+            logger.info(f"🎨 使用自定义风格文本: {style_role[:100]}")
+
+        # 构建精简的 reporter 输入
         user_query = state.get("user_query", "")
         user_dst = state.get("user_dst", "")
         report_outline = state.get("report_outline", "用户未提供大纲")
@@ -631,8 +652,7 @@ class SubAgentManager:
             "locale": state.get("locale", "zh-CN"),
         }
 
-
-        # ZX 🆕 新增 从 Memory Stack 获取章节研究数据
+        # 从 Memory Stack 获取章节研究数据
         import re
         memory_stack = self.central_agent.memory_stack
         chapter_results = {}
@@ -642,50 +662,89 @@ class SubAgentManager:
                 chapter_num = re.search(r'第\s*(\d+)\s*章', content)
                 if chapter_num:
                     chapter_num = chapter_num.group(1)
-                    # 🔧 修复：检查 entry.result 是否为 None
                     if entry.result is not None:
                         chapter_results[chapter_num] = entry.result.get("observations", [])
                     else:
                         logger.warning(f"章节 {chapter_num} 的研究结果为 None")
 
+        # 🆕 调试日志
+        logger.info(f"📊 风格切换时收集到 {len(chapter_results)} 个章节的研究数据")
+        logger.info(f"📊 chapter_results keys: {list(chapter_results.keys())}")
+
         context = {
             "user_query": user_query,
             "task_description": task_description,
-            "chapter_results": chapter_results,  # 🆕 添加 chapter_results
+            "chapter_results": chapter_results,
         }
-
-        logger.info(f"📊 风格切换时收集到 {len(chapter_results)} 个章节的研究数据")
 
         report = "报告生成失败: 未知错误"
         try:
             messages = apply_prompt_template(
-                "reporter_xxqg", state, extra_context=context
+                "reporter_xxqg", reporter_input, extra_context=context
             )
-
-            # 添加用户约束、大纲和数据收集
-            # data_collections = state.get("data_collections", [])
-            # data_collections_str = "\n\n".join(data_collections)
-            constraint = self.ROLE_CONSTRAINTS.get(style_role, "")
 
             # 检查是否存在原始报告（风格切换场景）
             original_report = state.get("original_report", "")
             reference_hint = ""
+            style_change_hint = ""
+
             if original_report:
                 # 提取原始报告中的引用编号
-                import re
-
                 citations = re.findall(r"【(\d+)】", original_report)
                 if citations:
                     unique_citations = sorted(set(citations), key=lambda x: int(x))
-                    reference_hint = f"\n\n##引用保持要求\n\n原始报告使用了以下引用编号：{'、'.join(['【' + c + '】' for c in unique_citations])}。请在新风格的报告中尽量保持使用相同的引用来源，确保引用的完整性和一致性。"
+                    reference_hint = f"\n\n## 引用保持要求\n\n原始报告使用了以下引用编号：{'、'.join(['【' + c + '】' for c in unique_citations])}。请在新风格的报告中尽量保持使用相同的引用来源。"
 
+                # 🆕 添加风格切换提示
+                style_change_hint = f"""
+
+    ## 🔴 重要：风格切换要求
+
+    用户明确要求将报告风格切换为：**{style_role}**
+
+    原始报告已经生成，现在需要你**完全重写报告**，使用新的风格。
+
+    ### 原始报告（仅供参考结构和引用）：
+    {original_report[:2000]}...
+
+    ---
+
+    请基于原始报告的结构和引用信息，使用 **{style_role}** 风格完全重写报告。
+    """
+
+            # 构建风格强调消息
+            style_emphasis = f"""
+    # 🎯 写作风格要求（最高优先级）
+
+    你正在撰写一篇 **{style_role}** 风格的报告。请严格遵守以下风格约束：
+
+    {constraint}
+
+    ---
+    """
+
+            # 🆕 将章节研究数据添加到消息中
+            if chapter_results:
+                research_content = ""
+                for chapter_num, observations in sorted(chapter_results.items(), key=lambda x: int(x[0])):
+                    research_content += f"\n\n## 第{chapter_num}章研究发现\n\n"
+                    for obs in observations:
+                        research_content += f"{obs}\n\n"
+
+                messages.append(
+                    HumanMessage(
+                        content=f"以下是各章节的研究发现：{research_content}"
+                    )
+                )
+
+            # 添加风格强调消息
             messages.append(
                 HumanMessage(
-                    content=f"{constraint}##User Query\n\n{user_query}\n\n##任务描述\n\n{task_description}\n\n##用户约束\n\n{user_dst}\n\n##报告大纲\n\n{report_outline}{reference_hint}"
+                    content=f"{style_emphasis}## 用户需求\n\n{user_query}\n\n## 任务描述\n\n{task_description}\n\n## 用户补充要求\n\n{user_dst}\n\n## 报告大纲\n\n{report_outline}{style_change_hint}{reference_hint}"
                 )
             )
 
-            # 添加 observations
+            # 🆕 添加 observations（如果有的话）
             observations = state.get("observations", [])
             for observation in observations:
                 messages.append(
@@ -707,176 +766,789 @@ class SubAgentManager:
             report = f"报告生成失败: {str(e)}"
         return report
 
+    # @timed_step("execute_xxqg_reporter")
+    # def execute_xxqg_reporter(self, state: State, config: RunnableConfig) -> Command:
+    #     """
+    #     执行报告Agent，负责结果整理与报告生成。
+    #
+    #     新工作流（Human Agent 设计）：
+    #     1. 生成报告后返回 central_agent
+    #     2. 设置 need_human_interaction=True，让 central_agent 委派给 human agent
+    #     3. human agent 收集人类反馈后，central_agent 继续处理
+    #
+    #     Args:
+    #         state: 当前系统状态
+    #         config: 运行配置
+    #
+    #     Returns:
+    #         执行结果Command对象
+    #     """
+    #     logger.info("报告Agent开始执行...")
+    #
+    #     delegation_context = state.get("delegation_context", {})
+    #     task_description = delegation_context.get("task_description", "生成最终报告")
+    #
+    #     # 直接从 state 获取风格（已在入口处提取并存储）
+    #     current_style = state.get("current_style", "")
+    #
+    #     # 检查是否已有人类反馈（用于处理风格切换等）
+    #     # 只处理与报告相关的反馈：[CHANGED_STYLE], [SKIP], [END], [FINISH], [CONTENT_MODIFY]
+    #     hitl_feedback = state.get("hitl_feedback", "")
+    #     if delegation_context.get("skip_hitl_feedback"):
+    #         hitl_feedback = ""
+    #     feedback_content = str(hitl_feedback).upper() if hitl_feedback else ""
+    #     is_report_feedback = feedback_content.startswith(
+    #         ("[CHANGED_STYLE]", "[SKIP]", "[END]", "[FINISH]", "[CONTENT_MODIFY]")
+    #     )
+    #
+    #     if (
+    #         hitl_feedback
+    #         and state.get("human_interaction_type") == ""
+    #         and is_report_feedback
+    #     ):
+    #         feedback_content = str(hitl_feedback)  # 恢复原始大小写
+    #         final_report = state.get("final_report", "")
+    #
+    #         if feedback_content.upper().startswith("[CHANGED_STYLE]"):
+    #             # 解析新风格，重新生成报告
+    #             raw_style = feedback_content[len("[CHANGED_STYLE]") :].strip()
+    #             new_style = raw_style.split()[0] if raw_style.split() else raw_style
+    #             if "[STYLE_ROLE]" in new_style:
+    #                 new_style = new_style.split("[STYLE_ROLE]")[0]
+    #             new_style = new_style.strip()
+    #             logger.info(f"用户请求切换风格: {current_style} -> {new_style}")
+    #
+    #             # 使用新风格重新生成报告
+    #             state_copy = dict(state)
+    #             state_copy["current_style"] = new_style
+    #             new_report = self._generate_report_with_style(state_copy, new_style)
+    #
+    #             # 返回 central_agent，让其再次委派给 human agent
+    #             return Command(
+    #                 update={
+    #                     "messages": [
+    #                         HumanMessage(
+    #                             content=f"报告已使用 {new_style} 风格重新生成",
+    #                             name="reporter",
+    #                         )
+    #                     ],
+    #                     "final_report": new_report,
+    #                     "current_style": new_style,
+    #                     "current_node": "central_agent",
+    #                     "need_human_interaction": True,  # 继续需要人类交互
+    #                     "human_interaction_type": "report_feedback",
+    #                     "hitl_feedback": "",  # 清空反馈
+    #                 },
+    #                 goto="central_agent",
+    #             )
+    #         elif (
+    #             feedback_content.upper().startswith("[SKIP]")
+    #             or feedback_content.upper().startswith("[END]")
+    #             or feedback_content.upper().startswith("[FINISH]")
+    #         ):
+    #             # 用户确认完成
+    #             logger.info("用户确认报告，报告生成完成")
+    #             return Command(
+    #                 update={
+    #                     "messages": [
+    #                         HumanMessage(
+    #                             content="报告生成完成，返回中枢Agent", name="reporter"
+    #                         )
+    #                     ],
+    #                     "final_report": final_report,
+    #                     "current_node": "central_agent",
+    #                     "need_human_interaction": False,
+    #                     "human_interaction_type": "",
+    #                     "memory_stack": self.central_agent.memory_stack.to_dict(),
+    #                 },
+    #                 goto="central_agent",
+    #             )
+    #         elif feedback_content.upper().startswith("[CONTENT_MODIFY]"):
+    #             # 内容修改请求，交由 central_agent 处理
+    #             modify_request = feedback_content[len("[CONTENT_MODIFY]") :].strip()
+    #             logger.info(f"用户请求内容修改: {modify_request}")
+    #
+    #             # 从 state 中恢复 memory_stack
+    #             state_memory_stack = state.get("memory_stack")
+    #             if state_memory_stack:
+    #                 self.central_agent.memory_stack.load_from_dict(state_memory_stack)
+    #
+    #             memory_entry = MemoryStackEntry(
+    #                 timestamp=datetime.now().isoformat(),
+    #                 action="human_feedback",
+    #                 content=f"用户对报告的修改意见: {modify_request}",
+    #                 result={
+    #                     "feedback_type": "content_modify",
+    #                     "request": modify_request,
+    #                 },
+    #             )
+    #             self.central_agent.memory_stack.push(memory_entry)
+    #
+    #             return Command(
+    #                 update={
+    #                     "messages": [
+    #                         HumanMessage(
+    #                             content=f"用户对报告的修改意见: {modify_request}",
+    #                             name="human_feedback",
+    #                         )
+    #                     ],
+    #                     "hitl_feedback": feedback_content,
+    #                     "current_node": "central_agent",
+    #                     "memory_stack": self.central_agent.memory_stack.to_dict(),
+    #                     "need_human_interaction": False,
+    #                     "human_interaction_type": "",
+    #                 },
+    #                 goto="central_agent",
+    #             )
+    #         else:
+    #             # 其他反馈，正常结束
+    #             logger.info(f"收到其他反馈: {feedback_content}，报告生成完成")
+    #             return Command(
+    #                 update={
+    #                     "messages": [
+    #                         HumanMessage(
+    #                             content="报告生成完成，返回中枢Agent", name="reporter"
+    #                         )
+    #                     ],
+    #                     "final_report": final_report,
+    #                     "current_node": "central_agent",
+    #                     "need_human_interaction": False,
+    #                     "human_interaction_type": "",
+    #                     "memory_stack": self.central_agent.memory_stack.to_dict(),
+    #                 },
+    #                 goto="central_agent",
+    #             )
+    #
+    #     # 第一次调用：生成报告
+    #     logger.info(f"使用风格 '{current_style}' 生成报告...")
+    #
+    #     # 新增内容 -------------------------------
+    #     # 从 Memory Stack 获取各段研究数据
+    #     memory_stack = self.central_agent.memory_stack
+    #     chapter_results = {}
+    #
+    #     for entry in memory_stack.get_all():
+    #         if entry.action == "delegate" and entry.agent_type == "researcher":
+    #             # 假设 entry.content 格式为 "研究第1章: 全国脱贫攻坚战重大成就概述"
+    #             content = entry.content
+    #             # 提取章节号
+    #             chapter_num = re.search(r'第\s*(\d+)\s*章', content)
+    #             if chapter_num:
+    #                 chapter_num = chapter_num.group(1)
+    #                 # 🔧 修复：检查 entry.result 是否为 None
+    #                 if entry.result is not None:
+    #                     chapter_results[chapter_num] = entry.result.get("observations", [])
+    #                 else:
+    #                     logger.warning(f"章节 {chapter_num} 的研究结果为 None")
+    #
+    #     logger.info(f"📊 收集到 {len(chapter_results)} 个章节的研究数据")
+    #
+    #     # 如果没有章节研究数据，使用传统方式生成报告
+    #     if not chapter_results:
+    #         logger.warning("未找到章节研究数据，使用传统方式生成报告")
+    #         # 使用 _generate_report_with_style 方法生成报告
+    #         final_report = self._generate_report_with_style(state, current_style)
+    #     else:
+    #         # 🆕 合并各段数据并调用 LLM 生成完整报告
+    #         logger.info(f"📊 收集到 {len(chapter_results)} 个章节的研究数据，开始生成报告...")
+    #         full_report = self._merge_chapter_results(chapter_results, state)  # 🆕 传入 state
+    #         final_report = full_report
+    #
+    #     # ZX 新增 🆕 确保 final_report 不为空
+    #     if not final_report or final_report.strip() == "":
+    #         logger.warning("报告内容为空，生成默认报告")
+    #         final_report = f"# 报告生成\n\n基于用户需求生成的报告内容。\n\n## 主题\n{state.get('user_query', '')}"
+    #
+    #     # ZX 新增 🆕 添加调试日志
+    #     logger.info(f"📄 final_report 长度: {len(final_report) if final_report else 0}")
+    #     if final_report and len(final_report) > 100:
+    #         logger.info(f"📄 final_report 前200字符: {final_report[:200]}")
+    #
+    #     # 在 apply_prompt_template 时传入 chapter_results
+    #     reporter_input = {
+    #         "messages": [
+    #             HumanMessage(
+    #                 content=f"# Research Requirements\n\n## User Query\n\n{state.get('user_query', '')}"
+    #             )
+    #         ],
+    #         "locale": state.get("locale", "zh-CN"),
+    #     }
+    #
+    #     context = {
+    #         "user_query": state.get("user_query", ""),
+    #         "task_description": task_description,
+    #         "chapter_results": chapter_results,  # 传入 chapter_results
+    #     }
+    #
+    #     messages = apply_prompt_template(
+    #         "reporter_xxqg",
+    #         state,
+    #         extra_context=context
+    #     )
+    #
+    #     # 新增内容结束 -----------------------------------------
+    #
+    #     # final_report = full_report  # 使用合并后的报告
+    #
+    #
+    #
+    #     # 记录到中枢Agent记忆栈
+    #     memory_entry = MemoryStackEntry(
+    #         timestamp=datetime.now().isoformat(),
+    #         action="delegate",
+    #         agent_type="reporter",
+    #         content=f"报告任务: {task_description}，风格: {current_style}",
+    #         result={"final_report": final_report},
+    #     )
+    #     self.central_agent.memory_stack.push(memory_entry)
+    #
+    #     # 返回 central_agent，设置标记让其委派给 human agent
+    #     logger.info("报告生成完成，返回 central_agent 等待委派给 human agent")
+    #     return Command(
+    #         update={
+    #             "messages": [
+    #                 HumanMessage(
+    #                     content=f"报告已生成，需要人类确认",
+    #                     name="reporter",
+    #                 )
+    #             ],
+    #             "final_report": final_report,
+    #             "original_report": final_report,  # 保存首次生成的报告作为参考
+    #             "current_style": current_style,
+    #             "current_node": "central_agent",
+    #             "need_human_interaction": True,  # 🔴 标记需要人类交互
+    #             "human_interaction_type": "report_feedback",  # 交互类型：报告反馈
+    #             "memory_stack": self.central_agent.memory_stack.to_dict(),
+    #         },
+    #         goto="central_agent",  # 返回 central_agent，由其委派给 human agent
+    #     )
+
+
+    # ZX 🆕 完全修改
+
     @timed_step("execute_xxqg_reporter")
     def execute_xxqg_reporter(self, state: State, config: RunnableConfig) -> Command:
-        """
-        执行报告Agent，负责结果整理与报告生成。
-
-        新工作流（Human Agent 设计）：
-        1. 生成报告后返回 central_agent
-        2. 设置 need_human_interaction=True，让 central_agent 委派给 human agent
-        3. human agent 收集人类反馈后，central_agent 继续处理
-
-        Args:
-            state: 当前系统状态
-            config: 运行配置
-
-        Returns:
-            执行结果Command对象
-        """
+        """执行报告Agent（学习强国版本）"""
         logger.info("报告Agent开始执行...")
 
         delegation_context = state.get("delegation_context", {})
-        task_description = delegation_context.get("task_description", "生成最终报告")
 
-        # 直接从 state 获取风格（已在入口处提取并存储）
-        current_style = state.get("current_style", "")
+        # 直接从 delegation_context 获取参数
+        chapter_mode = delegation_context.get("chapter_mode", "")
+        chapter_index = delegation_context.get("chapter_index", 1)
 
-        # 检查是否已有人类反馈（用于处理风格切换等）
-        # 只处理与报告相关的反馈：[CHANGED_STYLE], [SKIP], [END], [FINISH], [CONTENT_MODIFY]
+        # 添加调试日志
+        logger.info(f"📊 delegation_context: {delegation_context}")
+        logger.info(f"📊 chapter_mode: {chapter_mode}")
+        logger.info(f"📊 chapter_index: {chapter_index}")
+
+        # 🔧 修复：从多个地方尝试获取风格
+        # 优先级：user_selected_style > delegation_context > 默认值
+        current_style = state.get("user_selected_style", "")
+        if not current_style:
+            # 尝试从 delegation_context 获取
+            current_style = delegation_context.get("style", "")
+        if not current_style:
+            # 尝试从 user_query 中解析
+            user_query = state.get("user_query", "")
+            if "[STYLE_ROLE]" in user_query:
+                import re
+                match = re.search(r'\[STYLE_ROLE\](.*?)(?:\[|$)', user_query)
+                if match:
+                    current_style = match.group(1).strip()
+        if not current_style:
+            # 最后使用默认值
+            current_style = "政策研究报告"
+        logger.info(f"📊 current_style: {current_style}")
+
+        # 检查是否已有人类反馈
         hitl_feedback = state.get("hitl_feedback", "")
-        if delegation_context.get("skip_hitl_feedback"):
-            hitl_feedback = ""
-        feedback_content = str(hitl_feedback).upper() if hitl_feedback else ""
-        is_report_feedback = feedback_content.startswith(
-            ("[CHANGED_STYLE]", "[SKIP]", "[END]", "[FINISH]", "[CONTENT_MODIFY]")
+        human_interaction_type = state.get("human_interaction_type", "")
+
+        # 添加调试日志
+        logger.info(f"📊 hitl_feedback: {hitl_feedback[:100] if hitl_feedback else ''}")
+        logger.info(f"📊 human_interaction_type: {human_interaction_type}")
+
+        # 🔧 关键修复：处理人类反馈
+        if hitl_feedback and human_interaction_type == "report_feedback":
+            if delegation_context.get("skip_hitl_feedback"):
+                hitl_feedback = ""
+
+            feedback_content = str(hitl_feedback).upper() if hitl_feedback else ""
+            is_report_feedback = feedback_content.startswith(
+                ("[CHANGED_STYLE]", "[SKIP]", "[END]", "[FINISH]", "[CONTENT_MODIFY]")
+            )
+
+            # 添加调试日志
+            logger.info(f"📊 feedback_content: {feedback_content[:100]}")
+            logger.info(f"📊 is_report_feedback: {is_report_feedback}")
+
+            # ============================================================
+            # 🆕 处理人类反馈（在条件块内部！）
+            # ============================================================
+            if is_report_feedback:
+                feedback_content = str(hitl_feedback)  # 恢复原始大小写
+                final_report = state.get("final_report", "")
+
+                # 🆕 调试日志
+                logger.info(f"🎨 进入反馈处理逻辑!")
+                logger.info(f"   - feedback_content: {feedback_content[:100]}")
+
+                if feedback_content.upper().startswith("[CHANGED_STYLE]"):
+                    # 解析新风格，重新生成报告
+                    raw_style = feedback_content[len("[CHANGED_STYLE]"):].strip()
+                    new_style = raw_style.split()[0] if raw_style.split() else raw_style
+                    if "[STYLE_ROLE]" in new_style:
+                        new_style = new_style.split("[STYLE_ROLE]")[0]
+                    new_style = new_style.strip()
+
+                    logger.info(f"🎨 风格切换被触发!")
+                    logger.info(f"   - current_style: {current_style}")
+                    logger.info(f"   - new_style: {new_style}")
+
+                    # 使用新风格重新生成报告
+                    state_copy = dict(state)
+                    state_copy["current_style"] = new_style
+                    # 如果没有 original_report，使用 final_report
+                    if not state_copy.get("original_report"):
+                        state_copy["original_report"] = final_report
+
+                    new_report = self._generate_report_with_style(state_copy, new_style)
+
+                    logger.info(f"🎨 新报告生成完成!")
+                    logger.info(f"   - new_report length: {len(new_report)}")
+
+                    return Command(
+                        update={
+                            "messages": [
+                                HumanMessage(
+                                    content=f"报告已使用 {new_style} 风格重新生成",
+                                    name="reporter",
+                                )
+                            ],
+                            "final_report": new_report,
+                            "original_report": final_report,  # 🔧 保留原始报告
+                            "current_style": new_style,
+                            "current_node": "central_agent",
+                            "need_human_interaction": True,
+                            "human_interaction_type": "report_feedback",
+                            "hitl_feedback": "",
+                        },
+                        goto="central_agent",
+                    )
+
+                elif (
+                        feedback_content.upper().startswith("[SKIP]")
+                        or feedback_content.upper().startswith("[END]")
+                        or feedback_content.upper().startswith("[FINISH]")
+                ):
+                    logger.info("✅ 用户确认报告，报告生成完成")
+                    return Command(
+                        update={
+                            "messages": [
+                                HumanMessage(
+                                    content="报告生成完成，返回中枢Agent", name="reporter"
+                                )
+                            ],
+                            "final_report": final_report,
+                            "current_node": "central_agent",
+                            "need_human_interaction": False,
+                            "human_interaction_type": "",
+                            "memory_stack": self.central_agent.memory_stack.to_dict(),
+                        },
+                        goto="central_agent",
+                    )
+
+                elif feedback_content.upper().startswith("[CONTENT_MODIFY]"):
+                    modify_request = feedback_content[len("[CONTENT_MODIFY]"):].strip()
+                    logger.info(f"📝 用户请求内容修改: {modify_request}")
+
+                    state_memory_stack = state.get("memory_stack")
+                    if state_memory_stack:
+                        self.central_agent.memory_stack.load_from_dict(state_memory_stack)
+
+                    memory_entry = MemoryStackEntry(
+                        timestamp=datetime.now().isoformat(),
+                        action="human_feedback",
+                        content=f"用户对报告的修改意见: {modify_request}",
+                        result={
+                            "feedback_type": "content_modify",
+                            "request": modify_request,
+                        },
+                    )
+                    self.central_agent.memory_stack.push(memory_entry)
+
+                    return Command(
+                        update={
+                            "messages": [
+                                HumanMessage(
+                                    content=f"用户对报告的修改意见: {modify_request}",
+                                    name="human_feedback",
+                                )
+                            ],
+                            "hitl_feedback": feedback_content,
+                            "current_node": "central_agent",
+                            "memory_stack": self.central_agent.memory_stack.to_dict(),
+                            "need_human_interaction": False,
+                            "human_interaction_type": "",
+                        },
+                        goto="central_agent",
+                    )
+
+                else:
+                    logger.info(f"⚠️ 收到其他反馈: {feedback_content}，报告生成完成")
+                    return Command(
+                        update={
+                            "messages": [
+                                HumanMessage(
+                                    content="报告生成完成，返回中枢Agent", name="reporter"
+                                )
+                            ],
+                            "final_report": final_report,
+                            "current_node": "central_agent",
+                            "need_human_interaction": False,
+                            "human_interaction_type": "",
+                            "memory_stack": self.central_agent.memory_stack.to_dict(),
+                        },
+                        goto="central_agent",
+                    )
+
+        # ============================================================
+        # 🆕 核心逻辑：根据 chapter_mode 执行不同操作
+        # ============================================================
+
+        if chapter_mode == "single":
+            # ==================== 单章报告生成模式 ====================
+            logger.info(f"📝 单章报告模式：生成第 {chapter_index} 章内容")
+            return self._generate_single_chapter_report(state, chapter_index, current_style)
+
+        elif chapter_mode == "merge":
+            # ==================== 合并报告模式 ====================
+            logger.info("🔗 合并报告模式：合并所有章节报告")
+            return self._merge_all_chapter_reports(state, current_style)
+
+        elif chapter_mode == "final_from_observations":
+            # 🆕 新增：使用 observations 生成最终报告
+            return self._generate_final_report_from_observations(state, current_style)
+
+        else:
+            # ==================== 传统模式 ====================
+            task_description = delegation_context.get("task_description", "生成完整报告")
+            logger.info(f"📋 传统模式：生成完整报告，风格 '{current_style}'")
+            return self._generate_full_report(state, current_style, task_description)
+
+    def _generate_single_chapter_report(self, state: State, chapter_index: int, style: str) -> Command:
+        """
+        生成单个章节的报告内容
+
+        Args:
+            state: 当前状态
+            chapter_index: 章节索引（从1开始）
+            style: 报告风格
+
+        Returns:
+            Command 对象
+        """
+        import time
+        start_time = time.time()
+
+        # 🆕 调试日志：确认函数被调用
+        logger.info(f"🚀 _generate_single_chapter_report 被调用!")
+        logger.info(f"   - chapter_index: {chapter_index}")
+        logger.info(f"   - style: {style}")
+        logger.info(f"   - state keys: {list(state.keys())}")
+        logger.info(f"📊 生成第 {chapter_index} 章报告...")
+
+        # 🔧 新增：风格处理逻辑
+        style_constraint = self.ROLE_CONSTRAINTS.get(style, style)
+        if style in self.ROLE_CONSTRAINTS:
+            logger.info(f"🎨 _generate_single_chapter_report 使用预定义风格: {style}")
+            logger.info(f"🎨 风格约束长度: {len(style_constraint)} 字符")
+            logger.info(f"🎨 风格约束预览: {style_constraint[:200]}...")
+        else:
+            logger.info(
+                f"🎨 _generate_single_chapter_report 使用自定义风格: {style[:100] if len(style) > 100 else style}")
+
+        # 从 Memory Stack 获取该章的研究数据
+        memory_stack = self.central_agent.memory_stack
+        chapter_observations = []
+        chapter_title = ""
+
+        for entry in memory_stack.get_all():
+            if entry.action == "delegate" and entry.agent_type == "researcher":
+                content = entry.content
+                chapter_match = re.search(r'第\s*(\d+)\s*章', content)
+                if chapter_match and chapter_match.group(1) == str(chapter_index):
+                    if entry.result is not None:
+                        chapter_observations = entry.result.get("observations", [])
+                    # 提取章节标题
+                    title_match = re.search(r'第\s*\d+\s*章[:：\s]+(.+?)(?:\n|$)', content)
+                    if title_match:
+                        chapter_title = title_match.group(1).strip()
+                    break
+
+        # 获取大纲中该章的信息
+        outline = state.get("report_outline", "")
+        if outline:
+            chapters = parse_outline(outline)
+            if chapter_index - 1 < len(chapters):
+                chapter_info = chapters[chapter_index - 1]
+                if not chapter_title:
+                    chapter_title = chapter_info.get("title", f"第{chapter_index}章")
+
+        logger.info(f"📝 第 {chapter_index} 章标题: {chapter_title}")
+        logger.info(f"📊 研究数据条数: {len(chapter_observations)}")
+
+        # 调用 LLM 生成该章内容
+        try:
+            user_query = state.get("user_query", "")
+            user_dst = state.get("user_dst", "")
+
+            # 构建研究内容
+            research_content = "\n\n".join(chapter_observations) if chapter_observations else "暂无研究数据"
+
+            # 🔧 使用 style_constraint 而不是 style
+            prompt = f"""# 任务：撰写报告的一个章节
+
+    ## 用户原始需求
+    {user_query}
+
+    ## 用户补充需求
+    {user_dst}
+
+    ## 当前章节
+    第{chapter_index}章：{chapter_title}
+
+    ## 研究发现
+    {research_content}
+
+    ## 风格要求（最高优先级）
+    {style_constraint}
+
+    ---
+
+    请根据以上信息，撰写**第{chapter_index}章：{chapter_title}**的完整内容。
+
+    要求：
+    1. 紧扣章节主题，内容充实
+    2. 充分利用研究发现中的信息
+    3. 保持引用编号【x】的完整性
+    4. **严格遵守上述风格要求**
+    5. 语言流畅、逻辑清晰
+    6. 篇幅适中，一般 500-1000 字
+    """
+
+            messages = [HumanMessage(content=prompt)]
+            llm = get_llm_by_type(AGENT_LLM_MAP.get("reporter", "default"))
+            response = llm.invoke(messages)
+
+            chapter_content = response.content
+
+            # ZX 🆕 计算并记录耗时
+            end_time = time.time()
+            elapsed_time = end_time - start_time
+            logger.info(f"✅ 第 {chapter_index} 章报告生成成功")
+            logger.info(f"   📏 内容长度: {len(chapter_content)} 字符")
+            logger.info(f"   ⏱️  耗时: {elapsed_time:.2f} 秒")
+
+        except Exception as e:
+            import traceback
+            # 🆕 记录失败耗时
+            end_time = time.time()
+            elapsed_time = end_time - start_time
+            logger.error(f"❌ 第 {chapter_index} 章报告生成失败: {str(e)} (耗时: {elapsed_time:.2f} 秒)")
+            logger.error(traceback.format_exc())
+            chapter_content = f"## 第{chapter_index}章 {chapter_title}\n\n（内容生成失败）"
+
+        # 保存到 state.chapter_reports
+        chapter_reports = state.get("chapter_reports", {})
+        if chapter_reports is None:
+            chapter_reports = {}
+        chapter_reports = dict(chapter_reports)  # 确保是可修改的副本
+        chapter_reports[str(chapter_index)] = chapter_content
+
+        # ZX 🆕 添加调试日志
+        logger.info(f"📊 准备返回章节报告:")
+        logger.info(f"   - chapter_index: {chapter_index}")
+        logger.info(f"   - chapter_reports keys: {list(chapter_reports.keys())}")
+        logger.info(f"   - content length: {len(chapter_content)}")
+        logger.info(f"   - content preview: {chapter_content[:100]}...")
+
+        # 记录到 Memory Stack
+        memory_entry = MemoryStackEntry(
+            timestamp=datetime.now().isoformat(),
+            action="delegate",
+            agent_type="reporter",
+            content=f"生成第{chapter_index}章报告: {chapter_title}",
+            result={
+                "chapter_index": chapter_index,
+                "content_length": len(chapter_content),
+                "elapsed_time": elapsed_time,  # 🆕 记录耗时
+            },
+        )
+        self.central_agent.memory_stack.push(memory_entry)
+
+        # 🆕 调试日志：打印将要返回的 chapter_reports
+        logger.info(f"📊 准备返回章节报告:")
+        logger.info(f"   - chapter_index: {chapter_index}")
+        logger.info(f"   - chapter_reports keys: {list(chapter_reports.keys())}")
+        logger.info(f"   - chapter_reports[{chapter_index}] length: {len(chapter_content)}")
+        logger.info(f"   - chapter_reports[{chapter_index}] preview: {chapter_content[:100]}...")
+
+        return Command(
+            update={
+                "messages": [
+                    HumanMessage(
+                        content=f"第{chapter_index}章报告已生成",
+                        name="reporter",
+                    )
+                ],
+                "chapter_reports": chapter_reports,
+                "current_node": "central_agent",
+                "need_human_interaction": False,  # 不需要人类交互，继续下一章
+                "human_interaction_type": "",
+                "memory_stack": self.central_agent.memory_stack.to_dict(),
+            },
+            goto="central_agent",
         )
 
-        if (
-            hitl_feedback
-            and state.get("human_interaction_type") == ""
-            and is_report_feedback
-        ):
-            feedback_content = str(hitl_feedback)  # 恢复原始大小写
-            final_report = state.get("final_report", "")
+    def _merge_all_chapter_reports(self, state: State, style: str) -> Command:
+        """
+        合并所有章节报告，生成最终完整报告
 
-            if feedback_content.upper().startswith("[CHANGED_STYLE]"):
-                # 解析新风格，重新生成报告
-                raw_style = feedback_content[len("[CHANGED_STYLE]") :].strip()
-                new_style = raw_style.split()[0] if raw_style.split() else raw_style
-                if "[STYLE_ROLE]" in new_style:
-                    new_style = new_style.split("[STYLE_ROLE]")[0]
-                new_style = new_style.strip()
-                logger.info(f"用户请求切换风格: {current_style} -> {new_style}")
+        Args:
+            state: 当前状态
+            style: 报告风格
 
-                # 使用新风格重新生成报告
-                state_copy = dict(state)
-                state_copy["current_style"] = new_style
-                new_report = self._generate_report_with_style(state_copy, new_style)
+        Returns:
+            Command 对象
+        """
+        logger.info("🔗 开始合并所有章节报告...")
 
-                # 返回 central_agent，让其再次委派给 human agent
-                return Command(
-                    update={
-                        "messages": [
-                            HumanMessage(
-                                content=f"报告已使用 {new_style} 风格重新生成",
-                                name="reporter",
-                            )
-                        ],
-                        "final_report": new_report,
-                        "current_style": new_style,
-                        "current_node": "central_agent",
-                        "need_human_interaction": True,  # 继续需要人类交互
-                        "human_interaction_type": "report_feedback",
-                        "hitl_feedback": "",  # 清空反馈
-                    },
-                    goto="central_agent",
-                )
-            elif (
-                feedback_content.upper().startswith("[SKIP]")
-                or feedback_content.upper().startswith("[END]")
-                or feedback_content.upper().startswith("[FINISH]")
-            ):
-                # 用户确认完成
-                logger.info("用户确认报告，报告生成完成")
-                return Command(
-                    update={
-                        "messages": [
-                            HumanMessage(
-                                content="报告生成完成，返回中枢Agent", name="reporter"
-                            )
-                        ],
-                        "final_report": final_report,
-                        "current_node": "central_agent",
-                        "need_human_interaction": False,
-                        "human_interaction_type": "",
-                        "memory_stack": self.central_agent.memory_stack.to_dict(),
-                    },
-                    goto="central_agent",
-                )
-            elif feedback_content.upper().startswith("[CONTENT_MODIFY]"):
-                # 内容修改请求，交由 central_agent 处理
-                modify_request = feedback_content[len("[CONTENT_MODIFY]") :].strip()
-                logger.info(f"用户请求内容修改: {modify_request}")
+        chapter_reports = state.get("chapter_reports", {})
+        user_query = state.get("user_query", "")
 
-                # 从 state 中恢复 memory_stack
-                state_memory_stack = state.get("memory_stack")
-                if state_memory_stack:
-                    self.central_agent.memory_stack.load_from_dict(state_memory_stack)
+        if not chapter_reports:
+            logger.warning("没有章节报告，使用传统方式生成完整报告")
+            return self._generate_full_report(state, style, "生成完整报告")
 
-                memory_entry = MemoryStackEntry(
-                    timestamp=datetime.now().isoformat(),
-                    action="human_feedback",
-                    content=f"用户对报告的修改意见: {modify_request}",
-                    result={
-                        "feedback_type": "content_modify",
-                        "request": modify_request,
-                    },
-                )
-                self.central_agent.memory_stack.push(memory_entry)
+        # 按章节号排序
+        sorted_chapter_nums = sorted(chapter_reports.keys(), key=lambda x: int(x))
+        logger.info(f"📊 待合并章节数: {len(sorted_chapter_nums)}")
 
-                return Command(
-                    update={
-                        "messages": [
-                            HumanMessage(
-                                content=f"用户对报告的修改意见: {modify_request}",
-                                name="human_feedback",
-                            )
-                        ],
-                        "hitl_feedback": feedback_content,
-                        "current_node": "central_agent",
-                        "memory_stack": self.central_agent.memory_stack.to_dict(),
-                        "need_human_interaction": False,
-                        "human_interaction_type": "",
-                    },
-                    goto="central_agent",
-                )
-            else:
-                # 其他反馈，正常结束
-                logger.info(f"收到其他反馈: {feedback_content}，报告生成完成")
-                return Command(
-                    update={
-                        "messages": [
-                            HumanMessage(
-                                content="报告生成完成，返回中枢Agent", name="reporter"
-                            )
-                        ],
-                        "final_report": final_report,
-                        "current_node": "central_agent",
-                        "need_human_interaction": False,
-                        "human_interaction_type": "",
-                        "memory_stack": self.central_agent.memory_stack.to_dict(),
-                    },
-                    goto="central_agent",
-                )
+        # 策略：先简单拼接，再用 LLM 润色
+        # Step 1: 简单拼接
+        merged_content_parts = []
+        for num in sorted_chapter_nums:
+            content = chapter_reports[num]
+            merged_content_parts.append(content)
 
-        # 第一次调用：生成报告
-        logger.info(f"使用风格 '{current_style}' 生成报告...")
+        simple_merged = "\n\n".join(merged_content_parts)
 
-        # 新增内容 -------------------------------
+        # Step 2: LLM 整体润色
+        try:
+            outline = state.get("report_outline", "")
+
+            prompt = f"""# 任务：整合润色报告
+
+    ## 用户原始需求
+    {user_query}
+
+    ## 报告大纲
+    {outline}
+
+    ## 各章节内容（待整合）
+    {simple_merged}
+
+    ---
+
+    请将以上各章节内容整合成一篇完整、连贯的报告。要求：
+
+    1. **保持结构完整**：按大纲顺序组织各章节
+    2. **确保连贯性**：章节之间过渡自然，逻辑通顺
+    3. **保持引用完整**：不要丢失引用编号【x】
+    4. **统一风格**：全文风格一致，语言流畅
+    5. **适当润色**：可以适当调整措辞，但不要改变核心内容
+
+    输出整合后的完整报告。
+    """
+
+            messages = [HumanMessage(content=prompt)]
+            llm = get_llm_by_type(AGENT_LLM_MAP.get("reporter", "default"))
+            response = llm.invoke(messages)
+
+            final_report = response.content
+            logger.info(f"✅ 报告整合润色完成，长度: {len(final_report)}")
+
+        except Exception as e:
+            import traceback
+            logger.error(f"报告整合失败: {str(e)}")
+            logger.error(traceback.format_exc())
+            # 失败时使用简单拼接
+            final_report = simple_merged
+            logger.info(f"使用简单拼接结果，长度: {len(final_report)}")
+
+        # 记录到 Memory Stack
+        memory_entry = MemoryStackEntry(
+            timestamp=datetime.now().isoformat(),
+            action="delegate",
+            agent_type="reporter",
+            content="合并所有章节报告，生成最终报告",
+            result={"final_report_length": len(final_report)},
+        )
+        self.central_agent.memory_stack.push(memory_entry)
+
+        return Command(
+            update={
+                "messages": [
+                    HumanMessage(
+                        content="报告合并完成，需要人类确认",
+                        name="reporter",
+                    )
+                ],
+                "final_report": final_report,
+                "original_report": final_report,
+                "current_style": style,
+                "current_node": "central_agent",
+                "need_human_interaction": True,  # 🔴 需要人类交互
+                "human_interaction_type": "report_feedback",
+                "memory_stack": self.central_agent.memory_stack.to_dict(),
+            },
+            goto="central_agent",
+        )
+
+    def _generate_full_report(self, state: State, style: str, task_description: str) -> Command:
+        """
+        传统模式：生成完整报告（原有逻辑）
+
+        Args:
+            state: 当前状态
+            style: 报告风格
+            task_description: 任务描述
+
+        Returns:
+            Command 对象
+        """
+        logger.info(f"📋 传统模式生成完整报告...")
+        logger.info(f"🎨 当前风格: {style}")
+
+        # 🔧 新增：从 delegation_context 获取风格
+        delegation_context = state.get("delegation_context", {})
+        style_from_context = delegation_context.get("style", "")
+        if style_from_context and style_from_context != "政策研究报告":
+            style = style_from_context
+            logger.info(f"🎨 从 delegation_context 获取风格: {style}")
+
         # 从 Memory Stack 获取各段研究数据
         memory_stack = self.central_agent.memory_stack
         chapter_results = {}
 
         for entry in memory_stack.get_all():
             if entry.action == "delegate" and entry.agent_type == "researcher":
-                # 假设 entry.content 格式为 "研究第1章: 全国脱贫攻坚战重大成就概述"
                 content = entry.content
-                # 提取章节号
                 chapter_num = re.search(r'第\s*(\d+)\s*章', content)
                 if chapter_num:
                     chapter_num = chapter_num.group(1)
-                    # 🔧 修复：检查 entry.result 是否为 None
                     if entry.result is not None:
                         chapter_results[chapter_num] = entry.result.get("observations", [])
                     else:
@@ -884,66 +1556,43 @@ class SubAgentManager:
 
         logger.info(f"📊 收集到 {len(chapter_results)} 个章节的研究数据")
 
-        # 如果没有章节研究数据，使用传统方式生成报告
+        # 🔧 修复：统一使用 _generate_report_with_style
+        # 无论是单章还是多章，都使用这个方法，它会正确处理 ROLE_CONSTRAINTS
         if not chapter_results:
             logger.warning("未找到章节研究数据，使用传统方式生成报告")
-            # 使用 _generate_report_with_style 方法生成报告
-            final_report = self._generate_report_with_style(state, current_style)
+            final_report = self._generate_report_with_style(state, style)
         else:
-            # 🆕 合并各段数据并调用 LLM 生成完整报告
-            logger.info(f"📊 收集到 {len(chapter_results)} 个章节的研究数据，开始生成报告...")
-            full_report = self._merge_chapter_results(chapter_results, state)  # 🆕 传入 state
-            final_report = full_report
+            # 🔧 关键修改：使用 _generate_report_with_style 而不是 _merge_chapter_results
+            logger.info(f"📊 使用风格 '{style}' 生成完整报告...")
 
-        # ZX 新增 🆕 确保 final_report 不为空
+            # 🔧 将章节数据添加到 state 中，供 _generate_report_with_style 使用
+            state_with_chapters = dict(state)
+            state_with_chapters["chapter_results"] = chapter_results
+
+            # 使用 _generate_report_with_style，它会正确使用 ROLE_CONSTRAINTS
+            final_report = self._generate_report_with_style(state_with_chapters, style)
+
+            logger.info(f"✅ 报告生成完成，长度: {len(final_report)} 字符")
+
+        # 确保 final_report 不为空
         if not final_report or final_report.strip() == "":
             logger.warning("报告内容为空，生成默认报告")
             final_report = f"# 报告生成\n\n基于用户需求生成的报告内容。\n\n## 主题\n{state.get('user_query', '')}"
 
-        # ZX 新增 🆕 添加调试日志
         logger.info(f"📄 final_report 长度: {len(final_report) if final_report else 0}")
         if final_report and len(final_report) > 100:
             logger.info(f"📄 final_report 前200字符: {final_report[:200]}")
 
-        # 在 apply_prompt_template 时传入 chapter_results
-        reporter_input = {
-            "messages": [
-                HumanMessage(
-                    content=f"# Research Requirements\n\n## User Query\n\n{state.get('user_query', '')}"
-                )
-            ],
-            "locale": state.get("locale", "zh-CN"),
-        }
-
-        context = {
-            "user_query": state.get("user_query", ""),
-            "task_description": task_description,
-            "chapter_results": chapter_results,  # 传入 chapter_results
-        }
-
-        messages = apply_prompt_template(
-            "reporter_xxqg",
-            state,
-            extra_context=context
-        )
-
-        # 新增内容结束 -----------------------------------------
-
-        # final_report = full_report  # 使用合并后的报告
-
-
-
+        # 记录到中枢Agent记忆栈
         memory_entry = MemoryStackEntry(
             timestamp=datetime.now().isoformat(),
             action="delegate",
             agent_type="reporter",
-            content=f"报告任务: {task_description}，风格: {current_style}",
+            content=f"报告任务: {task_description}，风格: {style}",
             result={"final_report": final_report},
         )
         self.central_agent.memory_stack.push(memory_entry)
 
-        # 返回 central_agent，设置标记让其委派给 human agent
-        logger.info("报告生成完成，返回 central_agent 等待委派给 human agent")
         return Command(
             update={
                 "messages": [
@@ -953,42 +1602,79 @@ class SubAgentManager:
                     )
                 ],
                 "final_report": final_report,
-                "original_report": final_report,  # 保存首次生成的报告作为参考
-                "current_style": current_style,
+                "original_report": final_report,
+                "current_style": style,
                 "current_node": "central_agent",
-                "need_human_interaction": True,  # 🔴 标记需要人类交互
-                "human_interaction_type": "report_feedback",  # 交互类型：报告反馈
+                "need_human_interaction": True,
+                "human_interaction_type": "report_feedback",
                 "memory_stack": self.central_agent.memory_stack.to_dict(),
             },
-            goto="central_agent",  # 返回 central_agent，由其委派给 human agent
+            goto="central_agent",
         )
 
-    # 新增函数
-    # def _merge_chapter_results(self, chapter_results: Dict[str, List[str]]) -> str:
-    #     """
-    #     合并各段研究结果生成完整报告
-    #
-    #     Args:
-    #         chapter_results: 章节研究结果字典
-    #
-    #     Returns:
-    #         完整报告
-    #     """
-    #     # 按章节号排序
-    #     sorted_chapters = sorted(chapter_results.keys(), key=lambda x: int(x))
-    #
-    #     # 生成报告
-    #     report_parts = []
-    #     for chapter_num in sorted_chapters:
-    #         observations = chapter_results[chapter_num]
-    #         if observations:
-    #             # 将观察结果合并为一个段落
-    #             chapter_content = "\n".join(observations)
-    #             report_parts.append(f"## 第 {chapter_num} 章\n\n{chapter_content}")
-    #
-    #     return "\n\n".join(report_parts)
+    def _generate_final_report_from_observations(self, state: State, style: str) -> Command:
+        """
+        使用累积的 observations 生成最终报告（新流程）
 
-    # ZX 🆕 完全修改
+        Args:
+            state: 当前状态
+            style: 报告风格
+
+        Returns:
+            Command 对象
+        """
+        logger.info("📊 使用累积的 observations 生成最终报告...")
+
+        # 🔧 从 state.observations 获取所有研究数据
+        observations = state.get("observations", [])
+        logger.info(f"📊 累积的 observations 数量: {len(observations)}")
+
+        if observations:
+            for i, obs in enumerate(observations):
+                logger.info(f"   - observation {i + 1}: {obs[:100]}...")
+
+        if not observations:
+            logger.warning("没有累积的 observations，使用传统方式生成报告")
+            return self._generate_full_report(state, style, "生成完整报告")
+
+        # 1111111111111
+        # # 🔧 使用 _generate_report_with_style 生成报告
+        # # 它已经支持使用 observations
+        # final_report = self._generate_report_with_style(state, style)
+        #
+        # logger.info(f"✅ 最终报告生成完成，长度: {len(final_report)}")
+        # if final_report and len(final_report) > 100:
+        #     logger.info(f"📄 final_report 前200字符: {final_report[:200]}")
+
+        # 记录到 Memory Stack
+        memory_entry = MemoryStackEntry(
+            timestamp=datetime.now().isoformat(),
+            action="delegate",
+            agent_type="reporter",
+            content="使用累积的 observations 生成最终报告",
+            result={"final_report_length": len(final_report)},
+        )
+        self.central_agent.memory_stack.push(memory_entry)
+
+        return Command(
+            update={
+                "messages": [
+                    HumanMessage(
+                        content="报告生成完成，需要人类确认",
+                        name="reporter",
+                    )
+                ],
+                "final_report": final_report,
+                "original_report": final_report,
+                "current_style": style,
+                "current_node": "central_agent",
+                "need_human_interaction": True,  # 🔴 需要人类交互
+                "human_interaction_type": "report_feedback",
+                "memory_stack": self.central_agent.memory_stack.to_dict(),
+            },
+            goto="central_agent",
+        )
+
     def _merge_chapter_results(self, chapter_results: Dict[str, List[str]], state: State = None) -> str:
         """
         合并各段研究结果生成完整报告
@@ -1259,6 +1945,7 @@ class SubAgentManager:
                     goto="reporter",
                 )
 
+    # human agent!!
     @timed_step("execute_human")
     async def execute_human(self, state: State, config: RunnableConfig) -> Command:
         """

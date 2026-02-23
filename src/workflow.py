@@ -60,16 +60,13 @@ async def run_agent_workflow_async(
         "enable_background_investigation": enable_background_investigation,
         "user_query": user_input,
         "skip_perception": True,
+        # "report_mode": "cumulative_observations",  # ZX 🆕 报告生成模式：per_chapter（每章独立）或 cumulative_observations（累积模式）
     }
     config = {
         "configurable": {
             "thread_id": "default",
             "max_plan_iterations": max_plan_iterations,
             "max_step_num": max_step_num,
-            # "max_search_results": max_search_results,
-            # "mcp_settings": mcp_settings,
-            # "knowledge_base_name": knowledge_base_name,
-            "graph_format": graph_format,
             "mcp_settings": {
                 "servers": {
                     "mcp-github-trending": {

@@ -19,6 +19,8 @@ from src.utils.logger import logger
 from src.utils.statistics import global_statistics
 from src.prompts.central_decision import Decision, DelegateParams
 from src.utils.reference_utils import global_reference_map
+from src.utils.outline_parser import parse_outline, get_chapter_task_description
+
 from ..graph.types import State
 
 # ZX 新增 在文件顶部的导入部分添加
@@ -107,7 +109,7 @@ class CentralAgent:
         }
 
     def make_decision(
-        self, state: State, config: RunnableConfig, retry_count: int = 0
+            self, state: State, config: RunnableConfig, retry_count: int = 0
     ) -> CentralDecision:
         """
         中枢Agent决策核心逻辑，分析当前状态生成决策结果
@@ -123,9 +125,255 @@ class CentralAgent:
         logger.info("中枢Agent正在进行决策...")
         start_time = datetime.now()
 
-        # 增加 SOP 部分，用于加入 decision 模块
-        # SOP改成中文，SOP应该要的是抽象的。不能写是outline，replanner，具体谁来生成是让 CentralAgent 自己找
-        DECISION_SOP_SP = """### 执行流程指南（Execution Workflow Guidelines）
+        # 🆕 临时测试：硬编码 强制设置 report_mode
+        if "report_mode" not in state or not state.get("report_mode"):
+            state["report_mode"] = "cumulative_observations"
+            logger.info("🔧 临时设置 report_mode = cumulative_observations")
+
+        # ============================================================
+        # 🆕 步骤 0：最高优先级 - 检查是否需要人类交互
+        # ============================================================
+
+        need_human_interaction = state.get("need_human_interaction", False)
+        human_interaction_type = state.get("human_interaction_type", "")
+
+        logger.info(f"📊 人类交互状态检查:")
+        logger.info(f"   - need_human_interaction: {need_human_interaction}")
+        logger.info(f"   - human_interaction_type: {human_interaction_type}")
+
+        if need_human_interaction:
+            logger.info(f"🔴 需要人类交互，立即委派给 human agent")
+
+            end_time = datetime.now()
+            time_entry = {
+                "step_name": "central_decision" + start_time.isoformat(),
+                "start_time": start_time.isoformat(),
+                "end_time": end_time.isoformat(),
+                "duration": (end_time - start_time).total_seconds(),
+            }
+            global_statistics.add_time_entry(time_entry)
+
+            return CentralDecision(
+                action=CentralAgentAction.DELEGATE,
+                reasoning=f"需要人类交互: {human_interaction_type}",
+                params={
+                    "agent_type": "human",
+                    "interaction_type": human_interaction_type,
+                },
+                instruction="委派 Human Agent 进行人类交互",
+                state_updates={
+                    "need_human_interaction": False,  # 重置状态
+                    "human_interaction_type": "",
+                },
+            )
+
+        # ============================================================
+        # 🆕 步骤 1：优先检查段落循环状态（在 LLM 决策之前）
+        # ============================================================
+
+        outline = state.get("report_outline", "")
+        current_chapter_index = state.get("current_chapter_index", 0)
+        chapter_stage_status = state.get("chapter_stage_status", {})
+        chapter_reports = state.get("chapter_reports", {})
+
+        # ZX 🆕 调试日志
+        logger.info(f"📊 State 检查:")
+        logger.info(f"   - outline exists: {bool(outline)}")
+        logger.info(f"   - current_chapter_index: {current_chapter_index}")
+        logger.info(f"   - chapter_stage_status: {chapter_stage_status}")
+        logger.info(f"   - chapter_reports keys: {list(chapter_reports.keys()) if chapter_reports else []}")
+        logger.info(f"   - report_mode: {state.get('report_mode', 'per_chapter')}")  # ZX 🆕 新增
+
+        if outline:
+            chapters = parse_outline(outline)
+            total_chapters = len(chapters)
+
+            # 检查是否还有未完成的章节
+            if current_chapter_index < total_chapters:
+                current_chapter = chapters[current_chapter_index]
+                chapter_num_str = str(current_chapter_index + 1)
+                current_stage = chapter_stage_status.get(chapter_num_str, "")
+
+                if current_stage == "":
+                    # 阶段 1：研究
+                    logger.info(f"📂 段落进度: {current_chapter_index + 1}/{total_chapters} - 研究阶段")
+                    logger.info(f"📝 当前段落: 第{current_chapter['number']}章 - {current_chapter['title']}")
+
+                    task_description = get_chapter_task_description(current_chapter, current_chapter_index)
+
+                    new_stage_status = dict(chapter_stage_status) if chapter_stage_status else {}
+                    new_stage_status[chapter_num_str] = "researched"
+
+                    logger.info(f"🔄 强制进入研究阶段: 第 {current_chapter_index + 1} 章")
+
+                    end_time = datetime.now()
+                    time_entry = {
+                        "step_name": "central_decision" + start_time.isoformat(),
+                        "start_time": start_time.isoformat(),
+                        "end_time": end_time.isoformat(),
+                        "duration": (end_time - start_time).total_seconds(),
+                    }
+                    global_statistics.add_time_entry(time_entry)
+
+                    return CentralDecision(
+                        action=CentralAgentAction.DELEGATE,
+                        reasoning=f"段落循环模式：研究第 {current_chapter_index + 1}/{total_chapters} 章 - {current_chapter['title']}",
+                        params={
+                            "agent_type": "researcher",
+                            "task_description": task_description,
+                            "chapter_index": current_chapter_index + 1,
+                        },
+                        instruction="委派 Researcher Agent 进行章节研究",
+                        state_updates={"chapter_stage_status": new_stage_status},
+                    )
+
+                elif current_stage == "researched":
+                    # 阶段 2：生成该章report & observation
+                    report_mode = state.get("report_mode", "per_chapter")
+
+                    if report_mode == "per_chapter":
+                        # 原有流程：每章独立生成报告
+                        logger.info(f"📂 段落进度: {current_chapter_index + 1}/{total_chapters} - 报告生成阶段")
+                        logger.info(f"📝 当前段落: 第{current_chapter['number']}章 - {current_chapter['title']}")
+
+                        new_stage_status = dict(chapter_stage_status) if chapter_stage_status else {}
+                        new_stage_status[chapter_num_str] = "reported"
+
+                        logger.info(f"🔄 强制进入报告生成阶段: 第 {current_chapter_index + 1} 章")
+
+                        return CentralDecision(
+                            action=CentralAgentAction.DELEGATE,
+                            reasoning=f"段落循环模式：生成第 {current_chapter_index + 1}/{total_chapters} 章报告 - {current_chapter['title']}",
+                            params={
+                                "agent_type": "reporter",
+                                "task_description": f"根据研究结果，撰写第{current_chapter_index + 1}章的完整内容：{current_chapter['title']}",
+                                "chapter_index": current_chapter_index + 1,
+                                "chapter_mode": "single",
+                            },
+                            instruction="委派 Reporter Agent 生成单章报告",
+                            state_updates={
+                                "chapter_stage_status": new_stage_status,
+                                "current_chapter_index": current_chapter_index + 1,
+                            },
+                        )
+                    elif report_mode == "cumulative_observations":
+                        # 新流程：跳过单章报告，继续下一章研究
+                        logger.info(f"📂 段落进度: {current_chapter_index + 1}/{total_chapters} - 研究完成，继续下一章")
+
+                        new_stage_status = dict(chapter_stage_status) if chapter_stage_status else {}
+                        new_stage_status[chapter_num_str] = "reported"
+
+                        # 🔧 添加时间统计
+                        end_time = datetime.now()
+                        time_entry = {
+                            "step_name": "central_decision" + start_time.isoformat(),
+                            "start_time": start_time.isoformat(),
+                            "end_time": end_time.isoformat(),
+                            "duration": (end_time - start_time).total_seconds(),
+                        }
+                        global_statistics.add_time_entry(time_entry)
+
+                        # 🔧 关键：直接跳到下一章，不生成单章报告
+                        return CentralDecision(
+                            action=CentralAgentAction.THINK,
+                            reasoning=f"累积模式：第 {current_chapter_index + 1} 章研究完成，准备进入下一章",
+                            params={},
+                            instruction="思考下一步行动",
+                            state_updates={
+                                "chapter_stage_status": new_stage_status,
+                                "current_chapter_index": current_chapter_index + 1,
+                            },
+                        )
+            else:
+                # 所有章节已完成，根据 report_mode 决定下一步
+                report_mode = state.get("report_mode", "per_chapter")
+
+                if report_mode == "per_chapter":
+                    # ==================== 原有流程：合并所有章节报告 ====================
+                    logger.info(f"📊 检查合并条件:")
+                    logger.info(f"   - total_chapters: {total_chapters}")
+                    logger.info(f"   - chapter_reports count: {len(chapter_reports) if chapter_reports else 0}")
+                    logger.info(f"   - expected keys: {[str(i) for i in range(1, total_chapters + 1)]}")
+
+                    if chapter_reports and len(chapter_reports) == total_chapters:
+                        logger.info("✅ 所有段落已完成研究和报告生成，准备合并最终报告")
+
+                        end_time = datetime.now()
+                        time_entry = {
+                            "step_name": "central_decision" + start_time.isoformat(),
+                            "start_time": start_time.isoformat(),
+                            "end_time": end_time.isoformat(),
+                            "duration": (end_time - start_time).total_seconds(),
+                        }
+                        global_statistics.add_time_entry(time_entry)
+
+                        return CentralDecision(
+                            action=CentralAgentAction.DELEGATE,
+                            reasoning="所有章节已完成，合并生成最终报告",
+                            params={
+                                "agent_type": "reporter",
+                                "task_description": "合并所有章节报告，生成最终完整报告",
+                                "chapter_mode": "merge",
+                            },
+                            instruction="委派 Reporter Agent 合并所有章节报告",
+                            state_updates={"current_chapter_index": 0},
+                        )
+                    else:
+                        logger.warning(
+                            f"⚠️ 章节报告不完整: {len(chapter_reports) if chapter_reports else 0}/{total_chapters}")
+                        # 打印详细信息
+                        if chapter_reports:
+                            for i in range(1, total_chapters + 1):
+                                key = str(i)
+                                if key in chapter_reports:
+                                    logger.info(f"   ✅ 章节 {key}: 已生成")
+                                else:
+                                    logger.info(f"   ❌ 章节 {key}: 未生成")
+                        else:
+                            logger.warning("   chapter_reports 为空或 None")
+
+                elif report_mode == "cumulative_observations":
+                    # ==================== 新流程：使用累积的 observations 生成最终报告 ====================
+                    logger.info("✅ 所有段落已完成研究，准备使用累积的 observations 生成最终报告")
+
+                    # 检查 observations 是否有数据
+                    observations = state.get("observations", [])
+                    logger.info(f"📊 累积的 observations 数量: {len(observations)}")
+
+                    if observations:
+                        logger.info("✅ observations 数据充足，开始生成最终报告")
+
+                        end_time = datetime.now()
+                        time_entry = {
+                            "step_name": "central_decision" + start_time.isoformat(),
+                            "start_time": start_time.isoformat(),
+                            "end_time": end_time.isoformat(),
+                            "duration": (end_time - start_time).total_seconds(),
+                        }
+                        global_statistics.add_time_entry(time_entry)
+
+                        return CentralDecision(
+                            action=CentralAgentAction.DELEGATE,
+                            reasoning="累积模式：所有章节研究完成，使用累积的 observations 生成最终报告",
+                            params={
+                                "agent_type": "reporter",
+                                "task_description": "使用所有章节的研究结果，生成最终完整报告",
+                                "chapter_mode": "final_from_observations",  # 🔧 新增模式
+                            },
+                            instruction="委派 Reporter Agent 使用 observations 生成最终报告",
+                            state_updates={"current_chapter_index": 0},
+                        )
+                    else:
+                        logger.warning("⚠️ 没有累积的 observations，回退到传统模式")
+                        # 回退到传统模式
+                        pass
+
+        # ============================================================
+        # 步骤 2：以下是原有的 LLM 决策逻辑
+        # ============================================================
+
+        # 增加 SOP 部分
+        DECISION_SOP_SP = """### 执行流程指南
 
         你正在一个具有**严格阶段约束与不可回退节点**的多智能体系统中运行。
         你的职责是**严格按照以下流程推进任务直至完成**，并遵守每个阶段的进入与退出规则。
@@ -133,7 +381,7 @@ class CentralAgent:
 
         ---
 
-        #### 🔴 Human Agent 使用说明（Critical）
+        #### 🔴 Human Agent 使用说明
 
         **Human Agent** 是专门负责与人类交互的子Agent。你 **必须** 在以下情况委派给它：
 
@@ -154,7 +402,7 @@ class CentralAgent:
 
         ---
 
-        #### 强制性的高层执行流程（Mandatory High-Level Workflow）
+        #### 强制性的高层执行流程
 
         ### 1. 感知与澄清阶段（Perception Phase，强制，第一步，且仅此一次）
 
@@ -180,7 +428,7 @@ class CentralAgent:
         ### 3. 推理与研究阶段（Reasoning & Research Phase，强制，大纲确认之后）
 
         - 在大纲被确认之后，你 **必须** 执行一个集中式的推理与研究阶段
-        - 在该阶段，中枢智能体（central agent）**必须**：
+        - 在该阶段，中枢智能体**必须**：
           - 至少调用 **Researcher agent** 一次
           - 使用可用工具、文档或外部信息源，对已确认的大纲进行验证、补充或质疑
         - 若发现信息不足，可以委派给 **human agent** 进行主动提问（设置 `interaction_type: proactive_question`）
@@ -198,78 +446,25 @@ class CentralAgent:
 
         ---
 
-        ### 4.1 用户反馈处理循环（User Feedback Loop，关键补充）
+        ### 4.1 用户反馈处理循环
 
         - 用户反馈分为两类：
           - **风格切换**（[CHANGED_STYLE]）：直接委派 reporter agent 使用新风格重新生成报告
-          - **其他修改意见**（[CONTENT_MODIFY] 等）：你需要根据修改意见的具体内容和当前上下文，自行判断应该委派哪些 agent、以什么顺序执行。例如：
-            - 如果修改意见涉及补充信息或搜索更多资料，可以先委派 researcher，再委派 reporter
-            - 如果修改意见仅涉及措辞或结构调整，可以直接委派 reporter
-            - 无论经过多少中间步骤，最终都必须由 reporter 重新生成报告
+          - **其他修改意见**（[CONTENT_MODIFY] 等）：你需要根据修改意见的具体内容和当前上下文，自行判断应该委派哪些 agent、以什么顺序执行
         - **reporter agent 每次重新生成报告后，都会返回并标记 `need_human_interaction: true`、`human_interaction_type: "report_feedback"`**
         - 🔴 **此时你必须再次委派给 human agent**，让用户查看新报告并决定下一步操作
-        - 🔴 **绝对禁止在 `need_human_interaction: true` 时选择 FINISH**——这会导致用户永远看不到重新生成的报告
+        - 🔴 **绝对禁止在 `need_human_interaction: true` 时选择 FINISH**
         - 这个循环可能重复多次，每次都必须经过 human agent
         - **只有当用户明确发送 [SKIP]、[END] 或 [FINISH] 反馈后，才可以进入 FINISH 状态**
 
         ---
 
-        #### 主动提问机制（Proactive Questioning）
-
-        在任何阶段，如果你判断当前信息不足以继续执行任务，可以委派给 **human agent** 进行主动提问：
-
-        ```json
-        {
-          "action": "delegate",
-          "reasoning": "当前信息不足，需要向用户询问具体问题",
-          "params": {
-            "agent_type": "human",
-            "task_description": "向用户询问关于XXX的具体信息",
-            "interaction_type": "proactive_question",
-            "question": "你需要问的具体问题"
-          },
-          "instruction": "委派给 Human Agent 进行主动提问"
-        }
-        ```
-
-        ---
-
-        #### DELEGATE to Human Agent 示例
-
-        当收到 `need_human_interaction: true` 时，必须这样委派：
-
-        ```json
-        {
-          "action": "delegate",
-          "reasoning": "Perception agent 已生成表单，需要人类填写后才能继续",
-          "params": {
-            "agent_type": "human",
-            "task_description": "请人类填写表单",
-            "interaction_type": "form_filling"
-          },
-          "instruction": "委派给 Human Agent 收集人类输入"
-        }
-        ```
-
-        ---
-
-        #### 执行约束与禁止行为（Hard Constraints & Prohibited Actions）
+        #### 执行约束与禁止行为
 
         - 执行顺序 **必须严格遵循**：
-          **感知 → [Human] → 大纲 → [Human] → 研究 → 报告 → [Human] → (反馈循环: [根据反馈内容自行决定中间步骤] → 报告 → [Human] →) → 完成**
-        - 🔴 当 `need_human_interaction: true` 时，**必须** 委派给 human agent，**不得跳过**，**不得选择 FINISH 或其他任何动作**
-        - 🔴 **FINISH 的前置条件**：只有当 `need_human_interaction` 为 `false` 且用户已明确确认（发送 [SKIP]/[END]/[FINISH]）后，才允许进入 FINISH 状态
-        - perception 阶段与 outline 阶段：
-          - **均为一次性阶段**
-          - **均不可重复、不可回退、不可重新进入**
-
-        ---
-
-        #### 强制研究调用规则（Mandatory Research Invocation）
-
-        - 在 **每一次任务执行中**，Researcher agent **必须** 作为「推理与研究阶段」的一部分被真实调用
-        - **不得跳过、伪造或模拟该阶段**
-        - 在未真实调用 Researcher agent 的情况下继续执行，是被明确禁止的
+          **感知 → [Human] → 大纲 → [Human] → 研究 → 报告 → [Human] → 完成**
+        - 🔴 当 `need_human_interaction: true` 时，**必须** 委派给 human agent，**不得跳过**
+        - 🔴 **FINISH 的前置条件**：只有当 `need_human_interaction` 为 `false` 且用户已明确确认后，才允许进入 FINISH 状态
 
         ---
 
@@ -375,64 +570,8 @@ class CentralAgent:
                 action, ""
             )
 
-            # ZX 🆕 新增：段落循环研究逻辑
-            # 检查是否需要进入段落研究模式
-            outline = state.get("report_outline", "")
-            current_chapter_index = state.get("current_chapter_index", 0)
-
-            # 初始化 state_updates
-            state_updates = None
-
-            # 判断条件：
-            # 1. 大纲已确认（outline 不为空）
-            # 2. 当前决策是 DELEGATE researcher（LLM 决定要研究）
-            # 3. 还有未研究的段落
-            if outline and action == CentralAgentAction.DELEGATE:
-                agent_type = params.get("agent_type", "") if isinstance(params, dict) else getattr(params, "agent_type",
-                                                                                                   "")
-
-                if agent_type == "researcher":
-                    chapters = parse_outline(outline)
-
-                    # 检查是否还有未研究的段落
-                    if current_chapter_index < len(chapters):
-                        # 获取当前段落信息
-                        current_chapter = chapters[current_chapter_index]
-                        task_description = get_chapter_task_description(current_chapter, current_chapter_index)
-
-                        logger.info(f"📂 段落研究进度: {current_chapter_index + 1}/{len(chapters)}")
-                        logger.info(f"📝 当前段落: 第{current_chapter['number']}章 - {current_chapter['title']}")
-
-                        # 更新 params 中的任务描述
-                        if isinstance(params, dict):
-                            params["task_description"] = task_description
-                        else:
-                            params.task_description = task_description
-
-                        # 🆕 设置 state_updates（将通过 Command 传递）
-                        state_updates = {"current_chapter_index": current_chapter_index + 1}
-
-                        # 修改 reasoning
-                        reasoning = f"按段落研究模式：研究第 {current_chapter_index + 1}/{len(chapters)} 章: {current_chapter['title']}"
-
-                    else:
-                        # 所有段落都已研究完毕，应该调用 Reporter
-                        logger.info("✅ 所有段落研究完成，准备调用 Reporter")
-                        action = CentralAgentAction.DELEGATE
-                        reasoning = "所有段落的研究已完成，开始生成报告"
-                        if isinstance(params, dict):
-                            params["agent_type"] = "reporter"
-                            params["task_description"] = "根据所有段落的研究结果，生成完整报告"
-                        else:
-                            params.agent_type = "reporter"
-                            params.task_description = "根据所有段落的研究结果，生成完整报告"
-
-                        # 重置索引，以防后续需要重新研究
-                        state_updates = {"current_chapter_index": 0}
-
             if state.get("locale") == None:
                 locale = response.locale or "zh-CN"
-                # 将 locale 添加到 state
                 state["locale"] = locale
 
             logger.info(f"决策结果: {response}")
@@ -450,7 +589,7 @@ class CentralAgent:
                 reasoning=reasoning,
                 params=params,
                 instruction=instruction,
-                state_updates=state_updates,  # ZX 🆕 传递状态更新
+                state_updates=None,
             )
 
         except Exception as e:
@@ -540,7 +679,7 @@ class CentralAgent:
         )
 
     def execute_action(
-        self, decision: CentralDecision, state: State, config: RunnableConfig
+            self, decision: CentralDecision, state: State, config: RunnableConfig
     ) -> Command:
         """
         执行决策动作，调度对应的动作处理器
@@ -572,9 +711,6 @@ class CentralAgent:
                 goto="central_agent",
             )
 
-        # return handler(decision, state, config)
-
-        # ZX 🆕 新增
         # 执行 handler
         result = handler(decision, state, config)
 
@@ -586,13 +722,76 @@ class CentralAgent:
                 merged_update.update(result.update)  # 先复制原有的 update
             merged_update.update(decision.state_updates)  # 再让 state_updates 覆盖
 
+            # 🆕 对于 delegate 动作，添加用户可见的消息
+            if decision.action == CentralAgentAction.DELEGATE:
+                params = decision.params if isinstance(decision.params, dict) else {}
+                agent_type = params.get("agent_type", "")
+                task_description = params.get("task_description", "")
+
+                # 根据不同的 agent_type 生成不同的消息
+                if agent_type == "researcher":
+                    user_message = f"🔍 正在进行研究：{task_description[:50]}..." if len(
+                        task_description) > 50 else f"🔍 正在进行研究：{task_description}"
+                elif agent_type == "reporter":
+                    chapter_mode = params.get("chapter_mode", "")
+                    if chapter_mode == "single":
+                        chapter_index = params.get("chapter_index", 1)
+                        user_message = f"📝 正在生成第 {chapter_index} 章内容..."
+                    elif chapter_mode == "merge":
+                        user_message = "📄 正在合并所有章节，生成最终报告..."
+                    else:
+                        user_message = f"📝 正在生成报告..."
+                elif agent_type == "human":
+                    user_message = "👤 等待用户反馈..."
+                else:
+                    user_message = f"⚡ 正在执行任务..."
+
+                # 添加用户可见的消息
+                if "messages" not in merged_update:
+                    merged_update["messages"] = []
+                merged_update["messages"].append(
+                    AIMessage(content=user_message, name="central_agent")
+                )
+
             logger.debug(f"状态更新已合并: {decision.state_updates}")
 
-            # 🔧 创建新的 Command 对象（因为 Command 是 frozen 的）
+            # 创建新的 Command 对象
             return Command(
                 update=merged_update,
                 goto=result.goto,
             )
+
+        # 🆕 对于没有 state_updates 的 delegate 动作，也添加用户可见的消息
+        if decision.action == CentralAgentAction.DELEGATE:
+            params = decision.params if isinstance(decision.params, dict) else {}
+            agent_type = params.get("agent_type", "")
+            task_description = params.get("task_description", "")
+
+            # 根据不同的 agent_type 生成不同的消息
+            if agent_type == "researcher":
+                user_message = f"🔍 正在进行研究：{task_description[:50]}..." if len(
+                    task_description) > 50 else f"🔍 正在进行研究：{task_description}"
+            elif agent_type == "reporter":
+                chapter_mode = params.get("chapter_mode", "")
+                if chapter_mode == "single":
+                    chapter_index = params.get("chapter_index", 1)
+                    user_message = f"📝 正在生成第 {chapter_index} 章内容..."
+                elif chapter_mode == "merge":
+                    user_message = "📄 正在合并所有章节，生成最终报告..."
+                else:
+                    user_message = f"📝 正在生成报告..."
+            elif agent_type == "human":
+                user_message = "👤 等待用户反馈..."
+            else:
+                user_message = f"⚡ 正在执行任务..."
+
+            # 添加用户可见的消息
+            if result.update:
+                if "messages" not in result.update:
+                    result.update["messages"] = []
+                result.update["messages"].append(
+                    AIMessage(content=user_message, name="central_agent")
+                )
 
         return result
 
@@ -803,25 +1002,27 @@ class CentralAgent:
         )
 
     def _handle_delegate(
-        self, decision: CentralDecision, state: State, config: RunnableConfig
+            self, decision: CentralDecision, state: State, config: RunnableConfig
     ) -> Command:
         """处理委派动作，调度子Agent执行专项任务"""
-        # 检查 decision.params 的类型
+        # 检查 decision.params 的类型并提取参数
         if isinstance(decision.params, dict):
-            # 如果是字典，直接访问
             agent_type = decision.params.get("agent_type")
             task_description = decision.params.get("task_description", "")
+            params_dict = decision.params
         else:
-            # 如果是 DelegateParams 对象，使用属性访问
             agent_type = decision.params.agent_type
             task_description = decision.params.task_description or ""
+            if hasattr(decision.params, "model_dump"):  # Pydantic v2
+                params_dict = decision.params.model_dump()
+            elif hasattr(decision.params, "dict"):  # Pydantic v1
+                params_dict = decision.params.dict()
+            else:
+                params_dict = {}
 
         # 验证子Agent类型有效性
         if not agent_type or agent_type not in self.available_sub_agents:
-            error_msg = (
-                f"无效的子Agent类型: {agent_type}，可用类型: "
-                f"{self.available_sub_agents}"
-            )
+            error_msg = f"无效的子Agent类型: {agent_type}，可用类型: {self.available_sub_agents}"
             logger.error(f"central_error: {error_msg}")
             return Command(
                 update={
@@ -842,49 +1043,92 @@ class CentralAgent:
         )
         self.memory_stack.push(memory_entry)
 
-        # 构建子Agent执行上下文（包含记忆栈摘要）
+        # 构建子Agent执行上下文
         delegation_context = {
             "task_description": task_description,
             "agent_type": agent_type,
             "memory_context": self.memory_stack.get_summary(include_full_history=True),
             "original_query": state.get("user_query", ""),
         }
-        # 若为内容修改导致的 reporter 委派，清理 hitl_feedback 以避免 reporter 反复处理同一条反馈
+
+        # 🔧 风格处理逻辑（只保留一次）
+        hitl_feedback = state.get("hitl_feedback", "")
+        if hitl_feedback and "[CHANGED_STYLE]" in hitl_feedback:
+            # 🔧 风格切换：解析新风格
+            new_style = hitl_feedback.split("[CHANGED_STYLE]")[1].strip().split()[0] if \
+                hitl_feedback.split("[CHANGED_STYLE]")[1].strip().split() else hitl_feedback.split("[CHANGED_STYLE]")[
+                1].strip()
+
+            # 将新风格添加到 delegation_context
+            delegation_context["style"] = new_style
+            delegation_context["original_report"] = state.get("final_report", "")
+
+            logger.info(f"🎨 风格切换被触发！")
+            logger.info(f"   - 新风格: {new_style}")
+            logger.info(f"   - delegation_context['style']: {delegation_context.get('style')}")
+        else:
+            # 正常获取风格
+            user_selected_style = state.get("user_selected_style", "")
+
+            if not user_selected_style:
+                # 尝试从 user_query 或 original_query 中解析风格要求
+                user_query = state.get("user_query", "") or state.get("original_query", "")
+                original_query = state.get("original_query", "")
+                all_query_text = f"{user_query} {original_query}"
+
+                import re
+
+                # 方法1：提取【风格要求】后面的内容
+                style_match = re.search(r'【风格要求】\s*([\s\S]*?)(?=\n\n|【|$)', all_query_text)
+                if style_match:
+                    style_text = style_match.group(1).strip()
+                    # 提取前3行作为风格描述
+                    style_lines = [line.strip() for line in style_text.split('\n') if line.strip()]
+                    if style_lines:
+                        user_selected_style = ' '.join(style_lines[:3])
+                        logger.info(f"🎨 从【风格要求】中提取到风格: {user_selected_style[:100]}")
+
+            # 设置最终风格
+            final_style = user_selected_style or "政策研究报告"
+            delegation_context["style"] = final_style
+            logger.info(f"📊 最终使用的风格: {final_style[:100] if len(final_style) > 100 else final_style}")
+
+        # ZX 🆕 将 params 中的所有字段合并到 delegation_context
+        for key, value in params_dict.items():
+            if key not in ["task_description", "agent_type"] and value is not None:
+                delegation_context[key] = value
+
+        # ZX 🆕 添加调试日志
+        logger.info(f"📊 delegation_context keys: {list(delegation_context.keys())}")
+        logger.info(f"📊 chapter_mode: {delegation_context.get('chapter_mode')}")
+        logger.info(f"📊 chapter_index: {delegation_context.get('chapter_index')}")
+
+        # 处理内容修改导致的 reporter 委派
         hitl_feedback = state.get("hitl_feedback", "")
         clear_hitl_feedback = False
         if (
-            agent_type == "reporter"
-            and isinstance(hitl_feedback, str)
-            and hitl_feedback.upper().startswith("[CONTENT_MODIFY]")
+                agent_type == "reporter"
+                and isinstance(hitl_feedback, str)
+                and hitl_feedback.upper().startswith("[CONTENT_MODIFY]")
         ):
             clear_hitl_feedback = True
-            modify_request = hitl_feedback[len("[CONTENT_MODIFY]") :].strip()
+            modify_request = hitl_feedback[len("[CONTENT_MODIFY]"):].strip()
             if modify_request:
                 delegation_context["content_modify_request"] = modify_request
             delegation_context["skip_hitl_feedback"] = True
 
-        # 传递 decision.params 中的额外字段（如 interaction_type, question 等）
-        # 这对于 Human Agent 来说是必需的
-        if hasattr(decision.params, "model_dump"):  # Pydantic v2
-            params_dict = decision.params.model_dump()
-            for key, value in params_dict.items():
-                if key not in delegation_context and value is not None:
-                    delegation_context[key] = value
-        elif hasattr(decision.params, "dict"):  # Pydantic v1
-            params_dict = decision.params.dict()
-            for key, value in params_dict.items():
-                if key not in delegation_context and value is not None:
-                    delegation_context[key] = value
-        elif isinstance(decision.params, dict):
-            for key, value in decision.params.items():
-                if key not in delegation_context and value is not None:
-                    delegation_context[key] = value
-
         logger.info(f"central_delegate: 委派{agent_type}执行: {task_description}")
 
-        # ZX 🆕 新增
-        # 🆕 获取当前段落索引，确保状态传递
+        # 获取当前段落索引
         current_chapter_index = state.get("current_chapter_index", 0)
+
+        # ZX 🆕 保留子 Agent 设置的交互状态
+        need_human_interaction = state.get("need_human_interaction", False)
+        human_interaction_type = state.get("human_interaction_type", "")
+
+        logger.info(f"📊 保留交互状态:")
+        logger.info(f"   - need_human_interaction: {need_human_interaction}")
+        logger.info(f"   - human_interaction_type: {human_interaction_type}")
 
         return Command(
             update={
@@ -900,7 +1144,10 @@ class CentralAgent:
                     [entry.to_dict() for entry in self.memory_stack.get_all()]
                 ),
                 "locale": state.get("locale"),
-                "current_chapter_index": current_chapter_index,  # 🆕 确保状态传递
+                "current_chapter_index": current_chapter_index,
+                # ZX 🆕 保留交互状态
+                "need_human_interaction": need_human_interaction,
+                "human_interaction_type": human_interaction_type,
                 **({"hitl_feedback": ""} if clear_hitl_feedback else {}),
             },
             goto=agent_type,

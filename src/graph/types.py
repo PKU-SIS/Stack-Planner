@@ -45,4 +45,17 @@ class State(MessagesState):
 
     # ZX 新增：段落研究进度追踪
     current_chapter_index: int = 0  # 当前研究到哪个段落（从0开始）
-    chapter_research_status: dict = None  # 段落研究状态 {"1": "done", "2": "pending", ...}
+
+    # ZX 🆕 修改：将 chapter_research_status 改为 chapter_stage_status，含义更清晰
+    # 记录每章当前阶段："" | "researched" | "reported"
+    # 示例：{"1": "reported", "2": "researched", "3": "", ...}
+    chapter_stage_status: dict = {}
+
+    # ZX 🆕 新增：存储每章生成的报告内容
+    # 示例：{"1": "第1章的完整内容...", "2": "第2章的完整内容...", ...}
+    chapter_reports: dict = {}
+
+    # ZX 🆕 新增：报告生成模式
+    # "per_chapter": 每章独立生成报告，最后合并（原有流程）
+    # "cumulative_observations": 每章累积 observations，最后一次性生成报告（新流程）
+    report_mode: str = "cumulative_observations"  # "per_chapter" | "cumulative_observations"

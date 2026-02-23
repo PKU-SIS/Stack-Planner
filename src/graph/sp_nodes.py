@@ -6,6 +6,7 @@ from .types import State
 from src.utils.logger import logger
 from src.utils.statistics import global_statistics
 
+
 # -------------------------
 # 全局实例与节点定义
 # -------------------------
@@ -35,9 +36,26 @@ async def central_agent_node(state: State, config: RunnableConfig) -> Command:
     _check_agents_initialized()
     logger.info("中枢Agent节点激活")
 
+    # ZX 🆕 打印传入的 state 中的 chapter_reports
+    logger.info(f"📊 进入 central_agent_node 时:")
+    logger.info(f"   - chapter_reports: {state.get('chapter_reports', {})}")
+
     # 执行决策流程
     decision = global_central_agent.make_decision(state, config)
-    return global_central_agent.execute_action(decision, state, config)
+
+    # ZX 🆕 应用 state_updates（如果有）
+    if decision.state_updates:
+        logger.info(f"📊 应用状态更新: {decision.state_updates}")
+        state.update(decision.state_updates)
+
+    result = global_central_agent.execute_action(decision, state, config)
+
+    # 🆕 打印返回的 Command.update 中的 chapter_reports
+    if result.update:
+        logger.info(f"📊 central_agent_node 返回时:")
+        logger.info(f"   - chapter_reports in update: {result.update.get('chapter_reports', 'NOT FOUND')}")
+
+    return result
 
 
 async def researcher_node(state: State, config: RunnableConfig) -> Command:
