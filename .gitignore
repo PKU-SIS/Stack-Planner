@@ -41,3 +41,8 @@ cases/*
 test_*.py
 shells/*
 .cursor/
+
+#evaluation
+evaluation/deep_research_bench/run_benchmark_FactStruct.sh
+evaluation/deep_research_bench/run_benchmark_SP.sh
+# evaluation/deep_research_bench/run_benchmark.sh
