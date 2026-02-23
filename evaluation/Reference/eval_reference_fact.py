@@ -288,7 +288,7 @@ if __name__ == "__main__":
                 )
                 continue
             else:
-                result = validate(docs_map[ref_idx], fact_text)
+                # result = validate(docs_map[ref_idx], fact_text)
                 # print("result",result)
                 # exit()
                 # validation_results.append(
