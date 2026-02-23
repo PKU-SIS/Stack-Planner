@@ -18,9 +18,12 @@ from src.graph.sp_nodes import (
     coder_node,
     reporter_node,
     researcher_xxqg_node,
+    researcher_web_node,
     reporter_xxqg_node,
-    sp_planner_node,
+    reporter_test_node,
     outline_node,
+    sp_planner_node,
+    outline_test_node,
     perception_node,
     human_feedback_node,
     human_agent_node,
@@ -71,7 +74,7 @@ sub_agents_sp_xxqg = [
     {
         "name": SubAgentType.RESEARCHER.value,
         "description": "Information collection and research",
-        "node": researcher_xxqg_node,
+        "node": researcher_xxqg_node,  #
     },
     {
         "name": SubAgentType.REPORTER.value,
@@ -82,6 +85,25 @@ sub_agents_sp_xxqg = [
         "name": SubAgentType.HUMAN.value,
         "description": "Handle all human interactions including form filling, outline confirmation, report feedback, and proactive questioning. This agent manages the interrupt mechanism, ensures human feedback is properly collected, and ALWAYS prioritizes human input above all other considerations. 🔴 Human feedback has the HIGHEST priority.",
         "node": human_agent_node,
+    },
+]
+
+
+sub_agents_sp_test = [
+    {
+        "name": SubAgentType.OUTLINE.value,
+        "description": "Generate a structured content outline after the overall plan is finalized. This agent designs and adjusts the hierarchical structure of the report, including section titles and logical organization. It does NOT generate full text content or conduct research, and should be used only after task planning is complete.",
+        "node": outline_test_node,
+    },
+    {
+        "name": SubAgentType.RESEARCHER.value,
+        "description": "Information collection and research",
+        "node": researcher_web_node,  # researcher_xxqg_node, #
+    },
+    {
+        "name": SubAgentType.REPORTER.value,
+        "description": "Result organization and report generation",
+        "node": reporter_test_node,
     },
 ]
 
@@ -98,5 +120,7 @@ def get_sub_agents_by_global_type(graph_type: str):
         return sub_agents_sp
     elif graph_type == "sp_xxqg":
         return sub_agents_sp_xxqg
+    elif graph_type == "sp_test":
+        return sub_agents_sp_test
     else:
         raise ValueError(f"Unknown graph type: {graph_type}")

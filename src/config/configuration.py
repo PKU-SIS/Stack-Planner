@@ -1,6 +1,3 @@
-# Copyright (c) 2025 Bytedance Ltd. and/or its affiliates
-# SPDX-License-Identifier: MIT
-
 import os
 from dataclasses import dataclass, field, fields
 from typing import Any, Optional

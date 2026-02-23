@@ -1,8 +1,6 @@
-# Copyright (c) 2025 Bytedance Ltd. and/or its affiliates
-# SPDX-License-Identifier: MIT
-
 # Standard library imports
 from typing import Any, Dict, Iterator, List, Mapping, Optional, Type, Union, cast
+import re
 
 # Third-party imports
 import openai
@@ -26,6 +24,7 @@ from langchain_openai.chat_models.base import (
     _handle_openai_bad_request,
     warnings,
 )
+from src.utils.logger import logger
 
 
 def _convert_delta_to_message_chunk(
@@ -272,6 +271,7 @@ class ChatDashscope(ChatOpenAI):
         try:
             with context_manager as response:
                 is_first_chunk = True
+                logger.info("Successfully entered context manager")
                 for chunk in response:
                     # Convert chunk to dict if it's a model object
                     if not isinstance(chunk, dict):

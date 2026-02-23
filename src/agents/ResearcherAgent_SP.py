@@ -15,8 +15,9 @@ class ResearcherAgentSP(CommonReactAgent):
 
     def __init__(self, *args, **kwargs):
         agent_type = kwargs.pop("agent_type", "default_agent")
+        print("agent_type", agent_type)
         config = kwargs.pop("config", None)
-        default_tools = kwargs.pop("default_tools", [])
+        default_tools = kwargs.pop("default_tools", [])  # default_tools
         """Initialize the ResearcherAgent with additional attributes."""
         configurable = Configuration.from_runnable_config(config)
         mcp_servers = {}
@@ -62,7 +63,8 @@ class ResearcherAgentSP(CommonReactAgent):
         """Helper function to execute a step using the specified agent."""
         observations = state.get("observations", [])
         data_collections = state.get("data_collections", [])
-
+        logger.info(f"websearch 执行检索")
+        logger.info(f"state:{state}")
         # 从 params 中获取任务描述
         params = state.get("delegation_context", {})
         logger.debug(f"Delegate context: {params}")
@@ -144,7 +146,7 @@ class ResearcherAgentSP(CommonReactAgent):
         result = await self.ainvoke(
             input=agent_input, config={"recursion_limit": recursion_limit}
         )
-
+        logger.info(f"{self.agent_name.capitalize()} result: {result}")
         # Process the result
         response_content = result["messages"][-1].content
         logger.debug(

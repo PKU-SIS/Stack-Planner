@@ -1,6 +1,3 @@
-# Copyright (c) 2025 Bytedance Ltd. and/or its affiliates
-# SPDX-License-Identifier: MIT
-
 from langgraph.graph import MessagesState
 
 from src.prompts.planner_model import Plan
@@ -29,6 +26,7 @@ class State(MessagesState):
     dst_question: str = None
     hitl_feedback: str = ""
     report_outline: str = None
+    skip_perception: bool = False
 
     delegation_context: dict = None
     current_node: str = None
