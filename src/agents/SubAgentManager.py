@@ -6,7 +6,6 @@ from datetime import datetime
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import Command, interrupt
-from sentence_transformers import CrossEncoder
 
 from src.agents.CoderAgent import CoderAgent
 from src.agents.ResearcherAgent_SP import ResearcherAgentSP
@@ -24,8 +23,6 @@ from src.llms.llm import get_llm_by_type
 from src.prompts.template import apply_prompt_template
 from src.memory import MemoryStack, MemoryStackEntry
 from src.agents.CentralAgent import CentralAgent
-from src.tools.get_docs_info import search_docs
-from src.tools.bocha_search.web_search_en import web_search
 from src.tools.get_docs_info import search_docs_with_ref
 
 from ..graph.types import State
@@ -34,9 +31,6 @@ from src.utils.statistics import global_statistics, timed_step
 from src.utils.outline_parser import parse_outline, get_chapter_task_description
 
 import re
-from typing import Dict, Any
-import json
-from src.utils.reference_utils import global_reference_map, process_final_report
 
 from typing import Dict, List
 
@@ -213,93 +207,6 @@ class SubAgentManager:
         self.central_agent.memory_stack.push(memory_entry)
 
         logger.info("研究任务完成，返回中枢Agent")
-        return Command(
-            update={
-                "messages": [
-                    HumanMessage(
-                        content="研究任务完成，返回中枢Agent", name="researcher"
-                    )
-                ],
-                "current_node": "central_agent",
-                "memory_stack": self.central_agent.memory_stack.to_dict(),
-                "data_collections": result_data_collections,
-                "observations": result_observations,
-            },
-            goto="central_agent",
-        )
-
-    @timed_step("execute_web_researcher")
-    async def execute_web_researcher(
-        self, state: State, config: RunnableConfig
-    ) -> Command:
-        """
-        执行研究Agent，负责信息检索与分析
-
-        Args:
-            state: 当前系统状态
-            config: 运行配置
-
-        Returns:
-            执行结果Command对象
-        """
-        logger.info("Web Agent开始执行...")
-        delegation_context = state.get("delegation_context", {})
-        task_description = delegation_context.get("task_description", "未知研究任务")
-
-        # 配置研究工具链
-        # tools = [search_docs_tool]
-        tools = [get_web_search_tool(10)]
-
-        # 实例化研究Agent
-        research_agent = ResearcherAgentSP(
-            config=config, agent_type="researcher_web", default_tools=tools
-        )
-
-        # 执行研究任务并处理异常
-        try:
-            result_command = await research_agent.execute_agent_step(state)
-
-            # 从结果中提取数据用于记忆栈
-            result_observations = []
-            result_data_collections = []
-
-            if result_command and result_command.update:
-                result_observations = result_command.update.get("observations", [])
-                result_data_collections = result_command.update.get(
-                    "data_collections", []
-                )
-
-        except Exception as e:
-            logger.error(f"研究Agent执行失败: {str(e)}")
-            return Command(
-                update={
-                    "messages": [
-                        HumanMessage(
-                            content=f"研究任务失败: {str(e)}", name="researcher"
-                        )
-                    ],
-                    "current_node": "central_agent",
-                    "memory_stack": self.central_agent.memory_stack.to_dict(),
-                },
-                goto="central_agent",
-            )
-
-        # 记录到中枢Agent记忆栈
-        memory_entry = MemoryStackEntry(
-            timestamp=datetime.now().isoformat(),
-            action="delegate",
-            agent_type="researcher",
-            content=f"研究任务: {task_description}",
-            result={
-                "observations": result_observations,
-                # "data_collections": result_data_collections,
-            },
-        )
-        self.central_agent.memory_stack.push(memory_entry)
-
-        logger.info("研究任务完成，返回中枢Agent")
-        logger.info("Web研究任务完成，返回中枢Agent")
-        logger.info(f"state:{state}")
         return Command(
             update={
                 "messages": [
@@ -1637,14 +1544,13 @@ class SubAgentManager:
             logger.warning("没有累积的 observations，使用传统方式生成报告")
             return self._generate_full_report(state, style, "生成完整报告")
 
-        # 1111111111111
-        # # 🔧 使用 _generate_report_with_style 生成报告
-        # # 它已经支持使用 observations
-        # final_report = self._generate_report_with_style(state, style)
-        #
-        # logger.info(f"✅ 最终报告生成完成，长度: {len(final_report)}")
-        # if final_report and len(final_report) > 100:
-        #     logger.info(f"📄 final_report 前200字符: {final_report[:200]}")
+        # 🔧 使用 _generate_report_with_style 生成报告
+        # 它已经支持使用 observations
+        final_report = self._generate_report_with_style(state, style)
+
+        logger.info(f"✅ 最终报告生成完成，长度: {len(final_report)}")
+        if final_report and len(final_report) > 100:
+            logger.info(f"📄 final_report 前200字符: {final_report[:200]}")
 
         # 记录到 Memory Stack
         memory_entry = MemoryStackEntry(
@@ -2387,57 +2293,6 @@ class SubAgentManager:
                         )
                     ],
                     "current_node": "central_agent",
-                },
-                goto="central_agent",
-            )
-
-    @timed_step("execute_outline_test")
-    async def execute_outline_test(
-        self, state: State, config: RunnableConfig
-    ) -> Command:
-        user_query = state.get("user_query", "")
-        # check if the plan is auto accepted
-        outline_llm = get_llm_by_type(AGENT_LLM_MAP.get("outline", "default"))
-        wait_stage = state.get("wait_stage", "")
-        if wait_stage != "outline":
-            # bg_investigation = search_docs(user_query, top_k=5)
-            bg_investigation = web_search(user_query, top_k=5)
-            user_dst = state.get("user_dst", "")
-            try:
-                messages = [
-                    HumanMessage(
-                        f"##用户原始问题\n\n{user_query}\n\n##用户补充需求\n\n{user_dst}\n\n##可能用到的相关数据\n\n{bg_investigation}\n\n"
-                    )
-                ] + apply_prompt_template("outline", state)
-                response = outline_llm.invoke(messages)
-                outline_response = response.content
-                outline_response = repair_json_output(outline_response)
-                logger.info(f"大纲生成完成: {outline_response}")
-
-            except Exception as e:
-                logger.error(f"大纲生成执行失败: {str(e)}")
-                # 返回最简单的默认大纲
-                import json
-
-                outline_response = json.dumps(
-                    {"title": user_query, "children": []}, ensure_ascii=False
-                )
-
-            outline_confirmed = outline_response.strip()
-            logger.info(f"大纲自动确认: {outline_confirmed}")
-
-            return Command(
-                update={
-                    "messages": [
-                        HumanMessage(
-                            content=f"大纲确认: {outline_confirmed}", name="outline"
-                        )
-                    ],
-                    "report_outline": outline_confirmed,
-                    "current_node": "outline",
-                    "wait_stage": "",
-                    "need_human_interaction": False,
-                    "human_interaction_type": "",
                 },
                 goto="central_agent",
             )

@@ -18,8 +18,8 @@ from src.utils.json_utils import repair_json_output
 from src.utils.logger import logger
 from src.utils.statistics import global_statistics
 from src.prompts.central_decision import Decision, DelegateParams
-from src.utils.reference_utils import global_reference_map
 from src.utils.outline_parser import parse_outline, get_chapter_task_description
+
 
 from ..graph.types import State
 
@@ -472,81 +472,8 @@ class CentralAgent:
         在严格遵循上述不可回退执行流程的前提下，确保任务在结构上稳定、在人机交互上可控，并实现多智能体系统的可靠协同。
         """
 
-        DECISION_SOP_SP_TEST = """### 执行流程指南（Execution Workflow Guidelines）
-
-        你正在一个具有明确执行流程的多智能体系统中运行。
-        你的职责是**严格按照以下流程推进任务直至完成**，仅在任务复杂度提升或信息确实缺失时，才允许插入额外步骤。
-
-        ---
-
-        #### 强制性的高层执行流程（Mandatory High-Level Workflow）
-
-        ### 1. 大纲构建阶段（Outline Construction Phase，强制，规划之后）
-
-        - 你 **必须** 先委派给 **outline agent**。
-        - outline agent 负责基于已有上下文：
-        - 生成新的结构化大纲，或
-        - 对现有大纲进行结构性优化与修正。
-        - 该阶段 **至少必须执行一次**。
-        - 所有内部的大纲策略（如迭代深度、扩展、删减等）**完全由 outline agent 自主处理**。
-
-        ---
-
-        ### 2. 推理与研究阶段（Reasoning & Research Phase，强制，位于大纲与内容生成之间）
-
-        - 在大纲生成之后，你 **必须** 执行一个集中式的推理阶段。
-        - 在该阶段，中枢智能体（central agent）**必须**：
-        - 至少调用 **Researcher agent** 一次；
-        - 使用可用工具、文档或外部信息源，对大纲进行验证、补充或质疑。
-        - 该阶段的核心职责包括：
-        - 识别大纲中缺失、薄弱或缺乏支撑的章节；
-        - 在进入内容生成之前，解决结构性歧义或不确定性问题。
-        - **无论当前信息是否看似充分，该阶段都必须为每一个任务执行一次**。
-
-        ---
-
-        ### 3. 内容生成阶段（Content Generation Phase，强制，大纲确认之后）
-
-        - 一旦大纲生成并被确认，你 **必须** 委派给 **reporter agent**。
-        - reporter agent 必须 **严格依据已确认的大纲结构** 生成最终内容。
-        - 该阶段是任务完成的 **必要条件**。
-
-        ---
-
-        #### 执行约束与规则（Execution Constraints and Rules）
-
-        - 执行顺序 **必须严格遵循**：  
-        **大纲构建 → 推理与研究 → 内容生成**
-        - 仅当后续阶段暴露出内容结构或章节规划问题时，才允许回退至早期阶段。
-        - 在任何情况下，**都不得跳过大纲构建阶段**。
-        - **在 reporter agent 尚未生成最终内容之前，不得进入 FINISH 状态**。
-        - 若在任何阶段发现信息不足，必须在继续之前插入适当的补充步骤。
-
-        ---
-
-        #### 强制研究调用规则（Mandatory Research Invocation）
-
-        - 在 **每一次任务执行中**，Researcher agent **必须** 作为「推理与研究阶段」的一部分被调用。
-        - **不得跳过、伪造或模拟该阶段**；
-        - 在没有真实调用 Researcher agent 的情况下继续执行，是不被允许的。
-
-        ---
-
-        你的目标是：  
-        在严格遵循上述执行流程的前提下，确保任务在逻辑上完整、准备充分，并实现多智能体之间的高效、协调执行。
-        """
-
-        # 这个似乎要改其他地方，反正后面用不上，不要了
-        graph_format = config["configurable"]["graph_format"]
-        if graph_format == "sp_xxqg":
-            state["sop"] = DECISION_SOP_SP
-            logger.info(f"使用 SP 的 SOP")
-        if graph_format == "sp_test":
-            state["sop"] = DECISION_SOP_SP_TEST
-            logger.info(f"使用 SP 的 SOP")
-        else:
-            state["sop"] = None
-            logger.info(f"不使用 SOP")
+        state["sop"] = DECISION_SOP_SP
+        logger.info(f"使用 SP 的 SOP")
 
         # 构建决策prompt
         messages = self._build_decision_prompt(state, config)
@@ -671,9 +598,7 @@ class CentralAgent:
             **context,
             **config,
             "available_actions": ", ".join([a.value for a in action_options]),
-            "SOP": SOP,
         }
-
         return apply_prompt_template(
             "central_agent", state, extra_context=context_with_actions
         )
@@ -1237,8 +1162,6 @@ class CentralAgent:
         # 有报告，正常结束流程
         logger.info(f"final_report: {final_report}")
 
-        session_id = config["configurable"]["thread_id"]
-        # global_reference_map.save_session(session_id)
         # 构建执行摘要（包含完整记忆栈历史）
         execution_summary = {
             "user_query": state.get("user_query", "未知查询"),
@@ -1246,9 +1169,6 @@ class CentralAgent:
                 entry.to_dict() for entry in self.memory_stack.get_all()
             ],
             "final_report": final_report,
-            "research": global_reference_map.get_session_ref_map(
-                session_id
-            ),  # state.get("data_collections", []),
             "completion_time": datetime.now().isoformat(),
             "statistics": global_statistics.get_statistics(),
         }
