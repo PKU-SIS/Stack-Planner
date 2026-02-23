@@ -6,11 +6,20 @@ import time
 from tqdm import tqdm
 from openai import OpenAI
 import ast
+import yaml
+
+import os
+from dotenv import load_dotenv
+from openai import OpenAI
+
+# 自动加载 .env
+load_dotenv()
 
 
 def call_model(input):
-    api_key = "api"
-    client = OpenAI(api_key=api_key, base_url="url")
+    api_key = os.getenv("REF_API_KEY")
+    base_url = os.getenv("REF_BASE_URL")
+    client = OpenAI(api_key=api_key, base_url=base_url)
 
     response = client.chat.completions.create(
         model="deepseek-v3.2-20251201-160k-local",
