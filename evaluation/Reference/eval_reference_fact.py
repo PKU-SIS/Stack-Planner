@@ -289,13 +289,15 @@ if __name__ == "__main__":
                 continue
             else:
                 result = validate(docs_map[ref_idx], fact_text)
-                # print("result",result)
-                # exit()
+                if not result:  # 空列表
+                    final_result = "unknown"
+                else:
+                    final_result = result[0].get("result", "unknown")
                 validation_results.append(
                     {
                         "fact": fact_text,
                         "ref_idx": ref_idx,
-                        "result": result[0]["result"],
+                        "result": final_result,
                     }
                 )
 
