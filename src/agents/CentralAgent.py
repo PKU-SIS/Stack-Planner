@@ -19,6 +19,8 @@ from src.utils.logger import logger
 from src.utils.statistics import global_statistics
 from src.prompts.central_decision import Decision, DelegateParams
 from src.utils.reference_utils import global_reference_map
+from src.utils.outline_parser import parse_outline, get_chapter_task_description
+
 from ..graph.types import State
 
 # ZX 新增 在文件顶部的导入部分添加
@@ -346,7 +348,7 @@ class CentralAgent:
         if graph_format == "sp_xxqg":
             state["sop"] = DECISION_SOP_SP
             logger.info(f"使用 SP 的 SOP")
-        if graph_format == "sp_test":
+        elif graph_format == "sp_test":
             state["sop"] = DECISION_SOP_SP_TEST
             logger.info(f"使用 SP 的 SOP")
         else:
@@ -375,75 +377,78 @@ class CentralAgent:
                 action, ""
             )
 
-            # ZX 🆕 新增：段落循环研究逻辑
-            # 检查是否需要进入段落研究模式
-            outline = state.get("report_outline", "")
-            current_chapter_index = state.get("current_chapter_index", 0)
-
-            # 初始化 state_updates
             state_updates = None
+            if (
+                graph_format == "sp_xxqg"
+            ):  # 先这么放着，到时候在加给 test 用，现在 test 还是只调用一次 researcher。这个部分代码尝试后面放到前面的去搞。可以参考messages = self._build_decision_prompt(state, config)函数当中的"need_human_interaction": need_human_interaction,
+                # ZX 🆕 新增：段落循环研究逻辑
+                # 检查是否需要进入段落研究模式
+                outline = state.get("report_outline", "")
+                current_chapter_index = state.get("current_chapter_index", 0)
 
-            # 判断条件：
-            # 1. 大纲已确认（outline 不为空）
-            # 2. 当前决策是 DELEGATE researcher（LLM 决定要研究）
-            # 3. 还有未研究的段落
-            if outline and action == CentralAgentAction.DELEGATE:
-                agent_type = (
-                    params.get("agent_type", "")
-                    if isinstance(params, dict)
-                    else getattr(params, "agent_type", "")
-                )
+                # 初始化 state_updates
 
-                if agent_type == "researcher":
-                    chapters = parse_outline(outline)
+                # 判断条件：
+                # 1. 大纲已确认（outline 不为空）
+                # 2. 当前决策是 DELEGATE researcher（LLM 决定要研究）
+                # 3. 还有未研究的段落
+                if outline and action == CentralAgentAction.DELEGATE:
+                    agent_type = (
+                        params.get("agent_type", "")
+                        if isinstance(params, dict)
+                        else getattr(params, "agent_type", "")
+                    )
 
-                    # 检查是否还有未研究的段落
-                    if current_chapter_index < len(chapters):
-                        # 获取当前段落信息
-                        current_chapter = chapters[current_chapter_index]
-                        task_description = get_chapter_task_description(
-                            current_chapter, current_chapter_index
-                        )
+                    if agent_type == "researcher":
+                        chapters = parse_outline(outline)
 
-                        logger.info(
-                            f"📂 段落研究进度: {current_chapter_index + 1}/{len(chapters)}"
-                        )
-                        logger.info(
-                            f"📝 当前段落: 第{current_chapter['number']}章 - {current_chapter['title']}"
-                        )
-
-                        # 更新 params 中的任务描述
-                        if isinstance(params, dict):
-                            params["task_description"] = task_description
-                        else:
-                            params.task_description = task_description
-
-                        # 🆕 设置 state_updates（将通过 Command 传递）
-                        state_updates = {
-                            "current_chapter_index": current_chapter_index + 1
-                        }
-
-                        # 修改 reasoning
-                        reasoning = f"按段落研究模式：研究第 {current_chapter_index + 1}/{len(chapters)} 章: {current_chapter['title']}"
-
-                    else:
-                        # 所有段落都已研究完毕，应该调用 Reporter
-                        logger.info("✅ 所有段落研究完成，准备调用 Reporter")
-                        action = CentralAgentAction.DELEGATE
-                        reasoning = "所有段落的研究已完成，开始生成报告"
-                        if isinstance(params, dict):
-                            params["agent_type"] = "reporter"
-                            params["task_description"] = (
-                                "根据所有段落的研究结果，生成完整报告"
-                            )
-                        else:
-                            params.agent_type = "reporter"
-                            params.task_description = (
-                                "根据所有段落的研究结果，生成完整报告"
+                        # 检查是否还有未研究的段落
+                        if current_chapter_index < len(chapters):
+                            # 获取当前段落信息
+                            current_chapter = chapters[current_chapter_index]
+                            task_description = get_chapter_task_description(
+                                current_chapter, current_chapter_index
                             )
 
-                        # 重置索引，以防后续需要重新研究
-                        state_updates = {"current_chapter_index": 0}
+                            logger.info(
+                                f"📂 段落研究进度: {current_chapter_index + 1}/{len(chapters)}"
+                            )
+                            logger.info(
+                                f"📝 当前段落: 第{current_chapter['number']}章 - {current_chapter['title']}"
+                            )
+
+                            # 更新 params 中的任务描述
+                            if isinstance(params, dict):
+                                params["task_description"] = task_description
+                            else:
+                                params.task_description = task_description
+
+                            # 🆕 设置 state_updates（将通过 Command 传递）
+                            state_updates = {
+                                "current_chapter_index": current_chapter_index + 1
+                            }
+
+                            # 修改 reasoning
+                            reasoning = f"按段落研究模式：研究第 {current_chapter_index + 1}/{len(chapters)} 章: {current_chapter['title']}"
+
+                        else:
+                            # 所有段落都已研究完毕，应该调用 Reporter
+                            logger.info("✅ 所有段落研究完成，准备调用 Reporter")
+                            action = CentralAgentAction.DELEGATE
+                            reasoning = "所有段落的研究已完成，开始生成报告"
+                            if isinstance(params, dict):
+                                params["agent_type"] = "reporter"
+                                params["task_description"] = (
+                                    "根据所有段落的研究结果，生成完整报告"
+                                )
+                            else:
+                                params.agent_type = "reporter"
+                                params.task_description = (
+                                    "根据所有段落的研究结果，生成完整报告"
+                                )
+
+                            # 重置索引，以防后续需要重新研究
+                            state_updates = {"current_chapter_index": 0}
 
             if state.get("locale") == None:
                 locale = response.locale or "zh-CN"
@@ -549,7 +554,6 @@ class CentralAgent:
             "available_actions": ", ".join([a.value for a in action_options]),
             "SOP": SOP,
         }
-
         return apply_prompt_template(
             "central_agent", state, extra_context=context_with_actions
         )

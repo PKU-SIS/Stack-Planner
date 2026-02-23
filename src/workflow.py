@@ -1,3 +1,6 @@
+# Copyright (c) 2025 Bytedance Ltd. and/or its affiliates
+# SPDX-License-Identifier: MIT
+
 import asyncio
 import os
 from datetime import datetime
@@ -44,15 +47,19 @@ async def run_agent_workflow_async(
         enable_debug_logging()
 
     from src.graph.sp_nodes import init_agents
-    from src.graph.builder import get_graph_by_format
 
     init_agents(graph_format)
 
-    graph = get_graph_by_format(graph_format=graph_format, with_memory=False)
+    if graph_format == "sp":
+        from src.graph.builder import sp_graph as graph
+    elif graph_format == "xxqg":
+        from src.graph.builder import xxqg_graph as graph
+    elif graph_format == "sp_xxqg":
+        from src.graph.builder import sp_xxqg_graph as graph
+    elif graph_format == "base":
+        from src.graph.builder import base_graph as graph
 
-    logger.info(
-        f"Starting async workflow with user input: {user_input} (format: {graph_format})"
-    )
+    logger.info(f"Starting async workflow with user input: {user_input}")
     initial_state = {
         # Runtime Variables
         "messages": [{"role": "user", "content": user_input}],
@@ -60,6 +67,7 @@ async def run_agent_workflow_async(
         "enable_background_investigation": enable_background_investigation,
         "user_query": user_input,
         "skip_perception": True,
+        # "report_mode": "cumulative_observations",  # ZX 🆕 报告生成模式：per_chapter（每章独立）或 cumulative_observations（累积模式）
     }
     config = {
         "configurable": {
@@ -106,3 +114,7 @@ async def run_agent_workflow_async(
             logger.error(f"Error processing output: {str(e)}")
 
     logger.info("Async workflow completed successfully")
+
+
+if __name__ == "__main__":
+    logger.info(graph.get_graph(xray=True).draw_mermaid())
