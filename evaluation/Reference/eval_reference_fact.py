@@ -8,9 +8,18 @@ from openai import OpenAI
 import ast
 
 
+import os
+from dotenv import load_dotenv
+from openai import OpenAI
+
+# 自动加载 .env
+load_dotenv()
+
+
 def call_model(input):
-    api_key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjkwZDBjNmU0LTI1MzUtNGQ3OS1hOGI4LWUyMGJmYzIwMmIwYSJ9.xCJO76Cj2OMoEo1du9NTj0BI_wZIfYezCk3zbiijjqM"
-    client = OpenAI(api_key=api_key, base_url="http://162.105.88.35:3000/api")
+    api_key = os.getenv("REF_API_KEY")
+    base_url = os.getenv("REF_BASE_URL")
+    client = OpenAI(api_key=api_key, base_url=base_url)
 
     response = client.chat.completions.create(
         model="deepseek-v3.2-20251201-160k-local",
@@ -282,11 +291,23 @@ if __name__ == "__main__":
                 result = validate(docs_map[ref_idx], fact_text)
                 # print("result",result)
                 # exit()
+                # validation_results.append(
+                #     {
+                #         "fact": fact_text,
+                #         "ref_idx": ref_idx,
+                #         "result": result[0].get("result", "unknown"),
+                #     }
+                # )
+                result = validate(docs_map[ref_idx], fact_text)
+                if not result:  # 空列表
+                    final_result = "unknown"
+                else:
+                    final_result = result[0].get("result", "unknown")
                 validation_results.append(
                     {
                         "fact": fact_text,
                         "ref_idx": ref_idx,
-                        "result": result[0]["result"],
+                        "result": final_result,
                     }
                 )
 
