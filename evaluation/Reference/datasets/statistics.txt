@@ -1,7 +1,7 @@
-total_samples: 2
-total_facts: 28
-total_citations: 27
-total_supported: 25
-citation_per_sample: 13.5
-supported_per_sample: 12.5
-supported_rate: 0.9259259259259259
+total_samples: 9
+total_facts: 58
+total_citations: 52
+total_supported: 38
+citation_per_sample: 5.777777777777778
+supported_per_sample: 4.222222222222222
+supported_rate: 0.7307692307692307

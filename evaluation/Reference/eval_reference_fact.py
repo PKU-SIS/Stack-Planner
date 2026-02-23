@@ -85,22 +85,6 @@ prompt_validate = """你会看到一个参考资料和一些statement，请你�
 # =========================
 # 1️⃣ 解析 support_docs
 # =========================
-# def parse_support_docs(support_docs_str):
-#     docs_map = {}
-
-#     pattern = r"FactStructDocument\((.*?)\)"
-#     matches = re.findall(pattern, support_docs_str, re.S)
-
-#     for m in matches:
-#         cite_match = re.search(r"cite_id=(\d+)", m)
-#         text_match = re.search(r"text='(.*?)',\s*source_type", m, re.S)
-#         print("cite_match",cite_match)
-#         if cite_match and text_match:
-#             cite_id = int(cite_match.group(1))
-#             text = text_match.group(1)
-#             docs_map[cite_id] = text
-
-#     return docs_map
 import re
 
 
@@ -254,7 +238,9 @@ def compute_statistics(data, output_path):
 if __name__ == "__main__":
 
     input_path = "evaluation/Reference/datasets/parsed_dataset.json"
-    output_path = "evaluation/Reference/datasets/validated_dataset.json"
+    output_path = "evaluation/Reference/datasets/step2_validated_dataset.json"
+    # input_path = "evaluation/Reference/datasets/nli_processed_dataset.json"
+    # output_path = "evaluation/Reference/datasets/nli_validated_dataset.json"
 
     with open(input_path, "r", encoding="utf-8") as f:
         data = json.load(f)
@@ -262,10 +248,10 @@ if __name__ == "__main__":
     print(f"Processing {len(data)} samples...")
     count = 0
     for item in tqdm(data):
-        # count=count+1
-        # if count==3:
-        #     break
-        step1_output = item.get("step1_output")
+        count = count + 1
+        if count == 10:
+            break
+        step1_output = item.get("step2_output")  # item.get("step1_output")
         support_docs_str = item.get("support_docs")
 
         if not step1_output or not support_docs_str:

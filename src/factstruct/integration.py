@@ -613,8 +613,10 @@ def run_factstruct_stage2(
                     },
                 )
 
-                response = llm.invoke(messages)
-                content = response.content.strip()
+                # response = llm.invoke(messages)
+                # content = response.content.strip()
+                content = draft_content  # naive版本来个直接拼的，看看效果如何。
+
                 report_parts.append(f"{content}\n")
                 logger.debug(f"  生成了 {len(content)} 个字符")
                 # logger.info(f"正文messages:{messages}")
@@ -634,34 +636,34 @@ def run_factstruct_stage2(
                 )
 
                 # 如果没文档就不做引用检查了，后面再考虑上文的引用
-                if not relevant_docs:
-                    logger.warning(
-                        f"节点 '{node.title}' (ID: {node.id}) 未找到关联文档，不进行引用检查"
-                    )
-                else:
-                    logger.info(f"content :{content}")
-                    logger.info(f"relevant_docs:{relevant_docs}")
-                    # 这个是判断引用和句子的关系
-                    supported = filter_content_by_relevant_docs(
-                        content=content,
-                        relevant_docs=relevant_docs,
-                        semantic_cls=semantic_cls,
-                    )
-                    logger.info(f"supported :{supported}")
+                # if not relevant_docs:
+                #     logger.warning(
+                #         f"节点 '{node.title}' (ID: {node.id}) 未找到关联文档，不进行引用检查"
+                #     )
+                # else:
+                #     logger.info(f"content :{content}")
+                #     logger.info(f"relevant_docs:{relevant_docs}")
+                #     # 这个是判断引用和句子的关系
+                #     supported = filter_content_by_relevant_docs(
+                #         content=content,
+                #         relevant_docs=relevant_docs,
+                #         semantic_cls=semantic_cls,
+                #     )
+                #     logger.info(f"supported :{supported}")
 
-                    # 这个是把关系应用到生成文章上
-                    new_content = mark_content_with_support(
-                        content=content, nli_results=supported
-                    )
-                    logger.info(f"new_content :{new_content}")
+                #     # 这个是把关系应用到生成文章上
+                #     new_content = mark_content_with_support(
+                #         content=content, nli_results=supported
+                #     )
+                #     logger.info(f"new_content :{new_content}")
 
-                    # 这个是把错误引用进行处理的
-                    content = repair_unknown_citations(
-                        content=new_content,
-                        relevant_docs=relevant_docs,
-                        semantic_cls=semantic_cls,
-                    )
-                    logger.info(f"content :{content}")
+                #     # 这个是把错误引用进行处理的
+                #     content = repair_unknown_citations(
+                #         content=new_content,
+                #         relevant_docs=relevant_docs,
+                #         semantic_cls=semantic_cls,
+                #     )
+                #     logger.info(f"content :{content}")
 
             except Exception as e:
                 logger.error(f"  生成失败: {str(e)}")
