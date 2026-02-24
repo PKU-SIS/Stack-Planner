@@ -527,7 +527,7 @@ class OutlineAgent:
 
         try:
             outline_root, memory, initial_docs = self.batch_mab.run_initialization(
-                query=initial_query,
+                user_query=initial_query,
                 central_guidance=central_guidance,
                 replan_result=replan_result,
                 instruction=instruction,
@@ -577,6 +577,7 @@ class OutlineAgent:
 
         outline_root = state.get("factstruct_outline")
         memory = state.get("factstruct_memory")
+        initial_query = state["initial_query"]
         logger.info(f"用于写代码的case outline_root{outline_root}")
         logger.info(f"用于写代码的case memory{memory}")
         # 错误排查，防止没初始化
@@ -605,6 +606,7 @@ class OutlineAgent:
         try:
             # === 调用算法层 ===
             outline_root, memory = self.batch_mab.run_expansion(
+                user_query=initial_query,
                 outline_root=outline_root,
                 memory=memory,
                 max_iterations=max_iterations,
@@ -661,6 +663,7 @@ class OutlineAgent:
         """
         logger.info(f"Outline Tool: compress | reasoning={decision.reasoning}")
 
+        initial_query = state["initial_query"]
         outline_root = state.get("factstruct_outline")
         memory = state.get("factstruct_memory")
 
@@ -711,6 +714,7 @@ class OutlineAgent:
         try:
             # 调用 batch_mab 压缩算法（后续实现）
             outline_root, memory = self.batch_mab.run_compression(
+                user_query=initial_query,
                 outline_root=outline_root,
                 memory=memory,
                 merge_candidates=merge_candidates,
@@ -757,7 +761,7 @@ class OutlineAgent:
         更新 / 微调现有大纲（等价变换或添加文献覆盖）
         """
         logger.info(f"Outline Tool: update | reasoning={decision.reasoning}")
-
+        initial_query = state["initial_query"]
         outline_root = state.get("factstruct_outline")
         memory = state.get("factstruct_memory")
 
@@ -807,6 +811,7 @@ class OutlineAgent:
         try:
             # 调用 batch_mab 更新算法（后续实现）
             outline_root, memory = self.batch_mab.run_update(
+                user_query=initial_query,
                 outline_root=outline_root,
                 memory=memory,
                 update_candidates=update_candidates,

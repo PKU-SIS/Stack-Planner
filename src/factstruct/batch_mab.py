@@ -349,7 +349,7 @@ class BatchMAB:
 
     def run_initialization(
         self,
-        query: str,
+        user_query: str,
         central_guidance=None,
         replan_result=None,
         instruction=None,
@@ -361,12 +361,12 @@ class BatchMAB:
         """
         初始化 FactStruct：检索 → 向量化 → 存储 → 生成初始大纲
         """
-        logger.info(f"Starting Batch-MAB initialization with query: {query}")
+        logger.info(f"Starting Batch-MAB initialization with query: {user_query}")
 
         # --- Step 1: 检索 ---
         if not initial_docs:
             logger.info("Performing initial search...")
-            initial_docs = self.search_engine(query, k=k, config=config)
+            initial_docs = self.search_engine(user_query, k=k, config=config)
         else:
             logger.info("Use existing")
             if not all(isinstance(doc, FactStructDocument) for doc in initial_docs):
@@ -395,7 +395,7 @@ class BatchMAB:
         # --- Step 4: 生成初始大纲 ---
         logger.info("Generating initial outline...")
         outline_root = self.llm_wrapper.generate_initial_outline(
-            query=query,
+            query=user_query,
             docs=initial_docs_with_embed,
             central_guidance=central_guidance,
             replan_result=replan_result,
@@ -413,6 +413,7 @@ class BatchMAB:
 
     def run_expansion(
         self,
+        user_query: str,
         outline_root,
         memory,
         max_iterations: int,
@@ -530,6 +531,7 @@ class BatchMAB:
                 logger.info("Batch refining outline...")
                 outline_root, expanded_nodes_list, new_node_doc_mapping = (
                     self.llm_wrapper.batch_refine_outline(
+                        user_query,
                         outline_root,
                         node_doc_pairs_for_refine,
                         memory=self.memory,  # 传递 memory 以获取累积文档
@@ -626,6 +628,7 @@ class BatchMAB:
 
     def run_compression(
         self,
+        user_query: str,
         outline_root,
         memory,
         merge_candidates: List["OutlineNode"],
@@ -714,6 +717,7 @@ class BatchMAB:
                 new_node_doc_mapping,
                 merged_node_mapping,
             ) = self.llm_wrapper.compress_under_parent(
+                query=user_query,
                 outline_root=outline_root,
                 parent_node=parent,
                 child_nodes=children,
@@ -794,6 +798,7 @@ class BatchMAB:
 
     def run_update(
         self,
+        user_query: str,
         outline_root,
         memory,
         update_candidates: List["OutlineNode"],
@@ -961,6 +966,7 @@ class BatchMAB:
                 new_node_doc_mapping,
                 updated_node_mapping,
             ) = self.llm_wrapper.update_under_parent(
+                query=user_query,
                 outline_root=outline_root,
                 parent_node=parent,
                 child_nodes=children,
