@@ -18,13 +18,19 @@ LOCALE: {{locale}}
 
 ## 输入数据结构
 你将收到以下格式的输入数据：
-- **用户查询**
-- **报告大纲**
-- **各章节研究数据**
+- **用户查询**: {{user_query}}
+- **报告大纲**: {{report_outline}}
+- **各章节研究数据**:
+  {% for chapter_num, observations in chapter_results.items() %}
+  - **第 {{chapter_num}} 章**: 
+    {% for observation in observations %}
+    {{observation}}
+    {% endfor %}
+  {% endfor %}
 
 ## 生成要求
 1. 根据各章节研究数据生成完整报告
-2. 严格遵守报告大纲，保持章节结构
+2. 保持章节结构，为每个章节使用二级标题（##）
 3. 确保引用格式正确，使用行内引用【XX】
 4. 语言风格符合要求
 5. 逻辑连贯，内容完整

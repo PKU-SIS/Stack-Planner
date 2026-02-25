@@ -40,7 +40,7 @@ AVAILABLE_STYLES = ["鲁迅", "赵树理", "侠客岛"]
 # - content_modify: 测试内容修改（走 central_agent 决策）
 # - word_planning: 测试字数规划功能
 # - interactive: 交互式测试
-TEST_MODE = "word_planning"
+TEST_MODE = "style_switch"
 
 # 交互控制:
 # - "interactive": 强制走人工输入（仅在 TTY 下有效）
@@ -221,6 +221,18 @@ def present_report_and_get_feedback(report_content: str) -> str:
     print("=" * 60)
     print(report_content)
     print("=" * 60 + "\n")
+
+    # 提取并打印引用文献编号
+    import re
+    citation_pattern = r"【(\d+)】"
+    citation_numbers = re.findall(citation_pattern, report_content)
+    if citation_numbers:
+        citation_set = sorted(set(int(num) for num in citation_numbers))
+        print(f"📚 引用文献编号: {citation_set}")
+        print(f"📚 引用文献数量: {len(citation_set)} 个")
+    else:
+        print("📚 报告中未发现引用标记")
+    print()
 
     # 统计报告字数
     word_count = len(report_content)
