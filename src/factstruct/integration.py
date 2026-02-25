@@ -505,12 +505,7 @@ def run_factstruct_stage2(
                 logger.info(
                     f"----=====PARENT_NODE_ID_START=====----节点:  None (ID: None) ----=====PARENT_NODE_ID_END=====----"
                 )
-            # relevant_docs = []
-            # current = node
-            # while current is not None:
-            #     docs = memory.get_docs_by_node(current.id)
-            #     relevant_docs.extend(docs)
-            #     current = current.parent
+
             relevant_docs = []
             seen_ids = set()
             current = node
@@ -540,7 +535,20 @@ def run_factstruct_stage2(
             progress_context = get_progress_context(
                 path_stack, will_complete_chapters, next_chapter
             )
+            completed_content = "".join(report_parts).strip()
+            if not completed_content:
+                completed_content = "（尚未生成任何内容）"
+            # 处理字数限制
+            word_limit = None  # 是零就不处理
+            logger.info(f"node{node}")
+            logger.info(
+                f"node.word_limit = {node.word_limit}, type = {type(node.word_limit)}"
+            )
 
+            if (
+                isinstance(node.word_limit, int) and node.word_limit > 0
+            ):  # 是正整数就处理
+                word_limit = node.word_limit
             # prompt = f"""
             # 你是一个严谨的学术助手。
 
@@ -597,178 +605,359 @@ def run_factstruct_stage2(
             # ## 输出
             # 请生成“{node.title}”对应的事实整合段落文本。"""
 
-            prompt = f'''你是一名专业的高级研究分析师，负责撰写一份深度调研报告的特定章节。你的目标是产出**高信息密度、硬核事实驱动**的内容，坚决杜绝空洞的术语堆砌。
+            insight_prompt = f"""
+            你是一名专业的高级研究分析师，负责撰写一份深度调研报告的特定章节。
+
+            当前任务不是写报告正文，而是进行结构化推理：  
+            从给定资料中提炼“分析逻辑骨架”，用于后续正式写作。
+
+            你的目标是形成：机制清晰、可比较、可验证、可反驳的分析结构。
+
+            禁止：
+            - 不要写正式段落
+            - 不要写引用编号
+            - 不要写Markdown格式
+            - 不要写修辞语言
+            - 不要生成完整正文
+
+            ----------------------------------------------------------------------
+            一、核心认知原则
+            ----------------------------------------------------------------------
+
+            1. 机制优先原则（必须建立因果链）
+
+            禁止仅描述现象或结果。  
+            每一个趋势、增长、挑战或优势，必须解释“为什么发生”。
+
+            必须构建完整逻辑链条：
+
+            驱动因素 → 作用机制 → 中间变量 → 结果 → 可能反馈效应
+
+            不得出现孤立结论。
+
+            2. 比较抽象原则（避免平行罗列）
+
+            当存在两个及以上对象（公司/技术/路径/区域/模型）时：
+
+            - 必须抽象出共同比较维度
+            - 必须指出差异来源
+            - 不允许逐个对象割裂分析
+
+            比较维度示例（根据情境选择）：
+            技术路径 / 成本结构 / 商业模式 / 融资能力 / 风险暴露 / 可持续性 / 政策依赖度
+
+            3. 趋势拆解原则
+
+            若涉及增长、扩张、改善、衰退等变化：
+
+            - 必须区分内生因素、政策因素、周期因素
+            - 必须判断持续性条件
+
+            4. 风险与假设显性化
+
+            每一节必须识别：
+
+            - 隐含关键假设
+            - 潜在风险
+            - 数据局限来源
+
+            禁止给出无条件断言。
+
+            5. 情景化思维（如涉及预测）
+
+            若涉及未来趋势：
+
+            - 至少构建两种情景
+            - 明确触发条件
+            - 不得线性外推
+
+            必须输出以下结构化内容：
+
+            1. 本章节核心判断（1-2句话）
+
+            2. 信息域枚举  
+            （本章节理论上必须覆盖的维度）
+
+            3. 关键机制链条  
+            （可列出多条）
+
+            4. 若存在多个对象：  
+            统一比较维度 + 差异来源
+
+            5. 章节级表格规划（仅在必要时，不要每一次都生成表格，也不要整个文章都没有表格）：
+            - 是否需要表格：仅在本章节存在可横向比较的多个对象且有量化数据时
+            - 预估数量：整个文章全文建议 1~4 个表格
+            - 每个表格用途：展示核心对比维度，如经济资源对比、政治资源对比、教育/社保资源对比
+            - 表头设计：仅列出必要维度
+            - 核心数据字段：列出关键对比指标
+            - 建议位置：标明在章节哪个部分最合理出现
+            - 提示：若章节对象不可比较或数据不足，可跳过表格
+
+            提示：如果本章节对象不可比较或数据不足，可跳过表格。表格规划应作为章节整体策略，而非每条机制链条都生成。
             
-            ### 一、 核心写作准则（防范“虚、散、重”）
+            6. 数据可得性与缺口
 
-            1. **实体化锚点（拒绝空泛）**：
-            * 禁止使用“相关团队”、“某著名机构”、“多种算法”等模糊词汇。若资料包含具体机构、团队、数据库、年份或论文标题，必须准确呈现。
-            * **强制要求**：若资料中包含具体的实验室名称、带头人姓名、软件版本、数据库代号、论文标题、具体年份或特定城市，**必须**完整准确地呈现在正文中。
+            7. 风险与关键假设
 
+            8. 若涉及趋势：  
+            情景划分 + 触发条件
 
-            2. **量化证据链（拒绝定性描述）**：
-            * 禁止使用“显著提升”、“效果良好”、“规模巨大”等形容词。
-            * **强制要求**：若资料包含原始数值，必须呈现。若未提供具体数据，明确标注“未提供相关具体数据”，不得推测。
+            9. 篇幅估计：  
+            字数要参考字数限制提供的信息，生成指导信息，不要让下游文档生成超出限制。
+            ----------------------------------------------------------------------
 
-            3. **结构化对比（拒绝信息堆砌）**：
-            * 当多个对象在同一维度可横向比较时，使用 Markdown 表格。
-            * 若重点在机制解释或因果链条，使用段落分析。
-            * 避免为单一对象单独建立表格。
-
-            4. **因果逻辑闭环（提升深度洞察）**：
-            * 在描述“挑战”或“局限性”时，应该建立逻辑链条。例如：`数据标注成本高 -> 导致样本量稀缺 -> 进而限制了模型的外推预测能力【2】【4】`。
-
-
-            ### 二、 写作规范与格式
-
-            1. 格式要求：
-            - 使用规范的 Markdown 语法
-            - **重要：不得添加任何标题（# ## ###），仅撰写段落内容**
-            - 章节标题由系统自动生成
-            - 呈现对比数据、统计结果、功能或选项时可以使用表格，但是不要每一次都使用表格
-            - 正文内不包含行内引用标注
-            - 追踪信息来源，保持正文简洁易读
-            - 专业概念要解释
-
-
-            2. **直接切入，无元描述**：
-            * 严禁使用“本节主要介绍...”、“如前所述...”、“综上所述...”等过渡性废话。
-            * 第一句话必须是该章节的核心事实或关键结论。主题要聚焦，结构要凝练严密，不要重复
-            * 要突出重点，可以有表格。
-
-
-            3. **引用规范（行内分散式）**：
-            * 采用“事实陈述【编号】”格式。引用编号必须分散在句中或句末，严禁在一大段话最后堆砌一连串编号。
-            * 每条陈述必须有文献支撑，不允许编造。  
-            * 引用编号必须使用【1】【2】【3】格式，并严格对应文献顺序。  
-            * 避免生成重复或空引用。
-
-
-            4. **缺失信息处理**：
-            * 若参考资料中缺失关键信息（如具体的数据库规模或产业化时间线），请明确标注“未提供相关具体数据”，不得进行主观臆测。
-
-            ### 三、 数据完整性与表格模板
-
-            涉及对比分析时，请参考以下逻辑结构：
-            - 使用 Markdown 表格呈现对比数据、统计信息、功能或选项
-            - 必须包含清晰的表头行，注明列名
-            - 合理对齐列（文字左对齐，数字右对齐）
-            - 表格简洁，聚焦关键信息
-            - 使用规范 Markdown 表格语法：
-
-            | 表头1 | 表头2 | 表头3 |
-            |-------|-------|-------|
-            | 数据1 | 数据2 | 数据3 |
-            | 数据4 | 数据5 | 数据6 |
-
-            ---
-
-            ### 四、 任务上下文（由系统自动填充）
-
-            **1. 原始用户查询：**
+            原始用户查询：
             { user_query }
 
-            **2. 当前章节位置：**
-
-            * 完整大纲：{ full_outline }
-            * 当前节点：{node.title}
-
-            **写作规范**：
-            - 按照当前进度指示的章节撰写内容
-            - 参考完整大纲，明确自身在全文结构中的位置
-            - **不撰写结论性结尾**，完成本节内容即可
-
-
-            **3. 基于证据的草稿/素材（核心干货来源）：**
+            输入资料：
             {relevant_docs_text}
 
-            ## 输出
-            请生成“{node.title}”对应的事实整合段落文本。"""
-            **记住**：你的任务是**仅撰写当前章节的新增内容**，以上内容仅供参考。'''
-            draft_prompt = [HumanMessage(content=prompt)]
-            # step1 input
-            # logger.info(f"草稿messages:{draft_prompt}")
-            draft_response = llm.invoke(draft_prompt)
-            draft_content = draft_response.content.strip()
+            完整大纲：
+            { full_outline }
 
-            # 记录文档
-            logger.info(
-                f"----=====SUPPORT_DOCS_START=====----{relevant_docs}----=====SUPPORT_DOCS_END=====----"
-            )
-            # 记录step1 input
-            logger.info(
-                f"----=====STEP1_INPUT_START=====----{draft_prompt}----=====STEP1_INPUT_END=====----"
-            )
-            # 记录step1 output
-            logger.info(
-                f"----=====STEP1_OUTPUT_START=====----{draft_content}----=====STEP1_OUTPUT_END=====----"
-            )
+            已经生成内容：
+            {completed_content}
 
-            # 处理字数限制
-            word_limit = None  # 是零就不处理
-            logger.info(f"node{node}")
-            logger.info(
-                f"node.word_limit = {node.word_limit}, type = {type(node.word_limit)}"
-            )
-            # logger.info(f"relevant_docs{relevant_docs}")
+            章节标题：
+            {node.title}
+                            
+            字数限制:
+            {word_limit}
 
-            if (
-                isinstance(node.word_limit, int) and node.word_limit > 0
-            ):  # 是正整数就处理
-                word_limit = node.word_limit
+            ----------------------------------------------------------------------
 
-            completed_content = "".join(report_parts).strip()
-            if not completed_content:
-                completed_content = "（尚未生成任何内容）"
+            输出要求：
 
-            temp_state = {
-                "messages": [],
-                "user_query": user_query,
-                "full_outline": full_outline,
-                "progress_context": progress_context,
-                "completed_content": completed_content,
-                # "reference_materials": relevant_docs_text,
-                "draft_content": draft_content,
-                "locale": locale,
-                "word_limit": word_limit,  # 词数限制
-            }
+            - 使用清晰分点结构
+            - 每一部分必须单独列出
+            - 不要生成正文
+            - 不要加入多余解释
+            """
+
+            # temp_state = {
+            #     "messages": [],
+            #     "user_query": user_query,
+            #     "full_outline": full_outline,
+            #     "progress_context": progress_context,
+            #     "completed_content": completed_content,
+            #     # "reference_materials": relevant_docs_text,
+            #     "draft_content": draft_content,
+            #     "locale": locale,
+            #     "word_limit": word_limit,  # 词数限制
+            # }
 
             try:
-                messages = apply_prompt_template(
-                    "reporter_factstruct",
-                    temp_state,
-                    extra_context={
-                        "user_query": user_query,
-                        "full_outline": full_outline,
-                        "progress_context": progress_context,
-                        "completed_content": completed_content,
-                        # "reference_materials": relevant_docs_text,
-                        "draft_content": draft_content,
-                        "locale": locale,
-                        "word_limit": word_limit,  # 词数限制
-                    },
+                # step1 input
+                # 先构建 insight 草稿
+                insight_message = [HumanMessage(content=insight_prompt)]
+
+                insight_response = llm.invoke(insight_message)
+                insight_content = insight_response.content.strip()
+
+                # 记录文档
+                logger.info(
+                    f"----=====SUPPORT_DOCS_START=====----{relevant_docs}----=====SUPPORT_DOCS_END=====----"
                 )
+                # 记录step1 input
+                logger.info(
+                    f"----=====STEP1_INPUT_START=====----{insight_message}----=====STEP1_INPUT_END=====----"
+                )
+                # 记录step1 output
+                logger.info(
+                    f"----=====STEP1_OUTPUT_START=====----{insight_content}----=====STEP1_OUTPUT_END=====----"
+                )
+
+                # step2 input
+                # 再构建正文
+
+                content_prompt = f"""你是一名专业的高级研究分析师，负责撰写一份深度调研报告的特定章节。你的目标不是简单整合资料，而是进行结构化推理，产出“机制清晰、可比较、可验证、可反驳”的高密度分析内容。
+
+                本阶段任务：  
+                基于“结构化分析骨架（insight）”与“原始资料（relevant_docs_text）”，生成当前章节的正式分析正文。
+
+                你的输出必须严格围绕 insight 展开，不得偏离其逻辑结构。
+
+                ----------------------------------------------------------------------
+                一、输入材料
+                ----------------------------------------------------------------------
+
+                结构化分析骨架（必须作为逻辑主线）:
+                {insight_content}
+
+                证据资料（唯一事实来源）:
+                {relevant_docs_text}
+
+                原始用户查询:
+                {user_query}
+
+                完整大纲:
+                {full_outline}
+
+                当前章节标题:
+                {node.title}
+
+                ----------------------------------------------------------------------
+                二、核心写作原则（高约束模式）
+                ----------------------------------------------------------------------
+
+                1. 骨架驱动原则（禁止自由发挥）
+
+                - 正文结构必须严格对应 insight 的逻辑结构
+                - 所有机制链条必须被展开
+                - 所有比较维度必须被对齐展开
+                - 所有风险、假设、情景必须被落实为分析段落
+                - 不得新增 insight 未出现的重要判断
+
+                insight 是“逻辑蓝图”，正文只是“展开表达”。
+
+                ----------------------------------------------------------------------
+                2. 引用强制规则（最重要）
+                ----------------------------------------------------------------------
+
+                - 每一个事实陈述必须附带引用编号
+                - 每一段必须至少包含1个引用
+                - 不允许出现无来源断言
+                - 不允许编造引用
+                - 不允许合并引用堆砌在段尾
+                - 引用必须分散在句中或句末
+                - 引用编号严格【1】【2】【3】形式
+                - 情景与假设用段落文字描述，不放在【】中，不要输出这样的内容“【insight】”
+
+                引用格式必须为：
+                事实内容【1】
+
+                禁止：
+                - 在一段话末尾堆积【1】【2】【3】
+                - 出现未在资料中出现的信息
+
+                如果资料中未提供具体数据，必须写：
+                “未提供相关具体数据”
+
+                ----------------------------------------------------------------------
+                3. 语言风格控制（高级研究报告风格）
+                ----------------------------------------------------------------------
+
+                - 直接陈述核心判断，不使用“本节将…”等过渡语言
+                - 禁止口语化表达
+                - 禁止空泛形容词（如“显著”、“巨大”、“领先”）
+                - 必须使用机制语言：驱动、传导、约束、边际变化、成本结构、风险暴露等
+                - 多用因果句式，少用并列罗列
+                - 逻辑密度高于叙述密度
+
+                ----------------------------------------------------------------------
+                4. 表格使用规则（选择性，不强制）
+                ----------------------------------------------------------------------
+
+                当 insight 中存在“可横向对比的多个对象”，并且：
+
+                - 维度一致
+                - 数据可对齐
+                - 数量≥2
+
+                则使用 Markdown 表格呈现核心对比信息。
+
+                若重点在机制链条或因果分析，则使用段落展开。
+
+                禁止：
+                - 为单一对象建立表格
+                - 仅为装饰而建立表格
+
+                表格必须包含清晰表头，语法规范：
+
+                | 维度 | A | B |
+                |------|---|---|
+                | 指标1 | 数值 | 数值 |
+
+                ----------------------------------------------------------------------
+                5. 机制展开要求
+                ----------------------------------------------------------------------
+
+                每一个机制链条必须完整展开为：
+
+                驱动因素 → 传导机制 → 中间变量变化 → 结果 → 潜在反馈
+
+                不得只写结果。
+
+                ----------------------------------------------------------------------
+                6. 风险与假设显性化
+                ----------------------------------------------------------------------
+
+                正文必须包含：
+
+                - 关键隐含假设
+                - 潜在风险变量
+                - 若条件变化，结论如何调整
+
+                表达形式示例：
+
+                当前判断依赖于X假设成立；若Y发生变化，则该机制可能弱化【3】
+
+                ----------------------------------------------------------------------
+                7. 情景分析（若 insight 中包含）
+                ----------------------------------------------------------------------
+
+                必须构建：
+
+                - 基准情景
+                - 风险情景（或替代路径）
+
+                每个情景必须说明触发条件。
+
+                禁止线性外推。
+
+                ----------------------------------------------------------------------
+                三、格式要求
+                ----------------------------------------------------------------------
+
+                - 使用规范 Markdown
+                - 不添加标题（系统自动生成）
+                - 可以使用表格
+                - 不写结论性收尾
+                - 每150-200字必须有结构分隔（表格或独立段落）
+
+                ----------------------------------------------------------------------
+                四、输出目标
+                ----------------------------------------------------------------------
+
+                生成“{node.title}”对应的高密度分析正文。
+
+                必须：
+                - 严格依赖 insight
+                - 严格依赖资料
+                - 严格执行引用规范
+                - 仅生成当前章节新增内容"""
+                content_message = [HumanMessage(content=content_prompt)]
+
+                content_response = llm.invoke(content_message)
+                content_content = content_response.content.strip()
+                # messages = apply_prompt_template(
+                #     "reporter_factstruct",
+                #     temp_state,
+                #     extra_context={
+                #         "user_query": user_query,
+                #         "full_outline": full_outline,
+                #         "progress_context": progress_context,
+                #         "completed_content": completed_content,
+                #         # "reference_materials": relevant_docs_text,
+                #         "draft_content": draft_content,
+                #         "locale": locale,
+                #         "word_limit": word_limit,  # 词数限制
+                #     },
+                # )
 
                 # response = llm.invoke(messages)
                 # content = response.content.strip()
-                content = draft_content  # naive版本来个直接拼的，看看效果如何。
+                content = content_content  # naive版本来个直接拼的，看看效果如何。
 
                 report_parts.append(f"{content}\n")
                 logger.debug(f"  生成了 {len(content)} 个字符")
-                # logger.info(f"正文messages:{messages}")
-                # logger.info(
-                #     f"迁移输入开始开始开始标志标志标志{messages}迁移输入结束结束结束标志标志标志"
-                # )
-                # logger.info(
-                #     f"迁移输出开始开始开始标志标志标志{content}迁移输出结束结束结束标志标志标志"
-                # )
                 # 记录step2 input
                 logger.info(
-                    f"----=====STEP2_INPUT_START=====----{messages}----=====STEP2_INPUT_END=====----"
+                    f"----=====STEP2_INPUT_START=====----{content_message}----=====STEP2_INPUT_END=====----"
                 )
                 # 记录step2 output
                 logger.info(
-                    f"----=====STEP2_OUTPUT_START=====----{content}----=====STEP2_OUTPUT_END=====----"
+                    f"----=====STEP2_OUTPUT_START=====----{content_content}----=====STEP2_OUTPUT_END=====----"
                 )
 
                 # 如果没文档就不做引用检查了，后面再考虑上文的引用

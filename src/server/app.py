@@ -2,7 +2,6 @@ import base64
 import json
 from math import log
 
-from sympy import im
 from src.utils.logger import logger
 import os
 from typing import Annotated, List, cast
