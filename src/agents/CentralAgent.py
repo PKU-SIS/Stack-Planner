@@ -274,7 +274,7 @@ class CentralAgent:
                 action, ""
             )
             if state.get("locale") == None:
-                locale = response.locale or "zh-CN"
+                locale = response.locale or "en-US"  # "zh-CN"
                 # 将 locale 添加到 state
                 state["locale"] = locale
 
@@ -357,7 +357,9 @@ class CentralAgent:
             "sub_agents_description": self.sub_agents_description,
             "current_action": "decision",
             "messages_history": converted_messages,
-            "locale": state.get("locale", "zh-CN"),  # 确保locale被传递到模板
+            "locale": state.get(
+                "locale", "en-US"
+            ),  # "zh-CN"),  # 确保locale被传递到模板
         }
         action_options = list(CentralAgentAction)
         # 加载正确的模板名称并合并动作选项
@@ -417,7 +419,9 @@ class CentralAgent:
             "current_progress": state.get("observations", []),
             "decision_reasoning": decision.reasoning,
             "instruction": decision.instruction,
-            "locale": state.get("locale", "zh-CN"),  # 确保locale被传递到模板
+            "locale": state.get(
+                "locale", "en-US"
+            ),  # "zh-CN"),  # 确保locale被传递到模板
         }
 
         # 应用统一的决策提示模板
@@ -469,7 +473,9 @@ class CentralAgent:
             "current_action": "reflect",
             "decision_reasoning": decision.reasoning,
             "instruction": decision.instruction,
-            "locale": state.get("locale", "zh-CN"),  # 确保locale被传递到模板
+            "locale": state.get(
+                "locale", "en-US"
+            ),  # "zh-CN"),  # 确保locale被传递到模板
         }
 
         # 应用反思提示模板
@@ -561,7 +567,9 @@ class CentralAgent:
             "current_action": "summarize",
             "summarization_focus": decision.reasoning,
             "instruction": decision.instruction,
-            "locale": state.get("locale", "zh-CN"),  # 确保locale被传递到模板
+            "locale": state.get(
+                "locale", "en-US"
+            ),  # "zh-CN"),  # 确保locale被传递到模板
         }
 
         # 打印上下文用于调试
