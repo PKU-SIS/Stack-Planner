@@ -92,7 +92,7 @@ class OutlineAgent:
         llm=None,  # 这三个就是 None
         search_engine=None,
         embedder=None,
-        max_trys: int = 5,  # 这两个是默认参数
+        max_trys: int = 4,  # 5,  # 这两个是默认参数
     ):
         # 处理上游输入信息
         # --- Core task signal ---

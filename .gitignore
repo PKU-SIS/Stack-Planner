@@ -45,4 +45,5 @@ shells/*
 #evaluation
 evaluation/deep_research_bench/run_benchmark_FactStruct.sh
 evaluation/deep_research_bench/run_benchmark_SP.sh
+src/factstruct/More_reporter.py
 # evaluation/deep_research_bench/run_benchmark.sh

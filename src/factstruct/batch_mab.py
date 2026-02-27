@@ -466,7 +466,7 @@ class BatchMAB:
 
             # 并行执行检索（按照 proposal 要求实现真正的并行检索）
             logger.info(f"Performing parallel search for {len(queries)} queries...")
-            new_docs_list = self._parallel_search(queries, k=6, config=config)
+            new_docs_list = self._parallel_search(queries, k=8, config=config)
             # 这个地方要加一下。总结更新
             new_docs_list = self.batch_generate_observations(new_docs_list)
             # new_docs_list = self.batch_generate_observations(new_docs_list)
@@ -906,7 +906,7 @@ class BatchMAB:
 
         logger.info(f"Performing parallel search for {len(queries)} queries...")
         logger.info(f"Performing parallel search for {queries}")
-        new_docs_list = self._parallel_search(queries, k=6, config=config)
+        new_docs_list = self._parallel_search(queries, k=8, config=config)
         # 这个地方要加一下。总结更新
         new_docs_list = self.batch_generate_observations(new_docs_list)
 

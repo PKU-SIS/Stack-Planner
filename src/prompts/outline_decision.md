@@ -145,8 +145,8 @@
 
 ```json
 {
-  "max_iterations": 4,
-  "batch_size": 2
+  "max_iterations": 3,
+  "batch_size": 1
 }
 ```
 

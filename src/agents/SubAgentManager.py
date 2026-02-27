@@ -421,7 +421,7 @@ class SubAgentManager:
                     content=f"# Research Requirements\n\n## User Query\n\n{state.get('user_query', '')}\n\n{plan_info}"
                 )
             ],
-            "locale": state.get("locale", "en-US"),  # "zh-CN"),
+            "locale": state.get("locale", "zh-CN"),  # "en-US"),
         }
 
         # 收集报告生成所需上下文
@@ -656,7 +656,7 @@ class SubAgentManager:
                 memory_dict=factstruct_memory,
                 user_query=user_query,
                 llm_type=AGENT_LLM_MAP.get("reporter_factstruct", "basic"),
-                locale=state.get("locale", "en-US"),  # "zh-CN"),
+                locale=state.get("locale", "zh-CN"),  # "en-US"),
             )
 
             # 可以在这个地方加一个对final_report的处理
