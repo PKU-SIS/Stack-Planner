@@ -58,14 +58,28 @@ class WebSearcher:
                 resp.raise_for_status()
                 data = await resp.json()
                 results = self._parse_response(data)
-                return [
-                    {
+                # return [
+                #     {
+                #         "link": result["url"],
+                #         "title": result.get("name"),
+                #         "snippet": result.get("summary"),
+                #     }
+                #     for result in results.get("webpage", [])[:count]
+                # ]
+                output = []
+                for result in results.get("webpage", [])[:count]:
+                    snippet = result.get("summary")
+
+                    if isinstance(snippet, str) and len(snippet) > 1500:
+                        snippet = snippet[:1500]
+
+                    output.append({
                         "link": result["url"],
                         "title": result.get("name"),
-                        "snippet": result.get("summary"),
-                    }
-                    for result in results.get("webpage", [])[:count]
-                ]
+                        "snippet": snippet,
+                    })
+
+                return output
 
     @staticmethod
     def _parse_response(response: dict):

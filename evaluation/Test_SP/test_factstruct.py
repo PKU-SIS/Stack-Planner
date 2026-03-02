@@ -388,9 +388,9 @@ def parse_args():
         help="API URL，例如 http://localhost:8513/api/chat/sp_stream",
     )
     parser.add_argument(
-        "--jsonl_path",
+        "--input_path",
         type=str,
-        default="/data1/Yangzb/Wenzhi/CTG/deep_research_bench/data/prompt_data/query.jsonl",
+        default="evaluation/deep_research_bench/data/prompt_data/query.jsonl",
         help="输入 jsonl 文件路径",
     )
     parser.add_argument("--reports_dir", type=str, default="reports", help="日志目录")
@@ -407,7 +407,7 @@ def parse_args():
     parser.add_argument(
         "--output_path",
         type=str,
-        default="/data1/Yangzb/Wenzhi/CTG/deep_research_bench/data/test_data/raw_data/SP.jsonl",
+        default="evaluation/deep_research_bench/data/test_data/raw_data/SP.jsonl",
         help="输出文件路径",
     )
     parser.add_argument(
@@ -437,7 +437,7 @@ if __name__ == "__main__":
     print(f"已存在样本数量：{len(existing_prompts)}")
 
     # -------- 读取输入 jsonl --------
-    with open(args.jsonl_path, "r", encoding="utf-8") as f:
+    with open(args.input_path, "r", encoding="utf-8") as f:
         queries = [json.loads(line) for line in f if line.strip()]
     results = []
     count = 0

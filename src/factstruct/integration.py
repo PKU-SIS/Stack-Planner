@@ -436,9 +436,10 @@ def run_factstruct_stage2(
     # 初始化 NLI 模型
     nli_model_path = "/data1/Yangzb/Model/nlp_structbert_nli_chinese-tiny"
     # semantic_cls = pipeline(Tasks.nli,nli_model_path,model_revision='master')
-    semantic_cls = CrossEncoder(
-        "/data1/Yangzb/Model/StructBert/cross-encoder/nli-deberta-v3-small"
-    )
+    # semantic_cls = CrossEncoder(
+    #     "/data1/Yangzb/Model/StructBert/cross-encoder/nli-deberta-v3-small"
+    # )
+    semantic_cls =None
 
     def get_progress_context(stack, will_complete_chapters: list, next_chapter: str):
         context_lines = []

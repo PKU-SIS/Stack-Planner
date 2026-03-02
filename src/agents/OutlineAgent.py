@@ -118,7 +118,7 @@ class OutlineAgent:
 
         # === Embedder（重资源，只初始化一次）===
         self.embedder = embedder or Embedder(
-            model_name="../../Model/MiniLM/all-MiniLM-L6-v2"
+            model_name="/data2/sp/Model/MiniLM/all-MiniLM-L6-v2"#"#model_name="../../Model/MiniLM/all-MiniLM-L6-v2"
         )
 
         # === LLM ===

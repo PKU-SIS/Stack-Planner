@@ -90,15 +90,19 @@ class BoChaSearchResults(BaseTool):
 
     async def _arun(
         self,
-        query: str,
-        config: RunnableConfig,
+        query: str=None,
+        config: RunnableConfig=None,
         run_manager: Optional[AsyncCallbackManagerForToolRun] = None,
+        args=None, kwargs=None
     ) -> Tuple[Union[List[Dict], str], Dict]:
         """Use the BoCha search tool asynchronously."""
-
-        logger.debug(f"config:{config}")
+        
+        if kwargs and "query" in kwargs:
+            query = kwargs["query"]
+        if args and len(args) > 0:
+            query = args[0]
+            logger.debug(f"config:{config}")
         session_id = config["configurable"]["thread_id"]
-
         try:
             searcher = self._get_searcher()
             raw_results = await searcher.search_async(query, self.max_results)

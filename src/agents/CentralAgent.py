@@ -274,7 +274,7 @@ class CentralAgent:
                 action, ""
             )
             if state.get("locale") == None:
-                locale = response.locale or "zh-CN"  # "en-US"  # "zh-CN"
+                locale = response.locale or "en-US"  # "zh-CN"
                 # 将 locale 添加到 state
                 state["locale"] = locale
 
@@ -358,7 +358,7 @@ class CentralAgent:
             "current_action": "decision",
             "messages_history": converted_messages,
             "locale": state.get(
-                "locale", "zh-CN"  # "en-US"
+                "locale", "en-US"
             ),  # "zh-CN"),  # 确保locale被传递到模板
         }
         action_options = list(CentralAgentAction)
@@ -420,7 +420,7 @@ class CentralAgent:
             "decision_reasoning": decision.reasoning,
             "instruction": decision.instruction,
             "locale": state.get(
-                "locale", "zh-CN"  # "en-US"
+                "locale", "en-US"
             ),  # "zh-CN"),  # 确保locale被传递到模板
         }
 
@@ -474,7 +474,7 @@ class CentralAgent:
             "decision_reasoning": decision.reasoning,
             "instruction": decision.instruction,
             "locale": state.get(
-                "locale", "zh-CN"  # "en-US"
+                "locale", "en-US"
             ),  # "zh-CN"),  # 确保locale被传递到模板
         }
 
@@ -568,7 +568,7 @@ class CentralAgent:
             "summarization_focus": decision.reasoning,
             "instruction": decision.instruction,
             "locale": state.get(
-                "locale", "zh-CN"  # "en-US"
+                "locale",  "en-US"
             ),  # "zh-CN"),  # 确保locale被传递到模板
         }
 

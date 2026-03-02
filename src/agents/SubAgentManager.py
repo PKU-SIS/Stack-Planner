@@ -258,7 +258,7 @@ class SubAgentManager:
 
         # 配置研究工具链
         # tools = [search_docs_tool]
-        tools = [get_web_search_tool(10)]
+        tools = [get_web_search_tool(10)]#10
 
         # 实例化研究Agent
         research_agent = ResearcherAgentSP(
@@ -421,7 +421,7 @@ class SubAgentManager:
                     content=f"# Research Requirements\n\n## User Query\n\n{state.get('user_query', '')}\n\n{plan_info}"
                 )
             ],
-            "locale": state.get("locale", "zh-CN"),  # "en-US"),
+            "locale": state.get("locale", "en-US"),#"zh-CN"),  # 
         }
 
         # 收集报告生成所需上下文
@@ -563,30 +563,31 @@ class SubAgentManager:
             logger.info(f"observations:{observations}")
             # logger.info(f"data_collections:{data_collections}")
             logger.info(f"final_report:{final_report}")
-            semantic_cls = CrossEncoder(
-                "/data1/Yangzb/Model/StructBert/cross-encoder/nli-deberta-v3-small"
-            )
+            semantic_cls = None
+            # semantic_cls = CrossEncoder(
+            #     "/data1/Yangzb/Model/StructBert/cross-encoder/nli-deberta-v3-small"
+            # )
             # 这个是判断引用和句子的关系
-            supported = filter_content_by_relevant_docs(
-                content=final_report,
-                relevant_docs=reference_map,
-                semantic_cls=semantic_cls,
-            )
-            logger.info(f"supported :{supported}")
+            # supported = filter_content_by_relevant_docs(
+            #     content=final_report,
+            #     relevant_docs=reference_map,
+            #     semantic_cls=semantic_cls,
+            # )
+            # logger.info(f"supported :{supported}")
 
             # 这个是把关系应用到生成文章上
-            new_content = mark_content_with_support(
-                content=final_report, nli_results=supported
-            )
-            logger.info(f"new_content :{new_content}")
+            # new_content = mark_content_with_support(
+            #     content=final_report, nli_results=supported
+            # )
+            # logger.info(f"new_content :{new_content}")
 
-            # 这个是把错误引用进行处理的
-            final_report = repair_unknown_citations(
-                content=new_content,
-                relevant_docs=reference_map,
-                semantic_cls=semantic_cls,
-            )
-            logger.info(f"final_report :{final_report}")
+            # # 这个是把错误引用进行处理的
+            # final_report = repair_unknown_citations(
+            #     content=new_content,
+            #     relevant_docs=reference_map,
+            #     semantic_cls=semantic_cls,
+            # )
+            # logger.info(f"final_report :{final_report}")
 
         except Exception as e:
             import traceback
@@ -656,7 +657,7 @@ class SubAgentManager:
                 memory_dict=factstruct_memory,
                 user_query=user_query,
                 llm_type=AGENT_LLM_MAP.get("reporter_factstruct", "basic"),
-                locale=state.get("locale", "zh-CN"),  # "en-US"),
+                locale=state.get("locale",  "en-US"),# "zh-CN"),
             )
 
             # 可以在这个地方加一个对final_report的处理

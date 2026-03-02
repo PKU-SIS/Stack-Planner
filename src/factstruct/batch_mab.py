@@ -1516,7 +1516,7 @@ if __name__ == "__main__":
     # -----------------------
 
     # === Embedder（真实模型）===
-    embedder = Embedder(model_name="../../Model/MiniLM/all-MiniLM-L6-v2")
+    embedder = Embedder(model_name="/data2/sp/Model/MiniLM/all-MiniLM-L6-v2")#"../../Model/MiniLM/all-MiniLM-L6-v2")
 
     # === Search Engine（如果不想真的搜，可以给 dummy）===
     from src.factstruct.integration import create_search_engine_adapter

@@ -8,11 +8,15 @@ from openai import OpenAI
 from openai import NOT_GIVEN
 from openai.types.chat import ChatCompletionMessageParam
 
-client = OpenAI(
-    api_key=os.environ["OPENAI_API_KEY"],
-    organization=os.environ["OPENAI_ORGANIZATION_ID"],
-)
+# client = OpenAI(
+#     api_key=os.environ["OPENAI_API_KEY"],
+#     organization=os.environ["OPENAI_ORGANIZATION_ID"],
+# )
 
+client = OpenAI(
+    api_key=os.environ.get("OPENAI_API_KEY", "your_api_key_here"),
+    base_url=os.environ.get("OPENAI_BASE_URL", "https://your.api.server/v1"),
+)
 
 def query_openai_model(
     messages: list[ChatCompletionMessageParam],
