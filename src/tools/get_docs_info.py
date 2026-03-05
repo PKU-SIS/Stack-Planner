@@ -44,8 +44,8 @@ def get_kb_id_by_name(kb_name):
         "desc": "true",
     }
     data = {
-        "tenant_id": "e38fafc3e07411f0bf2ecd6543f8a381",  # "cbae14fb8c8411f0bf2ecd6543f8a381"
-        "owner_ids": ["cbae14fb8c8411f0bf2ecd6543f8a381"],
+        "tenant_id": "e38fafc3e07411f0bf2ecd6543f8a381",#"cbae14fb8c8411f0bf2ecd6543f8a381"  #这里提供的子然账号，XXQG知识库在这上面
+        "owner_ids": ["cbae14fb8c8411f0bf2ecd6543f8a381", "dc55bde9b62911f0bf2ecd6543f8a381"]
     }
 
     try:
@@ -149,7 +149,7 @@ def search_docs(question, top_k=5, config: RunnableConfig = None):
 
     query = {
         "tenant_id": "e38fafc3e07411f0bf2ecd6543f8a381",  # "cbae14fb8c8411f0bf2ecd6543f8a381",
-        "owner_ids": ["cbae14fb8c8411f0bf2ecd6543f8a381"],
+        "owner_ids": ["cbae14fb8c8411f0bf2ecd6543f8a381", "dc55bde9b62911f0bf2ecd6543f8a381"],
         "kb_id": [kb_id],
         "similarity_threshold": 0.3,  # 相似度阈值
         "question": question,
