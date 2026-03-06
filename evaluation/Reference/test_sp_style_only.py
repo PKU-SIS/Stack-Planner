@@ -11,6 +11,8 @@ if PROJECT_ROOT not in sys.path:
 
 from evaluation.Reference.sp_reporter_utils import (  # type: ignore
     group_by_query_and_outline,
+    group_by_query_and_outline_and_parent_node_id,
+    outline_for_parent_node,
     naive_style_change,
     extract_citation_set,
 )
@@ -40,10 +42,17 @@ def main() -> None:
         help="风格切换的目标风格（ROLE_CONSTRAINTS 中的 key 或自定义风格文本）",
     )
     parser.add_argument(
+        "--group_by",
+        type=str,
+        default="query_outline",
+        choices=["query_outline", "query_outline_parent"],
+        help="分组方式: query_outline=(user_query, outline); query_outline_parent=(user_query, outline, parent_node_id)",
+    )
+    parser.add_argument(
         "--max_groups",
         type=int,
         default=0,
-        help="最多处理多少个 (user_query, parent_node_id) 分组，0 表示全部",
+        help="最多处理多少个分组，0 表示全部",
     )
 
     args = parser.parse_args()
@@ -54,16 +63,29 @@ def main() -> None:
     with open(args.dataset_path, "r", encoding="utf-8") as f:
         data: List[Dict[str, Any]] = json.load(f)
 
-    groups = group_by_query_and_outline(data)
-    print(f"读取到 {len(data)} 条样本，分为 {len(groups)} 个 (user_query, outline) 分组。")
+    if args.group_by == "query_outline":
+        groups = group_by_query_and_outline(data)
+        print(f"读取到 {len(data)} 条样本，分为 {len(groups)} 个 (user_query, outline) 分组。")
+    else:
+        groups = group_by_query_and_outline_and_parent_node_id(data)
+        print(f"读取到 {len(data)} 条样本，分为 {len(groups)} 个 (user_query, outline, parent_node_id) 分组。")
 
     processed_groups = 0
+    total_with_refs = 0
+    total_same_set = 0
 
-    for idx, ((user_query, outline), items) in enumerate(groups.items(), start=1):
+    for idx, (key, items) in enumerate(groups.items(), start=1):
         if args.max_groups and idx > args.max_groups:
             break
 
-        # 取这一组中任意一个非空的 step3_output 作为原始报告
+        if args.group_by == "query_outline":
+            user_query, outline = key
+            report_outline = outline
+        else:
+            user_query, outline, parent_node_id = key
+            report_outline = outline_for_parent_node(outline, parent_node_id)
+
+        # 取这一组中任意一个非空的 step3_output 作为原始报告（同组内 step3_output 相同）
         base_item = next((it for it in items if it.get("step3_output")), None)
         if not base_item:
             continue
@@ -74,15 +96,18 @@ def main() -> None:
             continue
 
         print("\n" + "=" * 80)
-        print(f"[STYLE GROUP {idx}] style_algo={args.style_algo}")
+        print(f"[STYLE GROUP {idx}] style_algo={args.style_algo}, group_by={args.group_by}")
         print(f"user_query: {user_query}")
         print(f"outline: {outline}")
+        if args.group_by == "query_outline_parent":
+            print(f"parent_node_id: {parent_node_id}")
 
         print("\n[ORIGINAL MERGED REPORT]")
         print(merged_report)
 
         before_set = extract_citation_set(merged_report)
         print(f"\n[STYLE EVAL] 风格切换前引用集合: {before_set}")
+        print(f"[STYLE EVAL] before_set 大小: {len(before_set)}")
 
         # 1️⃣ 风格切换
         styled_report = naive_style_change(
@@ -90,7 +115,7 @@ def main() -> None:
             items=items,
             merged_report=merged_report,
             target_style=args.target_style,
-            report_outline=outline,
+            report_outline=report_outline,
         )
 
         print("\n[STYLED REPORT]")
@@ -98,6 +123,12 @@ def main() -> None:
 
         after_set = extract_citation_set(styled_report)
         print(f"\n[STYLE EVAL] 风格切换后引用集合: {after_set}")
+        print(f"[STYLE EVAL] after_set 大小: {len(after_set)}")
+
+        if len(before_set) > 0:
+            total_with_refs += 1
+            if before_set == after_set:
+                total_same_set += 1
 
         # 2️⃣ 写回 step4_input / step4_output
         for item in items:
@@ -114,6 +145,13 @@ def main() -> None:
         f"\n全部完成，共处理 {processed_groups} 个分组。"
         f"\n已将风格转换后的报告写回 step4_output，并将风格名写入 step4_input。"
     )
+
+    print("\n" + "=" * 80)
+    print("[GLOBAL STYLE STATS]")
+    print(f"before_set 大小 > 0 的分组总数: {total_with_refs}")
+    if total_with_refs > 0:
+        print(f"其中 before_set 与 after_set 完全相同的分组数: {total_same_set}")
+        print(f"占比: {total_same_set / total_with_refs:.2%}")
 
 
 if __name__ == "__main__":
