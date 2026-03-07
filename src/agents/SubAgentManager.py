@@ -329,35 +329,38 @@ class SubAgentManager:
                 "reporter", reporter_input, extra_context=context
             )
 
-            # 提取并强调用户的历史反馈意见
-            user_feedbacks = []
-            for entry in self.central_agent.memory_stack.get_all():
-                if entry.action == "human_feedback":
-                    # 提取反馈内容
-                    feedback_content = entry.content
-                    if entry.result:
-                        feedback_type = entry.result.get("feedback_type", "")
-                        if feedback_type == "content_modify":
-                            request = entry.result.get("request", "")
-                            user_feedbacks.append(f"- {request}")
-                        else:
-                            user_feedbacks.append(f"- {feedback_content}")
-                    else:
-                        user_feedbacks.append(f"- {feedback_content}")
-
-            # 如果有用户反馈，在显著位置添加到messages中
-            if user_feedbacks:
+            # 仅使用最新用户反馈（避免历史反馈累积导致矛盾指令）
+            hitl_feedback = state.get("hitl_feedback", "")
+            if hitl_feedback:
+                clean_feedback = hitl_feedback
+                if str(hitl_feedback).upper().startswith("[CONTENT_MODIFY]"):
+                    clean_feedback = str(hitl_feedback)[
+                        len("[CONTENT_MODIFY]") :
+                    ].strip()
                 feedback_message = (
-                    "# 🔴 CRITICAL: User Feedback Requirements\n\n"
-                    "The user has provided the following feedback that MUST be incorporated into the report:\n\n"
-                    + "\n".join(user_feedbacks)
-                    + "\n\n"
-                    "⚠️ These requirements are MANDATORY and must be fully addressed in the generated report. "
-                    "Do not ignore or dilute any of these feedback points."
+                    "# 🔴 CRITICAL: User Modification Request\n\n"
+                    f"The user has requested the following modification:\n\n{clean_feedback}\n\n"
+                    "⚠️ This is the LATEST user feedback. Apply this modification to the current report. "
+                    "Do not rewrite the entire report from scratch — only modify what the user requested."
                 )
                 messages.append(
                     HumanMessage(
                         content=feedback_message, name="user_feedback_emphasis"
+                    )
+                )
+
+            # 如果存在当前报告且有用户反馈，传入作为修改基础（增量修改而非从头生成）
+            current_report = state.get("final_report", "")
+            if current_report and hitl_feedback:
+                messages.append(
+                    HumanMessage(
+                        content=(
+                            "# Current Report (Base for Modification)\n\n"
+                            "Below is the current report. Apply the user's modification request to this report. "
+                            "Preserve all other content unchanged.\n\n"
+                            f"{current_report}"
+                        ),
+                        name="current_report",
                     )
                 )
 
@@ -416,26 +419,25 @@ class SubAgentManager:
 
     # 风格约束定义（类级别常量，供 reporter 相关方法共用）
     ROLE_CONSTRAINTS = {
-#         "鲁迅": """我希望生成的文字具备鲁迅式风格，语言尖锐、冷峻、带讽刺，但保持自然白话表达，可以使用少量文言。
-# 标题要求：文章必须包含一个标题，标题应简短有力、富隐喻或冷讽意味，可为一句或两句并列句。标题风格应与正文一致，具有鲁迅式的锋芒与余味，不得中性或平淡。标题必须使用 Markdown 一级标题格式呈现（即 # 标题），不得使用书名号、引号、括号等符号。
-# 重要禁止项：文中不要有"鲁迅"这个词，严禁在生成的文本中出现任何提及或引用"鲁迅"、"鲁迅先生"、"鲁迅笔下"、"他的作品"、"他的笔下的人物"等字眼的语句。文本风格应是直接的、沉浸式的鲁迅式表达，而非对鲁迅风格的引用或评论。此禁令在任何标题或正文中均适用，绝不可出现任何直接或间接的提及。
-# 风格应用强制要求：请确保文章的每一个自然段，乃至每一句的行文，都贯彻鲁迅式用词、句式和节奏。特别是在文章的中间部分，必须维持并强化这种尖锐、冷峻的语感。全篇保持一致的鲁迅式节奏与语气，特别在中段保持最高的语言张力与思想锋芒。
-# 正文开头必须紧接标题生成一个呼语（如'诸君！'），用于称呼听众。
-
-# 句式与节奏：
-# 采用短句、并列句和重复句（如"不是为了……，而是为了……"，"我们不能……再……"，"然而……"）；
-# 逻辑紧凑，节奏鲜明，读来有推力；
-# 可以用反问、讽刺、比喻、小见大，表达社会或人性的荒谬；
-# 偶尔自嘲或旁观者冷笑，保持"孤独知识分子"的视角。
-# 可出现明显的鲁迅式呼喊与强调，如"我要说的是……"，"我们不能……"，或"人类的悲欢并不相通"式的冷峻洞察。
-# 情感与气质：
-# 理性中带愤怒与冷漠，情感压抑而清醒；
-# 既有悲悯，也有讽刺与愤世嫉俗感；
-# 文字有"铁屋呐喊"的张力，让读者感受到现实的紧迫与不容回避。
-# 目标效果：
-# 生成文字中，应多出现类似"我今日站在这里，不是为了说些空话，而是为了……"、"我们不能让那些已经站起来的人，再倒下去"这种短句反复、强调现实责任与道德选择的表达；
-# 用词可带有鲁迅的语感，如"诸君""呐喊""罢了""然而""我想"之类。
-# 保证整体风格既现代白话，又显鲁迅式锋利、冷峻、理性批判。""",
+        #         "鲁迅": """我希望生成的文字具备鲁迅式风格，语言尖锐、冷峻、带讽刺，但保持自然白话表达，可以使用少量文言。
+        # 标题要求：文章必须包含一个标题，标题应简短有力、富隐喻或冷讽意味，可为一句或两句并列句。标题风格应与正文一致，具有鲁迅式的锋芒与余味，不得中性或平淡。标题必须使用 Markdown 一级标题格式呈现（即 # 标题），不得使用书名号、引号、括号等符号。
+        # 重要禁止项：文中不要有"鲁迅"这个词，严禁在生成的文本中出现任何提及或引用"鲁迅"、"鲁迅先生"、"鲁迅笔下"、"他的作品"、"他的笔下的人物"等字眼的语句。文本风格应是直接的、沉浸式的鲁迅式表达，而非对鲁迅风格的引用或评论。此禁令在任何标题或正文中均适用，绝不可出现任何直接或间接的提及。
+        # 风格应用强制要求：请确保文章的每一个自然段，乃至每一句的行文，都贯彻鲁迅式用词、句式和节奏。特别是在文章的中间部分，必须维持并强化这种尖锐、冷峻的语感。全篇保持一致的鲁迅式节奏与语气，特别在中段保持最高的语言张力与思想锋芒。
+        # 正文开头必须紧接标题生成一个呼语（如'诸君！'），用于称呼听众。
+        # 句式与节奏：
+        # 采用短句、并列句和重复句（如"不是为了……，而是为了……"，"我们不能……再……"，"然而……"）；
+        # 逻辑紧凑，节奏鲜明，读来有推力；
+        # 可以用反问、讽刺、比喻、小见大，表达社会或人性的荒谬；
+        # 偶尔自嘲或旁观者冷笑，保持"孤独知识分子"的视角。
+        # 可出现明显的鲁迅式呼喊与强调，如"我要说的是……"，"我们不能……"，或"人类的悲欢并不相通"式的冷峻洞察。
+        # 情感与气质：
+        # 理性中带愤怒与冷漠，情感压抑而清醒；
+        # 既有悲悯，也有讽刺与愤世嫉俗感；
+        # 文字有"铁屋呐喊"的张力，让读者感受到现实的紧迫与不容回避。
+        # 目标效果：
+        # 生成文字中，应多出现类似"我今日站在这里，不是为了说些空话，而是为了……"、"我们不能让那些已经站起来的人，再倒下去"这种短句反复、强调现实责任与道德选择的表达；
+        # 用词可带有鲁迅的语感，如"诸君""呐喊""罢了""然而""我想"之类。
+        # 保证整体风格既现代白话，又显鲁迅式锋利、冷峻、理性批判。""",
         "鲁迅": """我希望生成的文字具备鲁迅式语言风格，但精神气质必须是清醒、克制、面向行动与建设的，而非愤世嫉俗或情绪宣泄，但保持自然白话表达，可以使用少量文言。
 标题要求：文章必须包含一个标题，标题应简短有力、富隐喻或冷讽意味，可为一句或两句并列句。标题风格应与正文一致，具有鲁迅式的锋芒与余味，不得中性或平淡。标题必须使用 Markdown 一级标题格式呈现（即 # 标题），不得使用书名号、引号、括号等符号。
 重要禁止项：文中不要有"鲁迅"这个词，严禁在生成的文本中出现任何提及或引用"鲁迅"、"鲁迅先生"、"鲁迅笔下"、"他的作品"、"他的笔下的人物"等字眼的语句。文本风格应是直接的、沉浸式的鲁迅式表达，而非对鲁迅风格的引用或评论。此禁令在任何标题或正文中均适用，绝不可出现任何直接或间接的提及。
@@ -521,48 +523,39 @@ class SubAgentManager:
         delegation_context = state.get("delegation_context", {})
         task_description = delegation_context.get("task_description", "生成最终报告")
 
-        # 构建精简的 reporter 输入，只包含必要信息
-        # 避免传入完整 state["messages"]（包含大量 central agent 调度信息）
         user_query = state.get("user_query", "")
         user_dst = state.get("user_dst", "")
         report_outline = state.get("report_outline", "用户未提供大纲")
 
         reporter_input = {
-            "messages": [
-                HumanMessage(
-                    content=f"# Research Requirements\n\n## User Query\n\n{user_query}"
-                )
-            ],
+            "messages": [],
             "locale": state.get("locale", "zh-CN"),
-        }
-
-        context = {
-            "user_query": user_query,
-            "task_description": task_description,
         }
 
         report = "报告生成失败: 未知错误"
         try:
-            messages = apply_prompt_template(
-                "reporter_xxqg", reporter_input, extra_context=context
-            )
+            messages = apply_prompt_template("reporter_xxqg", reporter_input)
 
-            # 添加用户约束、大纲和数据收集
-            # data_collections = state.get("data_collections", [])
-            # data_collections_str = "\n\n".join(data_collections)
             constraint = self.ROLE_CONSTRAINTS.get(style_role, "")
 
-            # 检查是否存在原始报告（风格切换场景）
-            original_report = state.get("original_report", "")
-            reference_hint = ""
-            if original_report:
-                # 提取原始报告中的引用编号
-                import re
+            hitl_feedback = state.get("hitl_feedback", "")
+            is_content_modify = (
+                str(hitl_feedback).upper().startswith("[CONTENT_MODIFY]")
+            )
+            is_style_switch = str(hitl_feedback).upper().startswith("[CHANGED_STYLE]")
 
-                citations = re.findall(r"【(\d+)】", original_report)
-                if citations:
-                    unique_citations = sorted(set(citations), key=lambda x: int(x))
-                    reference_hint = f"\n\n##引用保持要求\n\n原始报告使用了以下引用编号：{'、'.join(['【' + c + '】' for c in unique_citations])}。请在新风格的报告中尽量保持使用相同的引用来源，确保引用的完整性和一致性。"
+            # reference_hint 仅用于风格切换：内容不变只换风格，引用应保持一致
+            # 内容修改时不需要，因为内容变化后引用自然会变
+            reference_hint = ""
+            if is_style_switch:
+                original_report = state.get("original_report", "")
+                if original_report:
+                    import re
+
+                    citations = re.findall(r"【(\d+)】", original_report)
+                    if citations:
+                        unique_citations = sorted(set(citations), key=lambda x: int(x))
+                        reference_hint = f"\n\n##引用保持要求\n\n原始报告使用了以下引用编号：{'、'.join(['【' + c + '】' for c in unique_citations])}。请在新风格的报告中尽量保持使用相同的引用来源，确保引用的完整性和一致性。"
 
             messages.append(
                 HumanMessage(
@@ -577,6 +570,45 @@ class SubAgentManager:
                     HumanMessage(
                         content=f"以下是检索智能体收集到的高质量信息: \n\n{observation}",
                         name="search_agent",
+                    )
+                )
+            current_report = state.get("final_report", "")
+
+            if is_content_modify:
+                clean_feedback = str(hitl_feedback)[len("[CONTENT_MODIFY]") :].strip()
+                messages.append(
+                    HumanMessage(
+                        content=(
+                            "# 🔴 CRITICAL: User Modification Request\n\n"
+                            f"The user has requested the following modification:\n\n{clean_feedback}\n\n"
+                            "⚠️ Apply this modification to the current report. "
+                            "Do not rewrite the entire report from scratch."
+                        ),
+                        name="user_feedback_emphasis",
+                    )
+                )
+                if current_report:
+                    messages.append(
+                        HumanMessage(
+                            content=(
+                                "# Current Report (Base for Modification)\n\n"
+                                "Below is the current report. Apply the user's modification request to this report. "
+                                "Preserve all other content unchanged.\n\n"
+                                f"{current_report}"
+                            ),
+                            name="current_report",
+                        )
+                    )
+            elif is_style_switch and current_report:
+                messages.append(
+                    HumanMessage(
+                        content=(
+                            "# Current Report (Base for Style Rewrite)\n\n"
+                            "Below is the current report. Rewrite it in the new style specified above. "
+                            "Preserve the factual content, structure, and citations.\n\n"
+                            f"{current_report}"
+                        ),
+                        name="current_report",
                     )
                 )
 
@@ -615,7 +647,7 @@ class SubAgentManager:
         current_style = state.get("current_style", "")
 
         wait_stage = state.get("wait_stage", "")
-        if wait_stage != "reporter":
+        if wait_stage != "reporter":  # 内容修改也走这个分支
             # 首次进入：生成报告
             logger.info(f"使用风格 '{current_style}' 生成报告...")
             final_report = self._generate_report_with_style(state, current_style)
@@ -1017,7 +1049,7 @@ class SubAgentManager:
                 previous_outline = state.get("report_outline", "")
                 outline_confirmed = feedback[len("[CONFIRMED_OUTLINE]") :].strip()
 
-                #原先的outline中有形如【id】的引用标志，而确认后的outline不仅删除了所有引用标志，还修改了文字部分。我需要把原先的引用标志补全回来：如果原先这个位置有引用标志而现在这个位置附近的文字也没被修改，那么补充回来；如果被修改了就不用补充了
+                # 原先的outline中有形如【id】的引用标志，而确认后的outline不仅删除了所有引用标志，还修改了文字部分。我需要把原先的引用标志补全回来：如果原先这个位置有引用标志而现在这个位置附近的文字也没被修改，那么补充回来；如果被修改了就不用补充了
                 def repair_outline_citations(previous_outline, outline_confirmed):
                     """
                     把 previous_outline 中的【id】引用标志，尽可能无损地回补到 outline_confirmed 中。
@@ -1028,21 +1060,22 @@ class SubAgentManager:
                     """
                     # 提取 previous 中的引用映射：{纯文本: 【id】}
                     prev_map = {}
-                    for m in re.finditer(r'(.*?)(【\d+】)', previous_outline):
+                    for m in re.finditer(r"(.*?)(【\d+】)", previous_outline):
                         text_snippet = m.group(1).strip()
                         citation = m.group(2)
                         if text_snippet:
                             prev_map[text_snippet] = citation
                     logger.debug(f"Previous outline citation map: {prev_map}")
+
                     # 按段落逐句扫描 confirmed，尝试回补
                     def replace_func(match):
                         sentence = match.group(1)
                         # 若句子已含引用，跳过
-                        if re.search(r'【\d+】', sentence):
+                        if re.search(r"【\d+】", sentence):
                             return match.group(0)
                         # 寻找最近似原文片段
                         best_key = None
-                        best_ratio = 0.6   # 阈值，可微调
+                        best_ratio = 0.6  # 阈值，可微调
                         for key in prev_map:
                             # 简单相似：包含关系即可
                             if key in sentence or sentence in key:
@@ -1055,19 +1088,19 @@ class SubAgentManager:
 
                     # 以句号为界，逐句处理
                     confirmed_repaired = re.sub(
-                        r'([^。！？\n]+[。！？])',
-                        replace_func,
-                        outline_confirmed
+                        r"([^。！？\n]+[。！？])", replace_func, outline_confirmed
                     )
                     return confirmed_repaired
 
-                if re.search(r'【\d+】', outline_confirmed):
+                if re.search(r"【\d+】", outline_confirmed):
                     # 如果确认后的大纲中已经有引用标志，就不需要回补了
                     logger.debug("确认后的大纲中已有引用标志，无需回补")
                     pass
                 else:
-                    outline_confirmed = repair_outline_citations(previous_outline, outline_confirmed)
-                    
+                    outline_confirmed = repair_outline_citations(
+                        previous_outline, outline_confirmed
+                    )
+
                 logger.info(f"大纲确认: {outline_confirmed}")
 
                 return Command(
@@ -1084,8 +1117,8 @@ class SubAgentManager:
                     goto="central_agent",
                 )
             elif feedback and str(feedback).upper().startswith("[SKIP]"):
-                outline_confirmed = feedback[len("[SKIP]") :].strip()
-                logger.info(f"大纲确认: {outline_confirmed}")
+                outline_confirmed = state.get("report_outline", "")
+                logger.info(f"用户跳过大纲编辑，保留原始大纲: {outline_confirmed}")
 
                 return Command(
                     update={

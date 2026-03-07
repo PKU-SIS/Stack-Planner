@@ -137,6 +137,9 @@ def search_docs(question, top_k=5, config: RunnableConfig = None):
         logger.info("knowledge_base_name使用的默认参数")
     else:
         knowledge_base_name = config["configurable"]["knowledge_base_name"]
+        if knowledge_base_name==None or knowledge_base_name=='':
+            knowledge_base_name= "学习强国"
+            logger.info("knowledge_base_name使用的默认参数")
         logger.info("knowledge_base_name使用的自定义参数")
 
     kb_id = get_kb_id_by_name(knowledge_base_name)

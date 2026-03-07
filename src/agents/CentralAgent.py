@@ -211,32 +211,18 @@ class CentralAgent:
             else:
                 converted_messages.append(msg)
 
-        # 提取用户反馈并格式化为强调文本
+        # 仅使用最新用户反馈（避免历史反馈累积导致矛盾指令）
         user_feedback_text = ""
         hitl_feedback = state.get("hitl_feedback", "")
         if hitl_feedback:
-            user_feedback_text = f"\n\n🔴 **CRITICAL USER FEEDBACK**: {hitl_feedback}\n\nThis feedback MUST be considered in your decision-making process."
-
-        # 从记忆栈中提取所有用户反馈
-        user_feedbacks_from_memory = []
-        for entry in self.memory_stack.get_all():
-            if entry.action == "human_feedback":
-                feedback_content = entry.content
-                if entry.result:
-                    feedback_type = entry.result.get("feedback_type", "")
-                    if feedback_type == "content_modify":
-                        request = entry.result.get("request", "")
-                        user_feedbacks_from_memory.append(f"- {request}")
-                    else:
-                        user_feedbacks_from_memory.append(f"- {feedback_content}")
-                else:
-                    user_feedbacks_from_memory.append(f"- {feedback_content}")
-
-        if user_feedbacks_from_memory:
-            user_feedback_text += (
-                "\n\n🔴 **USER FEEDBACK HISTORY**:\n"
-                + "\n".join(user_feedbacks_from_memory)
-                + "\n\n⚠️ All feedback above MUST be addressed. When delegating to reporter, ensure these requirements are fulfilled."
+            # 提取实际反馈内容（去掉 [CONTENT_MODIFY] 等前缀）
+            clean_feedback = hitl_feedback
+            if str(hitl_feedback).upper().startswith("[CONTENT_MODIFY]"):
+                clean_feedback = str(hitl_feedback)[len("[CONTENT_MODIFY]") :].strip()
+            user_feedback_text = (
+                f"\n\n🔴 **CRITICAL USER FEEDBACK (LATEST)**: {clean_feedback}\n\n"
+                "This is the user's LATEST feedback and MUST be the primary focus of your decision. "
+                "Previous feedback rounds have already been incorporated into the current report."
             )
 
         context = {
