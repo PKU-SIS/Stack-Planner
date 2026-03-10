@@ -419,25 +419,7 @@ class SubAgentManager:
 
     # 风格约束定义（类级别常量，供 reporter 相关方法共用）
     ROLE_CONSTRAINTS = {
-        #         "鲁迅": """我希望生成的文字具备鲁迅式风格，语言尖锐、冷峻、带讽刺，但保持自然白话表达，可以使用少量文言。
-        # 标题要求：文章必须包含一个标题，标题应简短有力、富隐喻或冷讽意味，可为一句或两句并列句。标题风格应与正文一致，具有鲁迅式的锋芒与余味，不得中性或平淡。标题必须使用 Markdown 一级标题格式呈现（即 # 标题），不得使用书名号、引号、括号等符号。
-        # 重要禁止项：文中不要有"鲁迅"这个词，严禁在生成的文本中出现任何提及或引用"鲁迅"、"鲁迅先生"、"鲁迅笔下"、"他的作品"、"他的笔下的人物"等字眼的语句。文本风格应是直接的、沉浸式的鲁迅式表达，而非对鲁迅风格的引用或评论。此禁令在任何标题或正文中均适用，绝不可出现任何直接或间接的提及。
-        # 风格应用强制要求：请确保文章的每一个自然段，乃至每一句的行文，都贯彻鲁迅式用词、句式和节奏。特别是在文章的中间部分，必须维持并强化这种尖锐、冷峻的语感。全篇保持一致的鲁迅式节奏与语气，特别在中段保持最高的语言张力与思想锋芒。
-        # 正文开头必须紧接标题生成一个呼语（如'诸君！'），用于称呼听众。
-        # 句式与节奏：
-        # 采用短句、并列句和重复句（如"不是为了……，而是为了……"，"我们不能……再……"，"然而……"）；
-        # 逻辑紧凑，节奏鲜明，读来有推力；
-        # 可以用反问、讽刺、比喻、小见大，表达社会或人性的荒谬；
-        # 偶尔自嘲或旁观者冷笑，保持"孤独知识分子"的视角。
-        # 可出现明显的鲁迅式呼喊与强调，如"我要说的是……"，"我们不能……"，或"人类的悲欢并不相通"式的冷峻洞察。
-        # 情感与气质：
-        # 理性中带愤怒与冷漠，情感压抑而清醒；
-        # 既有悲悯，也有讽刺与愤世嫉俗感；
-        # 文字有"铁屋呐喊"的张力，让读者感受到现实的紧迫与不容回避。
-        # 目标效果：
-        # 生成文字中，应多出现类似"我今日站在这里，不是为了说些空话，而是为了……"、"我们不能让那些已经站起来的人，再倒下去"这种短句反复、强调现实责任与道德选择的表达；
-        # 用词可带有鲁迅的语感，如"诸君""呐喊""罢了""然而""我想"之类。
-        # 保证整体风格既现代白话，又显鲁迅式锋利、冷峻、理性批判。""",
+
         "鲁迅": """我希望生成的文字具备鲁迅式语言风格，但精神气质必须是清醒、克制、面向行动与建设的，而非愤世嫉俗或情绪宣泄，但保持自然白话表达，可以使用少量文言。
 标题要求：文章必须包含一个标题，标题应简短有力、富隐喻或冷讽意味，可为一句或两句并列句。标题风格应与正文一致，具有鲁迅式的锋芒与余味，不得中性或平淡。标题必须使用 Markdown 一级标题格式呈现（即 # 标题），不得使用书名号、引号、括号等符号。
 重要禁止项：文中不要有"鲁迅"这个词，严禁在生成的文本中出现任何提及或引用"鲁迅"、"鲁迅先生"、"鲁迅笔下"、"他的作品"、"他的笔下的人物"等字眼的语句。文本风格应是直接的、沉浸式的鲁迅式表达，而非对鲁迅风格的引用或评论。此禁令在任何标题或正文中均适用，绝不可出现任何直接或间接的提及。
@@ -518,48 +500,61 @@ class SubAgentManager:
 """,
     }
 
-    def _generate_report_with_style(self, state: State, style_role: str) -> str:
-        """根据指定风格生成报告（内部辅助方法）"""
-        delegation_context = state.get("delegation_context", {})
-        task_description = delegation_context.get("task_description", "生成最终报告")
+    def _switch_report_style(self, state: State, style_role: str) -> str:
+        """根据原始报告切换风格（内部辅助方法）"""
+        logger.debug(f"切换风格: {style_role}")
+        logger.debug(f"原始报告: {state.get('original_report', '')}")
+        task_description = f"根据原始报告、已确定的大纲和研究员提供的资料，按照{style_role}风格将原始报告转换为符合用户风格要求的领导干部发言稿，注意与原始报告的行文思路和引用保持一致。"
 
+        # 构建精简的 reporter 输入，只包含必要信息
+        # 避免传入完整 state["messages"]（包含大量 central agent 调度信息）
         user_query = state.get("user_query", "")
         user_dst = state.get("user_dst", "")
         report_outline = state.get("report_outline", "用户未提供大纲")
 
         reporter_input = {
-            "messages": [],
+            "messages": [
+                HumanMessage(
+                    content=f"# Research Requirements\n\n## User Query\n\n{user_query}"
+                )
+            ],
             "locale": state.get("locale", "zh-CN"),
+        }
+
+        context = {
+            "user_query": user_query,
+            "task_description": task_description,
         }
 
         report = "报告生成失败: 未知错误"
         try:
-            messages = apply_prompt_template("reporter_xxqg", reporter_input)
+            messages = apply_prompt_template(
+                "reporter_xxqg", reporter_input, extra_context=context
+            )
 
+            # 添加用户约束、大纲和数据收集
+            # data_collections = state.get("data_collections", [])
+            # data_collections_str = "\n\n".join(data_collections)
             constraint = self.ROLE_CONSTRAINTS.get(style_role, "")
 
-            hitl_feedback = state.get("hitl_feedback", "")
-            is_content_modify = (
-                str(hitl_feedback).upper().startswith("[CONTENT_MODIFY]")
-            )
-            is_style_switch = str(hitl_feedback).upper().startswith("[CHANGED_STYLE]")
-
-            # reference_hint 仅用于风格切换：内容不变只换风格，引用应保持一致
-            # 内容修改时不需要，因为内容变化后引用自然会变
+            # 检查是否存在原始报告（风格切换场景）
+            original_report = state.get("original_report", "")
             reference_hint = ""
-            if is_style_switch:
-                original_report = state.get("original_report", "")
-                if original_report:
-                    import re
+            used_citation_ids: set = set()
+            if original_report:
+                # 提取原始报告中的引用编号
+                import re
 
-                    citations = re.findall(r"【(\d+)】", original_report)
-                    if citations:
-                        unique_citations = sorted(set(citations), key=lambda x: int(x))
-                        reference_hint = f"\n\n##引用保持要求\n\n原始报告使用了以下引用编号：{'、'.join(['【' + c + '】' for c in unique_citations])}。请在新风格的报告中尽量保持使用相同的引用来源，确保引用的完整性和一致性。"
+                citations = re.findall(r"【(\d+)】", original_report)
+                if citations:
+                    unique_citations = sorted(set(citations), key=lambda x: int(x))
+                    used_citation_ids = set(unique_citations)
+                    reference_hint = f"\n\n##引用保持要求\n\n原始报告使用了以下引用编号：{'、'.join(['【' + c + '】' for c in unique_citations])}。请在新风格的报告中使用完全相同的引用来源，一定要确保引用的完整性。"
+
 
             messages.append(
                 HumanMessage(
-                    content=f"{constraint}##User Query\n\n{user_query}\n\n##任务描述\n\n{task_description}\n\n##用户约束\n\n{user_dst}\n\n##报告大纲\n\n{report_outline}{reference_hint}"
+                    content=f"{constraint}##User Query\n\n{user_query}\n\n##任务描述\n\n{task_description}\n\n##用户约束\n\n{user_dst}\n\n##报告大纲\n\n{report_outline}{reference_hint}\n\n"
                 )
             )
 
@@ -572,43 +567,16 @@ class SubAgentManager:
                         name="search_agent",
                     )
                 )
-            current_report = state.get("final_report", "")
 
-            if is_content_modify:
-                clean_feedback = str(hitl_feedback)[len("[CONTENT_MODIFY]") :].strip()
-                messages.append(
-                    HumanMessage(
-                        content=(
-                            "# 🔴 CRITICAL: User Modification Request\n\n"
-                            f"The user has requested the following modification:\n\n{clean_feedback}\n\n"
-                            "⚠️ Apply this modification to the current report. "
-                            "Do not rewrite the entire report from scratch."
-                        ),
-                        name="user_feedback_emphasis",
-                    )
-                )
-                if current_report:
-                    messages.append(
-                        HumanMessage(
-                            content=(
-                                "# Current Report (Base for Modification)\n\n"
-                                "Below is the current report. Apply the user's modification request to this report. "
-                                "Preserve all other content unchanged.\n\n"
-                                f"{current_report}"
-                            ),
-                            name="current_report",
-                        )
-                    )
-            elif is_style_switch and current_report:
-                messages.append(
+            messages.append(
                     HumanMessage(
                         content=(
                             "# Current Report (Base for Style Rewrite)\n\n"
                             "Below is the current report. Rewrite it in the new style specified above. "
                             "Preserve the factual content, structure, and citations.\n\n"
-                            f"{current_report}"
+                            f"{original_report}"
                         ),
-                        name="current_report",
+                        name="original_report",
                     )
                 )
 
@@ -624,6 +592,110 @@ class SubAgentManager:
             report = f"报告生成失败: {str(e)}"
         return report
 
+    def _generate_original_report(self, state: State) -> str:
+        """生成原始报告（内部辅助方法）"""
+        # 可能有修改意见，此时需要根据修改意见生成报告
+        logger.debug(f"生成原始报告")
+        delegation_context = state.get("delegation_context", {})
+        task_description = delegation_context.get("task_description", "生成最终报告")
+
+        # 构建精简的 reporter 输入，只包含必要信息
+        # 避免传入完整 state["messages"]（包含大量 central agent 调度信息）
+
+        user_query = state.get("user_query", "")
+        user_dst = state.get("user_dst", "")
+        report_outline = state.get("report_outline", "用户未提供大纲")
+        original_report = state.get("original_report", "")
+        hitl_feedback = state.get("hitl_feedback", "")
+        is_content_modify = (
+                str(hitl_feedback).upper().startswith("[CONTENT_MODIFY]")
+            )
+
+
+        reporter_input = {
+            "messages": [
+                HumanMessage(
+                    content=f"# Research Requirements\n\n## User Query\n\n{user_query}"
+                )
+            ],
+            "locale": state.get("locale", "zh-CN"),
+        }
+
+        context = {
+            "user_query": user_query,
+            "task_description": task_description,
+        }
+
+        report = "报告生成失败: 未知错误"
+        try:
+            messages = apply_prompt_template(
+                "reporter_xxqg", reporter_input, extra_context=context
+            )
+            
+            # 添加用户约束、大纲和数据收集
+            # data_collections = state.get("data_collections", [])
+            # data_collections_str = "\n\n".join(data_collections)
+
+            messages.append(
+                HumanMessage(
+                    content=f"##User Query\n\n{user_query}\n\n##任务描述\n\n{task_description}\n\n##用户约束\n\n{user_dst}\n\n##报告大纲\n\n{report_outline}"
+                )
+            )
+
+            # 添加 observations
+            observations = state.get("observations", [])
+            for observation in observations:
+                messages.append(
+                    HumanMessage(
+                        content=f"以下是检索智能体收集到的高质量信息: \n\n{observation}",
+                        name="search_agent",
+                    )
+                )
+
+            if is_content_modify and original_report:
+                clean_feedback = str(hitl_feedback)[len("[CONTENT_MODIFY]") :].strip()
+                messages.append(
+                    HumanMessage(
+                        content=(
+                            "# 🔴 CRITICAL: User Modification Request\n\n"
+                            f"The user has requested the following modification:\n\n{clean_feedback}\n\n"
+                            "⚠️ Apply this modification to the current report. "
+                            "Do not rewrite the entire report from scratch."
+                        ),
+                        name="user_feedback_emphasis",
+                    )
+                )
+                if original_report:
+                    messages.append(
+                        HumanMessage(
+                            content=(
+                                "# Current Report (Base for Modification)\n\n"
+                                "Below is the current report. Apply the user's modification request to this report. "
+                                "Preserve all other content unchanged.\n\n"
+                                    f"{original_report}"
+                            ),
+                            name="original_report",
+                        )
+                    )
+            
+            logger.debug(f"Reporter messages: {messages}")
+            llm = get_llm_by_type(AGENT_LLM_MAP.get("reporter", "default"))
+            current_style = state.get("current_style", "")
+            if current_style:
+                response = llm.invoke(messages, config={"tags": ["noshow"]})
+            else:
+                response = llm.invoke(messages)
+
+            report = response.content
+        except Exception as e:
+            import traceback
+
+            logger.error(traceback.format_exc())
+            logger.error(f"报告Agent执行失败: {str(e)}")
+            report = f"报告生成失败: {str(e)}"
+        return report
+
+    
     @timed_step("execute_xxqg_reporter")
     def execute_xxqg_reporter(self, state: State, config: RunnableConfig) -> Command:
         """
@@ -650,7 +722,18 @@ class SubAgentManager:
         if wait_stage != "reporter":  # 内容修改也走这个分支
             # 首次进入：生成报告
             logger.info(f"使用风格 '{current_style}' 生成报告...")
-            final_report = self._generate_report_with_style(state, current_style)
+            #构建原始文档
+            # if current_style:
+            #     config["configurable"]["show_output"]=False
+            original_report = self._generate_original_report(state)
+            # config["configurable"]["show_output"]=True
+            state_copy = dict(state)
+            state_copy["original_report"] = original_report# 保存首次生成的报告作为参考
+            logger.debug(f"原始报告: {original_report}")
+            if current_style:
+                final_report = self._switch_report_style(state_copy, current_style)
+            else:
+                final_report = original_report
 
             # 记录到中枢Agent记忆栈
             memory_entry = MemoryStackEntry(
@@ -667,7 +750,7 @@ class SubAgentManager:
             return Command(
                 update={
                     "final_report": final_report,
-                    "original_report": final_report,  # 保存首次生成的报告作为参考
+                    "original_report": original_report,  # 保存首次生成的报告作为参考
                     "current_style": current_style,
                     "wait_stage": "reporter",
                     "current_node": "reporter",
@@ -692,16 +775,37 @@ class SubAgentManager:
                     new_style = new_style.split("[STYLE_ROLE]")[0]
                 new_style = new_style.strip()
                 logger.info(f"用户请求切换风格: {current_style} -> {new_style}")
-
+                # 直接更新风格报告，无需重新生成原始报告
                 # 只更新 current_style，不再修改 user_query
+
+                # 使用新风格重新生成报告
+                state_copy = dict(state)
+                state_copy["current_style"] = new_style
+                new_report = self._switch_report_style(state_copy, new_style)
+
+                # 记录到中枢Agent记忆栈
+                memory_entry = MemoryStackEntry(
+                    timestamp=datetime.now().isoformat(),
+                    action="delegate",
+                    agent_type="reporter",
+                    content=f"报告任务: {task_description}，风格: {new_style}",
+                    result={"final_report": new_report},
+                )
+                self.central_agent.memory_stack.push(memory_entry)
+
+                # 跳转到 human_feedback 节点等待用户反馈
+                logger.info("报告生成完成，跳转到 human_feedback 节点等待用户反馈")
                 return Command(
                     update={
+                        "final_report": new_report,
                         "current_style": new_style,
-                        "wait_stage": "",  # 清空 wait_stage，下次进入时重新生成报告
+                        "wait_stage": "reporter",
                         "current_node": "reporter",
                     },
-                    goto="reporter",
+                    goto="human_feedback",
                 )
+
+                
             elif feedback and str(feedback).upper().startswith("[SKIP]"):
                 # 用户跳过，正常结束
                 logger.info("用户跳过风格切换，报告生成完成")
@@ -1016,16 +1120,87 @@ class SubAgentManager:
         outline_llm = get_llm_by_type(AGENT_LLM_MAP.get("outline", "default"))
         wait_stage = state.get("wait_stage", "")
         if wait_stage != "outline":
+            
+            #构建observation
+            Observation_TEMPLATE = """
+            你是由中枢智能体管理的 researcher 智能体。
+            你专注于使用搜索工具进行深入调查，你收集并整理的信息将用于后续。现在你已经使用了工具进行了调查，你现在需要去将检索到的信息整理概括
+
+            针对的query是
+            {{user_query}}
+
+            然后工具已经返回了结果
+            {{doc}}
+
+            你需要将检索到的信息进行整理
+
+            信息整理格式
+            - 以 Markdown 格式提供结构化回应。
+            - 包含以下部分：
+                - 问题陈述：为清晰起见，重述最初的问题。
+                - 研究发现：按搜索计划的环节（而非按所用工具）组织你的发现。对每项主要步骤：
+                    - 概括关键信息
+                    - 重点整理关键讲话、数据、事实或案例
+                    - 参考引用格式要求使用行内引用或句内引用标注提供信息来源，不要在文末以链接引用格式列出任何参考文献，不要生成“参考文献”章节。
+            - 始终使用 zh-CN 语言区域输出。
+            - 所有引用必须仅来自搜索结果中的信息。切勿引用搜索结果中未出现的内容。引用尽可能丰富、尽可能覆盖所有检索到的关键信息，应使用超过10个以上不同的引用标志。
+
+            引用格式要求
+            - 引用标志的使用：
+            - 所有引用均须以行内引用形式（如“xxxxx【id】xxxxx”）标注，引用格式应为：一段文字【1】【3】【6】，其中 id 代表对应文章的阿拉伯数字编号。
+            - 添加引用的原则：
+            - 当你使用了检索结果中的数据数字、关键讲话、事实或者案例时，务必添加引用标记。
+            - 引用标志应该尽可能贴近需要引用的位置。
+
+            注意事项
+            - 始终验证所收集信息的相关性和可信度。
+            - 输出要求：你尽可能同时输出thinking内容和tool_call。当你需要结束任务时，不需要生成tool_call，只输出你总结的信息。
+            """
             bg_investigation = search_docs_with_ref(
                 user_query, top_k=5, config=config
             ).get("docs", [])
             user_dst = state.get("user_dst", "")
+            
+            formatted_docs = []
+            current_chars = 0
+
+            for doc in bg_investigation:
+                source = doc.get("source", "")
+                content = doc.get("content", "")
+
+                clean_content = content.replace("\n", " ")
+                doc_entry = f"{source}\n{clean_content}\n"
+
+                formatted_docs.append(doc_entry)
+                current_chars += len(clean_content)
+
+            doc_text = "\n".join(formatted_docs)
+
+            Observation_prompt = Observation_TEMPLATE \
+                .replace("{{user_query}}", user_query) \
+                .replace("{{doc}}", doc_text)
+            #这个地方增加一个生成observation吧
+
+
+
+
+
             try:
+                response_observation = outline_llm.invoke(Observation_prompt, config={"tags": ["noshow"]})
+                logger.info(f"Observation_prompt{Observation_prompt}")
+                logger.info(f"response_observation{response_observation}")
+                bg_observation = response_observation.content
+                # messages = [
+                #     HumanMessage(
+                #         f"##用户原始问题\n\n{user_query}\n\n##用户补充需求\n\n{user_dst}\n\n##可能用到的相关数据\n\n{bg_investigation}\n\n"
+                #     )
+                # ] + apply_prompt_template("outline", state)
                 messages = [
                     HumanMessage(
-                        f"##用户原始问题\n\n{user_query}\n\n##用户补充需求\n\n{user_dst}\n\n##可能用到的相关数据\n\n{bg_investigation}\n\n"
+                        f"##用户原始问题\n\n{user_query}\n\n##用户补充需求\n\n{user_dst}\n\n##可能用到的相关数据\n\n{bg_observation}\n\n"#这个地方改成observation
                     )
                 ] + apply_prompt_template("outline", state)
+                
                 response = outline_llm.invoke(messages)
                 outline_response = response.content
                 outline_response = repair_json_output(outline_response)

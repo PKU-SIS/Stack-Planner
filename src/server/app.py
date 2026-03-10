@@ -404,6 +404,7 @@ async def _astream_workflow_generator_sp(
             "max_search_results": max_search_results,
             "mcp_settings": mcp_settings,
             "knowledge_base_name": knowledge_base_name,
+            # "show_output": True,
         },
         stream_mode=["messages", "updates"],
         subgraphs=True,
@@ -509,7 +510,15 @@ async def _astream_workflow_generator_sp(
             event_stream_message["tool_call_id"] = message_chunk.tool_call_id
             yield _make_event("tool_call_result", event_stream_message)
         elif isinstance(message_chunk, AIMessageChunk):
+            
+            # logger.info(f"message_chunk的数据结构打印{message_chunk}")
+            # logger.info(f"message_metadata{message_metadata}")
             # AI Message - Raw message tokens
+            # if message_metadata["show_output"]==False:
+            #     continue
+            # 检查 metadata 里的 tags
+            if "noshow" in message_metadata.get("tags", []):
+                continue
             if message_chunk.tool_calls:
                 # AI Message - Tool Call
                 event_stream_message["tool_calls"] = message_chunk.tool_calls
