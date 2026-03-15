@@ -33,7 +33,9 @@ conf.yaml
 .langgraph_api/
 *.log
 tests/
+case/
 draft.py
+draft
 
 # coverage report
 coverage.xml

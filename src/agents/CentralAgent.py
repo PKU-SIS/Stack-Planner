@@ -115,7 +115,7 @@ class CentralAgent:
 
         # 构建决策prompt
         messages = self._build_decision_prompt(state, config)
-        # logger.debug(f"决策prompt: {messages}")
+        logger.debug(f"决策prompt: {messages}")
 
         # 获取LLM决策并处理异常
         try:
@@ -224,7 +224,7 @@ class CentralAgent:
                 "This is the user's LATEST feedback and MUST be the primary focus of your decision. "
                 "Previous feedback rounds have already been incorporated into the current report."
             )
-
+        logger.info(f"user_feedback_text 人类反馈的信息{user_feedback_text}")
         context = {
             "available_actions": [action.value for action in CentralAgentAction],
             "available_sub_agents": self.available_sub_agents,
