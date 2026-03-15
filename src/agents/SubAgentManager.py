@@ -24,12 +24,13 @@ from src.prompts.template import apply_prompt_template
 from src.memory import MemoryStack, MemoryStackEntry
 from src.agents.CentralAgent import CentralAgent
 from src.tools.get_docs_info import search_docs_with_ref
-
+from src.cite_verify.num_verify import cite_verify_report
+from src.utils.reference_utils import global_reference_map
 from ..graph.types import State
 from ..config import SELECTED_SEARCH_ENGINE, SearchEngine
 from src.utils.statistics import global_statistics, timed_step
 import re
-
+from uuid import uuid4
 
 # -------------------------
 # 子Agent管理模块
@@ -582,7 +583,7 @@ class SubAgentManager:
 
             logger.debug(f"Reporter messages: {messages}")
             llm = get_llm_by_type(AGENT_LLM_MAP.get("reporter", "default"))
-            response = llm.invoke(messages)
+            response = llm.invoke(messages, config={"tags": ["noshow"]})#原本是没有的
             report = response.content
         except Exception as e:
             import traceback
@@ -684,7 +685,7 @@ class SubAgentManager:
             if current_style:
                 response = llm.invoke(messages, config={"tags": ["noshow"]})
             else:
-                response = llm.invoke(messages)
+                response = llm.invoke(messages, config={"tags": ["noshow"]})#原本是没有的
 
             report = response.content
         except Exception as e:
@@ -734,7 +735,59 @@ class SubAgentManager:
                 final_report = self._switch_report_style(state_copy, current_style)
             else:
                 final_report = original_report
+            
+            #引用
+            session_id = config["configurable"]["thread_id"]
+            ref_docs=global_reference_map.get_session_ref_map(session_id)
+            
+            final_report=cite_verify_report(final_report,ref_docs)
+            logger.info(f"ref_docs{ref_docs}")
+            logger.info(f"final_report after citation fix{final_report}")
+            #暴力吧
+            delete_unref_data_prompt=f"""
+            你是一个严格的文本校对助手。你的任务是对给定文本进行极小范围的修改，并严格遵守以下规则：
 
+            【核心规则】
+            1. 逐句检查文本。
+            2. 如果一句话中包含“数字”（例如：1、2、3、10%、几十、数百等数值表达），不包括2023年等年份，三重保障，三股力量这样的偏口号的情况
+            但该句子中没有任何引用标记（例如：[1]、[2]、(1)、(张三,2020) 等），
+            则必须处理该句子。
+
+            【处理方式】
+            对于这种“含数字但没有引用”的句子，只允许以下两种处理方式之一：
+            A. 直接删除该句子；
+            B. 将该句子改写为不包含任何数字的表达，同时保持语义自然和上下文连贯。
+
+            注意：
+            - 改写时 **绝对不能使用“大约、约、接近、近、超过、几十、数百”等模糊数量词**。
+            - 改写后必须完全不包含任何数字或数量表达。
+
+            【绝对禁止的行为】
+            除上述情况外，禁止进行任何修改，包括但不限于：
+            - 不允许修改已有引用
+            - 不允许新增引用
+            - 不允许删除已有引用
+            - 不允许修改任何带引用句子的文字
+            - 不允许改变任何字词
+            - 不允许改变句子顺序
+            - 不允许改变段落结构
+            - 不允许改写没有数字的句子
+            - 不允许改写包含引用的句子
+            - 不允许调整标点
+            - 不允许总结或解释
+
+            【输出要求】
+            1. 只输出最终修改后的完整文本。
+            2. 不要输出任何解释、说明或额外内容。
+            3. 未被处理的句子必须与原文 **逐字完全一致**。
+
+            【待处理文本】
+            {final_report}
+            """
+            llm = get_llm_by_type(AGENT_LLM_MAP.get("reporter", "default"))
+            final_report = llm.invoke(delete_unref_data_prompt)#暴力法
+            final_report = final_report.content
+            logger.info(f"使用LLM输出修改的final_report{final_report}")
             # 记录到中枢Agent记忆栈
             memory_entry = MemoryStackEntry(
                 timestamp=datetime.now().isoformat(),
@@ -782,7 +835,59 @@ class SubAgentManager:
                 state_copy = dict(state)
                 state_copy["current_style"] = new_style
                 new_report = self._switch_report_style(state_copy, new_style)
+                
+                #引用
+                session_id = config["configurable"]["thread_id"]
+                ref_docs=global_reference_map.get_session_ref_map(session_id)
+                
+                new_report=cite_verify_report(new_report,ref_docs)
+                logger.info(f"ref_docs{ref_docs}")
+                logger.info(f"new_report after citation fix{new_report}")
+                #暴力
+                delete_unref_data_prompt=f"""
+                你是一个严格的文本校对助手。你的任务是对给定文本进行极小范围的修改，并严格遵守以下规则：
 
+                【核心规则】
+                1. 逐句检查文本。
+                2. 如果一句话中包含“数字”（例如：1、2、3、10%、几十、数百等数值表达），不包括2023年等年份，三重保障，三股力量这样的偏口号的情况
+                但该句子中没有任何引用标记（例如：[1]、[2]、(1)、(张三,2020) 等），
+                则必须处理该句子。
+
+                【处理方式】
+                对于这种“含数字但没有引用”的句子，只允许以下两种处理方式之一：
+                A. 直接删除该句子；
+                B. 将该句子改写为不包含任何数字的表达，同时保持语义自然和上下文连贯。
+
+                注意：
+                - 改写时 **绝对不能使用“大约、约、接近、近、超过、几十、数百”等模糊数量词**。
+                - 改写后必须完全不包含任何数字或数量表达。
+
+                【绝对禁止的行为】
+                除上述情况外，禁止进行任何修改，包括但不限于：
+                - 不允许修改已有引用
+                - 不允许新增引用
+                - 不允许删除已有引用
+                - 不允许修改任何带引用句子的文字
+                - 不允许改变任何字词
+                - 不允许改变句子顺序
+                - 不允许改变段落结构
+                - 不允许改写没有数字的句子
+                - 不允许改写包含引用的句子
+                - 不允许调整标点
+                - 不允许总结或解释
+
+                【输出要求】
+                1. 只输出最终修改后的完整文本。
+                2. 不要输出任何解释、说明或额外内容。
+                3. 未被处理的句子必须与原文 **逐字完全一致**。
+
+                【待处理文本】
+                {new_report}
+                """
+                llm = get_llm_by_type(AGENT_LLM_MAP.get("reporter", "default"))
+                new_report = llm.invoke(delete_unref_data_prompt)#暴力法
+                new_report = new_report.content
+                logger.info(f"使用LLM输出修改的new_report{new_report}")
                 # 记录到中枢Agent记忆栈
                 memory_entry = MemoryStackEntry(
                     timestamp=datetime.now().isoformat(),
@@ -1186,20 +1291,22 @@ class SubAgentManager:
 
 
             try:
-                response_observation = outline_llm.invoke(Observation_prompt, config={"tags": ["noshow"]})
-                logger.info(f"Observation_prompt{Observation_prompt}")
-                logger.info(f"response_observation{response_observation}")
-                bg_observation = response_observation.content
-                # messages = [
-                #     HumanMessage(
-                #         f"##用户原始问题\n\n{user_query}\n\n##用户补充需求\n\n{user_dst}\n\n##可能用到的相关数据\n\n{bg_investigation}\n\n"
-                #     )
-                # ] + apply_prompt_template("outline", state)
+                #observation不要了
+                # response_observation = outline_llm.invoke(Observation_prompt, config={"tags": ["noshow"]})
+                # logger.info(f"Observation_prompt{Observation_prompt}")
+                # logger.info(f"response_observation{response_observation}")
+                # bg_observation = response_observation.content
                 messages = [
                     HumanMessage(
-                        f"##用户原始问题\n\n{user_query}\n\n##用户补充需求\n\n{user_dst}\n\n##可能用到的相关数据\n\n{bg_observation}\n\n"#这个地方改成observation
+                        f"##用户原始问题\n\n{user_query}\n\n##用户补充需求\n\n{user_dst}\n\n##可能用到的相关数据\n\n{bg_investigation}\n\n"
                     )
                 ] + apply_prompt_template("outline", state)
+                #observation不要了
+                # messages = [
+                #     HumanMessage(
+                #         f"##用户原始问题\n\n{user_query}\n\n##用户补充需求\n\n{user_dst}\n\n##可能用到的相关数据\n\n{bg_observation}\n\n"#这个地方改成observation
+                #     )
+                # ] + apply_prompt_template("outline", state)
                 
                 response = outline_llm.invoke(messages)
                 outline_response = response.content
