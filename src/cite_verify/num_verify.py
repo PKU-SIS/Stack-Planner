@@ -56,6 +56,9 @@ from dataclasses import dataclass
 from typing import List, Optional, Dict, Any
 from src.utils.logger import logger
 import re
+import json
+from src.config.agents import AGENT_LLM_MAP
+from src.llms.llm import get_llm_by_type
 
 def move_refs_before_punctuation(text, refs):
     ref_str = "".join([f"【{r}】" for r in refs])
@@ -113,9 +116,105 @@ def remove_word_count(text: str) -> str:
     删除类似（全文共998字）的结尾统计，包括前面的空格或回车
     """
     # 匹配：可能有空格/回车 + （全文共数字字）
-    # text = re.sub(r'[\s\r\n]*（全文共?\s*\d+\s*字）', '', text)
     text = re.sub(r'[\s\r\n]*（全文共?约?\s*\d+\s*字）', '', text)
     return text
+
+
+def verify_references_with_llm(reference: str, statements: List[str]) -> List[Dict[str, str]]:
+    """
+    使用LLM验证引用的准确性
+    
+    Args:
+        reference: 参考资料内容
+        statements: 需要验证的语句列表
+    
+    Returns:
+        List[Dict[str, str]]: 验证结果列表，每个元素包含idx和result
+    """
+#     prompt_template = """你会看到一个参考资料和一个statement，请你判断statement中的数字在参考资料中是否有相同含义的数字，注意： 
+#  判断判断statement中的数字是否在参考资料中有相同含义的数字： 
+#  - 如果有相同含义的数字（数据接受四舍五入），返回supported 
+#  - 如果没有相同含义的数字，返回unsupported 
+
+#  你应该返回单个字符串，只能是supported、unsupported或unknown中的一个，不要输出任何其他内容。
+
+#  下面是参考资料和statement： 
+#  <reference> 
+#  {reference} 
+#  </reference> 
+
+#  <statement> 
+#  {statement} 
+#  </statement> 
+
+#  下面开始判断，直接输出结果字符串，不要输出任何闲聊或解释。"""
+    prompt_template="""
+    你会看到一个参考资料和一个statement，请判断statement中的数字与参考资料中的数字是否有相同含义。  
+    - 如果数字具有相同的含义（允许四舍五入），返回 `supported`。
+    - 如果数字含义不同，返回 `unsupported`。
+    - 如果无法判断，返回 `unknown`。
+
+    例子1：
+    <reference>
+    截至2020年底，全国832个贫困县全部摘帽，剩余贫困人口如期脱贫，已实现“两不愁三保障”全面覆盖。
+    </reference>
+    <statement>
+    截至去年底，剩余的832个贫困县已经脱贫摘帽。
+    </statement>
+    输出：supported
+
+    例子2：
+    <reference>
+    扶贫开发领导小组成员单位先后出台了40多项政策文件，帮助解决疫情带来的困境。
+    </reference>
+    <statement>
+    该基地直接带动300人稳定就业，其中脱贫户占比达40%。
+    </statement>
+    输出：unsupported
+
+    下面是参考资料和statement：  
+    <reference>  
+    {reference}  
+    </reference>  
+    <statement>  
+    {statement}  
+    </statement>  
+    请不要输出 supported 或者 unsupported 或者 unknown 以外的任何内容，只能输出一个词
+    开始判断：
+    """
+    # 只处理第一个statement
+    if not statements:
+        return [{"idx": 1, "result": "unknown"}]
+    
+    statement = statements[0]
+    
+    # 填充prompt
+    prompt = prompt_template.format(
+        reference=reference,
+        statement=statement
+    )
+    logger.info(f"prompt:{prompt}")
+    # 获取LLM
+    llm = get_llm_by_type(AGENT_LLM_MAP.get("reporter", "default"))
+    #llm = get_llm_by_type(AGENT_LLM_MAP.get("support_verifier", "default"))
+    
+    # 调用LLM
+    try:
+        response = llm.invoke(prompt)
+        content = response.content.strip()
+        logger.info(f"LLM返回结果: {content}")
+        # 验证结果是否合法
+        if content in ["supported", "unsupported", "unknown"]:
+            return [{"idx": 1, "result": content}]
+        else:
+            # 结果不合法，返回unknown
+            logger.error(f"LLM返回了非法结果: {content}")
+            return [{"idx": 1, "result": "unknown"}]
+    except Exception as e:
+        logger.error(f"LLM验证引用失败: {str(e)}")
+        # 失败时返回默认结果
+        return [{"idx": 1, "result": "unknown"}]
+
 
 
 @dataclass
@@ -144,61 +243,40 @@ def is_boundary(ch: str):
 
 from typing import List
 
-# def split_to_clauses(text: str) -> List[str]:
-#     """
-#     按段落+句子切分文本，同时保留原文换行
-#     """
-#     paragraphs = text.split("\n\n")  # 保留段落
-#     clauses = []
-
-#     for para in paragraphs:
-#         buf = ""
-#         for ch in para:
-#             buf += ch
-#             if is_boundary(ch):
-#                 if len(buf.strip()) >= 6:
-#                     clauses.append(buf)  # 不 strip()，保留换行
-#                     buf = ""
-#         if buf.strip():
-#             clauses.append(buf)
-#         # 段落末尾添加空行，保持原文段落结构
-#         clauses.append("\n")
-
-#     return clauses
 def split_to_clauses(text: str) -> List[str]:
     """
     报告文本切分：
-    - 标题保持完整
-    - 段落保持完整
-    - 只在段落内部按句号切句
+    - 标题 (#) 截取到该行结束
+    - 普通文本按句号切句
+    - 保留原始换行
     """
 
     text = text.replace("\r\n", "\n")
 
-    paragraphs = re.split(r'\n\s*\n', text)
+    lines = text.splitlines(keepends=True)
 
     clauses = []
 
-    for para in paragraphs:
+    for line in lines:
 
-        para = para.strip()
+        stripped = line.strip()
 
-        if not para:
+        # 空行直接保留
+        if not stripped:
+            clauses.append(line)
             continue
 
-        # Markdown标题整段保留
-        if para.startswith("#"):
-            clauses.append(para + "\n\n")
+        # Markdown标题：整行保留
+        if stripped.startswith("#"):
+            clauses.append(line)
             continue
 
-        # 普通段落再按句子切
-        sentences = re.split(r'(?<=[。！？])', para)
+        # 普通文本：按句子切
+        sentences = re.split(r'(?<=[。！？])', line)
 
         for s in sentences:
             if s.strip():
                 clauses.append(s)
-
-        clauses.append("\n\n")  # 保持段落结构
 
     return clauses
 
@@ -464,24 +542,31 @@ def cite_verify_report(query,docs):
             # 3 判断是否有数字
             nums = extract_numbers(clean_q)
 
+            # 标题不处理
+            clean_q_strip = clean_q.strip()
+            if clean_q_strip.startswith("#"):
+                logger.info(f"title{q}")
+                new_doc.append(q)
+                continue
+            
+            #非数字问题
             if len(nums) == 0:
                 # print("跳过句子:", clean_q)
 
                 # 没有数字直接恢复引用
+                #这个地方需要天津院开发
+                #子卿的ngram暴力匹配确定区间后，进行 LLM 判断是否匹配
                 if refs:
                     refs = dedup_refs(refs)
                     clean_q = clean_q + "".join([f"【{r}】" for r in refs])
 
                 new_doc.append(clean_q)
                 continue
-            clean_q_strip = clean_q.strip()
-
-            # 标题不处理
-            if clean_q_strip.startswith("#"):
-                new_doc.append(q)
-                continue
             
-            matched_texts = []
+            #数字问题
+
+
+            matched_ref_text_map = {}
             matched_refs =[]
             for doc_id, doc in docs.items():
 
@@ -493,26 +578,45 @@ def cite_verify_report(query,docs):
                 )
 
                 if result and result.score > 0:
-
-                    matched_texts.append(result.text)
+                    matched_ref_text_map[doc_id] = result.text
                     matched_refs.append(doc_id)
 
-            # if len(matched_texts)==0:
+            # if len(matched_ref_text_map)==0:
             #     logger.info(f"没有成功匹配的clean_q{clean_q}")
             # else:
+            #     matched_texts = list(matched_ref_text_map.values())
             #     if isinstance(matched_texts, list):
             #         clean_q = clean_q + "(" + ", ".join(map(str, matched_texts)) + ")"
             #     else:
             #         clean_q = clean_q + "(" + str(matched_texts) + ")"
             
-            all_refs =  matched_refs+refs
+            all_refs =  matched_refs#+refs
             
             all_refs = dedup_refs(all_refs)
+            
+            # 使用LLM验证引用的准确性，只保留有效的引用
+            #如果数字都对不上，其他的更别说了
+            valid_refs= all_refs
+            valid_refs = []
+            if all_refs:
+                for ref in all_refs:
+                    if ref in matched_ref_text_map:
+                        # 构建statement
+                        statement = clean_q.strip()
+                        if statement:
+                            # 调用LLM验证，使用匹配到的片段而不是全文
+                            results = verify_references_with_llm(matched_ref_text_map[ref], [statement])
+                            logger.info(f"results{results}")
+                            if results and results[0].get("result") == "supported":
+                                valid_refs.append(ref)
+            
+            # 如果有有效引用，添加到句子中；否则，不添加引用
+            if valid_refs:
+                logger.info(f"valid_refs{valid_refs}")
+                clean_q = move_refs_before_punctuation(clean_q, valid_refs)
+            # 没有有效引用，保持原句不变
 
-            # clean_q = clean_q + "".join([f"【{r}】" for r in all_refs])
-            clean_q = move_refs_before_punctuation(clean_q, all_refs)
-
-
+            
             new_doc.append(clean_q)
 
         # 6 生成完整文档
@@ -520,7 +624,8 @@ def cite_verify_report(query,docs):
 
 
         final_doc=remove_word_count(final_doc)
-        logger.info("\n================ 最终文档 ================\n")
+        
+        logger.info("\n================ 最终文档 ================")
         logger.info(final_doc)
         return final_doc
     except Exception as e_outer:
@@ -529,4 +634,12 @@ def cite_verify_report(query,docs):
         return query  # 返回原始 query 作为最安全托底
 
 if __name__ == "__main__":
+    #文本自带引用+数字匹配补充引用
+    #对于数字补充引用：LLM 判断是否support 直接用切分的短句去判断，如果数字过了就不走文本了【杨志邦来做】
+    #对于文本自带引用(不包括自身)：子卿的ngram暴力匹配确定区间后，进行 LLM 判断是否匹配【天津院同学来做一下】
+    #对齐接口，句子级别引用【天津院同学来做一下】
+    import time
+    start_time = time.time()
     cite_verify_report(query_case,docs_case)
+    end_time = time.time()
+    logger.info(f"执行时间: {end_time - start_time:.2f} 秒")

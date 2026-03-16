@@ -12,8 +12,8 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 # os.environ["HTTPS_PROXY"] = "http://localhost:8888"
 
 
-url = "http://localhost:8555/api/chat/sp_stream"
-base_url = "http://localhost:8555"  # 基础 URL，用于其他 API 调用
+url = "http://localhost:8556/api/chat/sp_stream"
+base_url = "http://localhost:8556"  # 基础 URL，用于其他 API 调用
 
 # 初始请求内容，带有 [STYLE_ROLE] 标记指定初始风格
 content = """我需要一篇关于脱贫攻坚成果的讲话稿。
@@ -258,8 +258,12 @@ def process_event(
     global _perception_node_count, _suppress_after_second_perception
     global _style_switch_count, _content_modify_count
 
+    # # 当第二次进入 perception 节点后，直到下一次 interrupt 之前，抑制输出
+    # if _suppress_after_second_perception and event_type != "interrupt":
+    #     return None
     # 当第二次进入 perception 节点后，直到下一次 interrupt 之前，抑制输出
-    if _suppress_after_second_perception and event_type != "interrupt":
+    # 但 tool_call_result 事件不被抑制
+    if _suppress_after_second_perception and event_type != "interrupt" and event_type != "tool_call_result":
         return None
 
     if event_type in ["message_chunk", "tool_calls", "tool_call_result"]:

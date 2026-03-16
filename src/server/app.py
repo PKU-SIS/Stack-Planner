@@ -490,6 +490,22 @@ async def _astream_workflow_generator_sp(
                         "tool_call_id": toolMessage.tool_call_id,
                     },
                 )
+            elif "outline" in event_data:#Outline预检索
+                toolMessage = event_data["outline"]["messages"][0]
+                if not isinstance(toolMessage, ToolMessage):
+                    continue
+                yield _make_event(
+                    "tool_call_result",
+                    {
+                        "thread_id": thread_id,
+                        "role": "assistant",
+                        "agent": "outline",#"researcher",
+                        "content": toolMessage.content,
+                        "id": getattr(toolMessage, "id", None),
+                        "tool_name": getattr(toolMessage, "name", None),
+                        "tool_call_id": getattr(toolMessage, "tool_call_id", None),
+                    },
+                )
             # 检查是否包含 reporter 状态更新
             if "reporter" in event_data:
                 reporter_data = event_data["reporter"]
@@ -564,7 +580,7 @@ async def _astream_workflow_generator_sp(
             #         f"前端内容筛选，不要 outline 或 researcher{event_stream_message}"
             #     )
             #     continue
-            if event_stream_message.get("agent") in {"outline", "researcher"} or (
+            if event_stream_message.get("agent") in {"outline", "researcher"} or ( #
                 event_stream_message.get("agent") == "central_agent"
                 and event_stream_message.get("action_name") == "central_think"
             ):

@@ -1261,9 +1261,15 @@ class SubAgentManager:
             - 始终验证所收集信息的相关性和可信度。
             - 输出要求：你尽可能同时输出thinking内容和tool_call。当你需要结束任务时，不需要生成tool_call，只输出你总结的信息。
             """
-            bg_investigation = search_docs_with_ref(
+            # 直接调用 search_docs_with_ref 获取背景调查数据
+            bg_investigation_result = search_docs_with_ref(
                 user_query, top_k=5, config=config
-            ).get("docs", [])
+            )
+            bg_investigation = bg_investigation_result.get("docs", [])
+            
+            # 添加日志，确保 bg_investigation 被正确获取
+            logger.info(f"背景调查数据: {bg_investigation}")
+            logger.info(f"背景调查结果: {bg_investigation_result}")
             user_dst = state.get("user_dst", "")
             
             formatted_docs = []
@@ -1314,9 +1320,28 @@ class SubAgentManager:
                 if "[STYLE_ROLE]" in outline_response:
                     outline_response = outline_response.split("[STYLE_ROLE]")[0]
                 logger.info(f"大纲生成完成: {outline_response}")
+                # 生成背景调查结果工具消息
+                import json
+                from langchain_core.messages import ToolMessage
+                
+                # 构建工具消息内容
+                tool_content = {
+                    "query": user_query,
+                    "docs": bg_investigation
+                }
+                
+                # 创建 ToolMessage
+                tool_message = ToolMessage(
+                    content=json.dumps(tool_content, ensure_ascii=False),
+                    tool_call_id="search_docs_with_ref_" + str(hash(user_query)),
+                    name="search_docs_with_ref"
+                )
+                
                 return Command(
                     update={
+                        "messages": [tool_message],
                         "report_outline": outline_response,
+                        "bg_investigation": bg_investigation,
                         "wait_stage": "outline",
                         "current_node": "outline",
                     },

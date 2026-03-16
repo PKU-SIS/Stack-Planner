@@ -31,6 +31,7 @@ def _get_llm_type_config_keys() -> dict[str, str]:
         "vision": "VISION_MODEL",
         "code": "CODE_MODEL",
         "report": "REPORT_MODEL",
+        "verifier": "VERIFIER_MODEL",
     }
 
 
