@@ -419,10 +419,12 @@ async def _astream_workflow_generator_sp(
             }
             yield _make_event("node_status", current_node_state)
 
-        if isinstance(event_data, dict):
-            logger.debug(f"Event data: {event_data}")
-        else:
-            logger.debug(f"Event data type: {type(event_data)}")
+        #暂时先注释了
+        # if isinstance(event_data, dict):
+        #     logger.debug(f"Event data: {event_data}")
+        # else:
+        #     logger.debug(f"Event data type: {type(event_data)}")
+        logger.info(f"查看event_data{event_data}")
         if isinstance(event_data, dict):
             if "__ref_map__" in event_data:
                 ref_map = event_data["__ref_map__"][0].value
@@ -488,6 +490,22 @@ async def _astream_workflow_generator_sp(
                         "tool_call_id": toolMessage.tool_call_id,
                     },
                 )
+            # 检查是否包含 reporter 状态更新
+            if "reporter" in event_data:
+                reporter_data = event_data["reporter"]
+                # 检查更新中是否包含 final_report
+                if "final_report" in reporter_data:
+                    final_report = reporter_data["final_report"]
+                    yield _make_event(
+                        "message_chunk",
+                        {
+                            "thread_id": thread_id,
+                            "agent": "reporter",
+                            "role": "assistant",
+                            "content": final_report,
+                        },
+                    )
+
             continue
         message_chunk, message_metadata = cast(
             tuple[BaseMessage, dict[str, any]], event_data

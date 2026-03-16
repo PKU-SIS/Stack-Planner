@@ -113,7 +113,8 @@ def remove_word_count(text: str) -> str:
     删除类似（全文共998字）的结尾统计，包括前面的空格或回车
     """
     # 匹配：可能有空格/回车 + （全文共数字字）
-    text = re.sub(r'[\s\r\n]*（全文共?\s*\d+\s*字）', '', text)
+    # text = re.sub(r'[\s\r\n]*（全文共?\s*\d+\s*字）', '', text)
+    text = re.sub(r'[\s\r\n]*（全文共?约?\s*\d+\s*字）', '', text)
     return text
 
 
