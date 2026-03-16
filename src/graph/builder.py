@@ -128,8 +128,9 @@ def build_multi_agent_graph():
     # builder.add_node("reporter", sp_reporter_node)
 
     # 定义状态转移
-    builder.add_edge(START, "central_agent")
-
+    builder.add_edge(START, "memagent")
+    builder.add_edge("memagent", "central_agent")
+    # builder.add_edge(START, "central_agent")
     builder.add_edge("central_agent", END)
 
     return builder.compile()

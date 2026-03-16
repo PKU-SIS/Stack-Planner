@@ -9,6 +9,7 @@ from langgraph.types import Command, interrupt
 
 from src.agents.CoderAgent import CoderAgent
 from src.agents.ResearcherAgent_SP import ResearcherAgentSP
+from src.agents.Memagent import Memagent
 from src.tools import (
     crawl_tool,
     get_web_search_tool,
@@ -129,7 +130,68 @@ class SubAgentManager:
             },
             goto="central_agent",
         )
+    
+    @timed_step("execute_memagent")
+    async def execute_memagent(self, state: State, config: RunnableConfig) -> Command:
+        logger.info("记忆Agent开始执行...")
 
+        context = state.get("user_query", {})
+
+        # 实例化长期记忆总结Agent
+        memagent = Memagent(
+            config=config,
+            agent_type="memagent",
+        )
+
+        # 执行总结任务并处理异常
+        try:
+            result_observations = []
+
+            result_command = await memagent.execute_agent_step(state)
+
+            if result_command and result_command.update:
+                result_observations = result_command.update.get("observations", [])
+
+        except Exception as e:
+            logger.error(f"长期记忆总结Agent执行失败: {str(e)}")
+            return Command(
+                update={
+                    "messages": [
+                        HumanMessage(
+                            content=f"长期记忆总结任务失败: {str(e)}",
+                            name="experience_agent",
+                        )
+                    ],
+                },
+                goto="central_agent",
+            )
+
+        memory_entry = MemoryStackEntry(
+            timestamp=datetime.now().isoformat(),
+            action="delegate",
+            agent_type="memagent",
+            content=f"长期记忆总结任务: {context}",
+            result={
+                "observations": result_observations,
+            },
+        )
+        self.central_agent.memory_stack.push(memory_entry)
+
+        logger.info("查询长期记忆任务完成，返回中枢Agent")
+        return Command(
+            update={
+                "messages": [
+                    HumanMessage(
+                        content="查询长期记忆任务完成，返回中枢Agent",
+                        name="memagent",
+                    )
+                ],
+                "current_node": "central_agent",
+                "memory_stack": self.central_agent.memory_stack.to_dict(),
+            }
+        )
+
+    
     @timed_step("execute_xxqg_researcher")
     async def execute_xxqg_researcher(
         self, state: State, config: RunnableConfig

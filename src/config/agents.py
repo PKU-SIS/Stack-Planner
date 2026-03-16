@@ -24,4 +24,5 @@ AGENT_LLM_MAP: dict[str, LLMType] = {
     "perception": "basic",
     "outline": "basic",
     "reporter_xxqg": "report",
+    "memagent": "basic"
 }

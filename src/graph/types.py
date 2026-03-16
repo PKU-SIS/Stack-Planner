@@ -24,6 +24,8 @@ class State(MessagesState):
     auto_accepted_plan: bool = False
     enable_background_investigation: bool = True
     background_investigation_results: str = None
+    enable_memory: bool = False
+    task_mem: str = None
     user_dst: str = None
     wait_stage: str = ""
     dst_question: str = None

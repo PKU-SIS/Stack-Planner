@@ -49,6 +49,11 @@ async def researcher_node(state: State, config: RunnableConfig) -> Command:
     _check_agents_initialized()
     return await sub_agent_manager.execute_researcher(state, config)
 
+async def memagent_node(state: State, config: RunnableConfig) -> Command:
+    """记忆Agent节点处理函数"""
+    _check_agents_initialized()
+    return await sub_agent_manager.execute_memagent(state, config)
+
 
 async def coder_node(state: State, config: RunnableConfig) -> Command:
     """编码Agent节点处理函数"""

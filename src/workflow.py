@@ -26,6 +26,7 @@ async def run_agent_workflow_async(
     max_step_num: int = 3,
     enable_background_investigation: bool = True,
     graph_format: str = "sp",
+    enable_memory: bool = False,
 ):
     """Run the agent workflow asynchronously with the given user input.
 
@@ -66,7 +67,9 @@ async def run_agent_workflow_async(
         "auto_accepted_plan": True,
         "enable_background_investigation": enable_background_investigation,
         "user_query": user_input,
+        "enable_memory": enable_memory,
     }
+    
     config = {
         "configurable": {
             "thread_id": "default",

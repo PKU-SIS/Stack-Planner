@@ -11,10 +11,12 @@ class SubAgentType(Enum):
     OUTLINE = "outline"  # 负责大纲生成
     PERCEPTION = "perception"  # 负责表单生成
     HUMAN = "human"  # 负责与人类的交互（表单填写、大纲确认、报告反馈、主动提问）
+    MEMAGENT = "memagent"
 
 
 from src.graph.sp_nodes import (
     researcher_node,
+    memagent_node,
     coder_node,
     reporter_node,
     researcher_xxqg_node,
@@ -43,6 +45,11 @@ sub_agents_sp = [
         "description": "Result organization and report generation",
         "node": reporter_node,
     },
+    {
+        "name": SubAgentType.MEMAGENT.value,
+        "description": "Memory retrieval and summerize",
+        "node": memagent_node,
+    }
 ]
 
 

@@ -63,3 +63,6 @@ graceful-mapping-gizmo.md
 .github/
 docs/
 examples/
+
+# memory
+sp_qdrant_memory/

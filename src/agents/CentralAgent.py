@@ -21,6 +21,9 @@ from src.prompts.central_decision import Decision, DelegateParams
 
 from ..graph.types import State
 
+from src.llms.mem0 import mem0_add
+import asyncio
+
 # from .SubAgentConfig import get_sub_agents_by_global_type
 
 
@@ -817,6 +820,61 @@ class CentralAgent:
 
         logger.info(report_msg)
         logger.info(global_statistics.get_statistics())
+        
+        if state.get("enable_memory") and not state.get("task_mem", None):
+            # 中枢 Agent 更新记忆
+            return self._handle_longmemory(decision, state, config, execution_summary)
+            
         return Command(
             goto="zip_data",  # 结束执行
         )
+    
+    def _handle_longmemory(
+        self, decision: CentralDecision, state: State, config: RunnableConfig, execution_summary
+    ) -> Command:
+        logger.info("中枢Agent正在更新长期记忆...")
+        start_time = datetime.now()
+        context = {
+            "text" : json.dumps(execution_summary, ensure_ascii=False)
+        }
+        messages = apply_prompt_template(
+            "memory_extract", state, extra_context=context
+        )
+        
+        llm = get_llm_by_type(AGENT_LLM_MAP.get("central_agent", "default"))
+        
+        response = llm.invoke(messages)
+        
+        end_time = datetime.now()
+        
+        time_entry = {
+            "step_name": "central_summarize" + start_time.isoformat(),
+            "start_time": start_time.isoformat(),
+            "end_time": end_time.isoformat(),
+            "duration": (end_time - start_time).total_seconds(),
+        }
+        global_statistics.add_time_entry(time_entry)
+        
+        if response.content.startswith("```json"):
+            response.content = (
+                response.content.replace("```json", "").replace("```", "").strip()
+            )
+        
+        results = mem0_add(response)
+        logger.info(f"Mem0 写入结果 {results}")
+            
+        return Command(
+            update={
+                "messages": [AIMessage(content=response.content, name="lmem_update")],
+                "task_mem": response.content,
+                "current_node": "central_agent",
+                "memory_stack": json.dumps(
+                    [entry.to_dict() for entry in self.memory_stack.get_all()]
+                ),
+                "locale": state.get("locale"),
+            },
+            goto="central_agent",
+        )
+        
+        
+        

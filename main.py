@@ -21,6 +21,7 @@ def ask(
     max_step_num=3,
     enable_background_investigation=True,
     graph_format="sp",
+    enable_memory = False,
 ):
     """Run the agent workflow with the given question.
 
@@ -39,6 +40,7 @@ def ask(
             max_step_num=max_step_num,
             enable_background_investigation=enable_background_investigation,
             graph_format=graph_format,
+            enable_memory=enable_memory,
         )
     )
 
@@ -49,6 +51,7 @@ def main(
     max_step_num=3,
     enable_background_investigation=True,
     graph_format="sp",
+    enable_memory=False,
 ):
     """Interactive mode with built-in questions.
 
@@ -97,6 +100,7 @@ def main(
         max_step_num=max_step_num,
         enable_background_investigation=enable_background_investigation,
         graph_format=graph_format,
+        enable_memory=enable_memory,
     )
 
 
@@ -104,6 +108,12 @@ if __name__ == "__main__":
     # Set up argument parser
     parser = argparse.ArgumentParser(description="Run the Deer")
     parser.add_argument("query", nargs="*", help="The query to process")
+    parser.add_argument(
+        "--enable_memory",
+        type=bool,
+        default=False,
+        help="whether to use mem0",
+    )
     parser.add_argument(
         "--interactive",
         action="store_true",
@@ -146,6 +156,7 @@ if __name__ == "__main__":
             max_step_num=args.max_step_num,
             enable_background_investigation=args.enable_background_investigation,
             graph_format=args.graph_format,
+            enable_memory=args.enable_memory,
         )
     else:
         # Parse user input from command line arguments or user input
@@ -162,4 +173,5 @@ if __name__ == "__main__":
             max_step_num=args.max_step_num,
             enable_background_investigation=args.enable_background_investigation,
             graph_format=args.graph_format,
+            enable_memory=args.enable_memory,
         )
