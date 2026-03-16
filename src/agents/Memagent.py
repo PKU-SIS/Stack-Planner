@@ -4,7 +4,7 @@ import json
 from langgraph.types import Command
 from langchain_core.messages import HumanMessage
 from langchain_core.tools import tool
-
+from src.utils.logger import logger
 from src.config.configuration import Configuration
 from src.agents.CommonReactAgent import CommonReactAgent
 from src.utils.logger import logger
@@ -40,6 +40,7 @@ class Memagent(CommonReactAgent):
 
     async def execute_agent_step(self, state) -> Command:
         observations = state.get("observations", [])
+        data_collections = state.get("data_collections", [])
 
         text = state.get("user_query", {})
         locale = state.get("locale", "zh-CN")
@@ -52,11 +53,13 @@ class Memagent(CommonReactAgent):
                         f"{text}\n\n"
                         f"语言环境\n\n"
                         f"{locale}\n\n"
-                        f"调用 mem0_search_tool 进行检索，再根据检索结果生成中文报告。"
+                        f"调用 mem0_search_tool 进行检索，再根据检索结果生成总结。"
                     )
                 )
             ]
         }
+        
+        # logger.info(f"{self.agent_name.capitalize()} input: {agent_input['messages'][0].content}")
 
         result = await self.ainvoke(
             input=agent_input,
@@ -76,6 +79,6 @@ class Memagent(CommonReactAgent):
                     )
                 ],
                 "observations": observations + [response_content],
-                # "data_collections": data_collections + self.tool_results,
+                "data_collections": data_collections + self.tool_results,
             },
         )

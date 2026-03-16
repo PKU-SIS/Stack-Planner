@@ -803,6 +803,10 @@ class CentralAgent:
             "completion_time": datetime.now().isoformat(),
             "statistics": global_statistics.get_statistics(),
         }
+        
+        if state.get("enable_memory") and not state.get("task_mem", None):
+            # 中枢 Agent 更新记忆
+            return self._handle_longmemory(decision, state, config, execution_summary)
 
         # 保存执行摘要到文件
         os.makedirs("./reports", exist_ok=True)
@@ -820,10 +824,6 @@ class CentralAgent:
 
         logger.info(report_msg)
         logger.info(global_statistics.get_statistics())
-        
-        if state.get("enable_memory") and not state.get("task_mem", None):
-            # 中枢 Agent 更新记忆
-            return self._handle_longmemory(decision, state, config, execution_summary)
             
         return Command(
             goto="zip_data",  # 结束执行

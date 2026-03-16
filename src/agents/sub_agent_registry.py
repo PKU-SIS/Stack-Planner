@@ -45,6 +45,24 @@ sub_agents_sp = [
         "description": "Result organization and report generation",
         "node": reporter_node,
     },
+]
+
+sub_agents_sp_with_memory = [
+    {
+        "name": SubAgentType.RESEARCHER.value,
+        "description": "Information collection and research",
+        "node": researcher_node,
+    },
+    {
+        "name": SubAgentType.CODER.value,
+        "description": "Code generation and execution for math or code problems",
+        "node": coder_node,
+    },
+    {
+        "name": SubAgentType.REPORTER.value,
+        "description": "Result organization and report generation",
+        "node": reporter_node,
+    },
     {
         "name": SubAgentType.MEMAGENT.value,
         "description": "Memory retrieval and summerize",
@@ -103,6 +121,8 @@ def get_sub_agents_by_global_type(graph_type: str):
     """
     if graph_type == "sp" or graph_type == "base":
         return sub_agents_sp
+    if graph_type == "sp-memory":
+        return sub_agents_sp_with_memory
     elif graph_type == "sp_xxqg":
         return sub_agents_sp_xxqg
     else:

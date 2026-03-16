@@ -133,9 +133,23 @@ class SubAgentManager:
     
     @timed_step("execute_memagent")
     async def execute_memagent(self, state: State, config: RunnableConfig) -> Command:
-        logger.info("记忆Agent开始执行...")
+        """
+        执行长期记忆总结Agent，负责查询和总结长期记忆
 
-        context = state.get("user_query", {})
+        Args:
+            state: 当前系统状态
+            config: 运行配置
+
+        Returns:
+            执行结果Command对象
+        """
+        logger.info("记忆Agent开始执行...")
+        
+        context = state.get("user_query", "")
+        delegation_context = state.get("delegation_context", {})
+        task_description = delegation_context.get("task_description", "")
+        if task_description != "":
+            context = task_description   
 
         # 实例化长期记忆总结Agent
         memagent = Memagent(
@@ -146,12 +160,14 @@ class SubAgentManager:
         # 执行总结任务并处理异常
         try:
             result_observations = []
-
+            result_data_collections = []
+            
             result_command = await memagent.execute_agent_step(state)
 
             if result_command and result_command.update:
                 result_observations = result_command.update.get("observations", [])
-
+                result_data_collections = result_command.update.get("data_collections", [])
+                
         except Exception as e:
             logger.error(f"长期记忆总结Agent执行失败: {str(e)}")
             return Command(
@@ -159,9 +175,11 @@ class SubAgentManager:
                     "messages": [
                         HumanMessage(
                             content=f"长期记忆总结任务失败: {str(e)}",
-                            name="experience_agent",
+                            name="memory_agent",
                         )
                     ],
+                    "current_node": "central_agent",
+                    "memory_stack": self.central_agent.memory_stack.to_dict(),
                 },
                 goto="central_agent",
             )
@@ -188,7 +206,10 @@ class SubAgentManager:
                 ],
                 "current_node": "central_agent",
                 "memory_stack": self.central_agent.memory_stack.to_dict(),
-            }
+                "data_collections": result_data_collections,
+                "observations": result_observations,
+            },
+            goto= "central_agent"
         )
 
     

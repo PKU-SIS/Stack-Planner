@@ -65,4 +65,4 @@ docs/
 examples/
 
 # memory
-sp_qdrant_memory/
+qdrant_memory/

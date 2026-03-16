@@ -48,11 +48,14 @@ async def run_agent_workflow_async(
         enable_debug_logging()
 
     from src.graph.sp_nodes import init_agents
-
-    init_agents(graph_format)
+    
+    init_agents(graph_format + ("-memory" if enable_memory else ""))
 
     if graph_format == "sp":
-        from src.graph.builder import sp_graph as graph
+        if enable_memory:
+            from src.graph.builder import sp_graph_with_memory as graph
+        else:
+            from src.graph.builder import sp_graph as graph
     elif graph_format == "xxqg":
         from src.graph.builder import xxqg_graph as graph
     elif graph_format == "sp_xxqg":
