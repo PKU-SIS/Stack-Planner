@@ -12,16 +12,20 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 # os.environ["HTTPS_PROXY"] = "http://localhost:8888"
 
 
-url = "http://localhost:8556/api/chat/sp_stream"
-base_url = "http://localhost:8556"  # 基础 URL，用于其他 API 调用
+url = "http://localhost:8555/api/chat/sp_stream"
+base_url = "http://localhost:8555"  # 基础 URL，用于其他 API 调用
 
 # 初始请求内容，带有 [STYLE_ROLE] 标记指定初始风格
+# content = """我需要一篇关于脱贫攻坚成果的讲话稿。
+# 内容安排上，先要突出全国打赢脱贫攻坚战的重大成就，再结合我们凉山州的实际情况进行阐述，
+# 并适当穿插一两个具体案例，例如某个村通过发展产业实现了致富，
+# 或者某个家庭在政策帮扶下生活明显改善。最后，要强调我们还要把脱贫与乡村振兴紧密衔接，
+# 巩固成果，防止返贫。[STYLE_ROLE]""".strip() #鲁迅
 content = """我需要一篇关于脱贫攻坚成果的讲话稿。
-内容安排上，先要突出全国打赢脱贫攻坚战的重大成就，再结合我们凉山州的实际情况进行阐述，
+内容安排上，先要突出全国打赢脱贫攻坚战的重大成就，再结合我们湘北县的实际情况进行阐述，
 并适当穿插一两个具体案例，例如某个村通过发展产业实现了致富，
 或者某个家庭在政策帮扶下生活明显改善。最后，要强调我们还要把脱贫与乡村振兴紧密衔接，
 巩固成果，防止返贫。[STYLE_ROLE]""".strip() #鲁迅
-
 # 可选的风格列表
 AVAILABLE_STYLES = ["鲁迅", "赵树理", "侠客岛"]
 

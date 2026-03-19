@@ -35,7 +35,7 @@ from src.utils.reference_utils import global_reference_map
 
 
 def get_kb_id_by_name(kb_name):
-    url = "https://ragflow.pkubir.cn/v1/kb_api/list"
+    url = "https://zhangly-ragflow.pkubir.cn/v1/kb_api/list"
     params = {
         "page": 1,
         "page_size": 100,
@@ -44,8 +44,8 @@ def get_kb_id_by_name(kb_name):
         "desc": "true",
     }
     data = {
-        "tenant_id": "e38fafc3e07411f0bf2ecd6543f8a381",#"cbae14fb8c8411f0bf2ecd6543f8a381"  #这里提供的子然账号，XXQG知识库在这上面
-        "owner_ids": ["cbae14fb8c8411f0bf2ecd6543f8a381", "dc55bde9b62911f0bf2ecd6543f8a381"]
+        "tenant_id": "9f5f108c227c11f18f6e2ae98a832b29",#"cbae14fb8c8411f0bf2ecd6543f8a381"  #这里提供的子然账号，XXQG知识库在这上面
+       # "owner_ids": ["cbae14fb8c8411f0bf2ecd6543f8a381", "dc55bde9b62911f0bf2ecd6543f8a381"]
     }
 
     try:
@@ -148,11 +148,11 @@ def search_docs(question, top_k=5, config: RunnableConfig = None):
         return docs
     logger.info(f"knowledge_base_name: {knowledge_base_name}")
 
-    api_url = "https://ragflow.pkubir.cn/v1/chunk_api/retrieval_test"
+    api_url = "https://zhangly-ragflow.pkubir.cn/v1/chunk_api/retrieval_test"
 
     query = {
-        "tenant_id": "e38fafc3e07411f0bf2ecd6543f8a381",  # "cbae14fb8c8411f0bf2ecd6543f8a381",
-        "owner_ids": ["cbae14fb8c8411f0bf2ecd6543f8a381", "dc55bde9b62911f0bf2ecd6543f8a381"],
+        "tenant_id": "9f5f108c227c11f18f6e2ae98a832b29",  # "cbae14fb8c8411f0bf2ecd6543f8a381",
+        #"owner_ids": ["cbae14fb8c8411f0bf2ecd6543f8a381", "dc55bde9b62911f0bf2ecd6543f8a381"],
         "kb_id": [kb_id],
         "similarity_threshold": 0.3,  # 相似度阈值
         "question": question,
@@ -273,4 +273,4 @@ def search_docs_with_ref(
 
 # todo 知识库的领域分类如何注册到工具调用中？如何根据问题+领域分类，自适应的选择知识库去检索
 
-# logger.info(search_docs_tool("习近平总书记关于全面从严治党的重要论述有哪些？"))
+logger.info(search_docs_tool("习近平总书记关于全面从严治党的重要论述有哪些？"))

@@ -3,7 +3,7 @@ import requests
 
 
 def get_kb_id_by_name(kb_name):
-    url = "https://ragflow.pkubir.cn/v1/kb_api/list"
+    url = "https://zhangly-ragflow.pkubir.cn/v1/kb_api/list"#"https://ragflow.pkubir.cn/v1/kb_api/list"
     params = {
         "page": 1,
         "page_size": 100,
@@ -12,8 +12,9 @@ def get_kb_id_by_name(kb_name):
         "desc": "true",
     }
     data = {
-        "tenant_id": "e38fafc3e07411f0bf2ecd6543f8a381",#"cbae14fb8c8411f0bf2ecd6543f8a381"  #这里提供的子然账号，XXQG知识库在这上面
-        "owner_ids": ["cbae14fb8c8411f0bf2ecd6543f8a381", "dc55bde9b62911f0bf2ecd6543f8a381"]
+        "tenant_id":"9f5f108c227c11f18f6e2ae98a832b29",
+        # "tenant_id": "e38fafc3e07411f0bf2ecd6543f8a381",#"cbae14fb8c8411f0bf2ecd6543f8a381"  #这里提供的子然账号，XXQG知识库在这上面
+        # "owner_ids": ["cbae14fb8c8411f0bf2ecd6543f8a381", "dc55bde9b62911f0bf2ecd6543f8a381"]
     }
 
     try:
@@ -47,11 +48,13 @@ def search_docs(question, top_k=5):
     docs = []
     knowledge_base_name="学习强国"
     kb_id = get_kb_id_by_name(knowledge_base_name)
-    api_url = "https://ragflow.pkubir.cn/v1/chunk_api/retrieval_test"
+    print("kb_id",kb_id)
+    # exit()
+    api_url = "https://zhangly-ragflow.pkubir.cn/v1/chunk_api/retrieval_test"#"https://ragflow.pkubir.cn/v1/chunk_api/retrieval_test"
 
     query = {
-        "tenant_id": "e38fafc3e07411f0bf2ecd6543f8a381",  # "cbae14fb8c8411f0bf2ecd6543f8a381",
-        "owner_ids": ["cbae14fb8c8411f0bf2ecd6543f8a381", "dc55bde9b62911f0bf2ecd6543f8a381"],
+        "tenant_id": "9f5f108c227c11f18f6e2ae98a832b29",#"e38fafc3e07411f0bf2ecd6543f8a381",  # "cbae14fb8c8411f0bf2ecd6543f8a381",
+        # "owner_ids": ["cbae14fb8c8411f0bf2ecd6543f8a381", "dc55bde9b62911f0bf2ecd6543f8a381"],
         "kb_id": [kb_id],
         "similarity_threshold": 0.3,  # 相似度阈值
         "question": question,
@@ -91,4 +94,4 @@ def search_docs(question, top_k=5):
         logger.error(f"请求过程中出现异常: {e}")
         return docs
 
-print(search_docs("湘北县扶贫", top_k=15))
+print(search_docs("湘北扶贫", top_k=15))

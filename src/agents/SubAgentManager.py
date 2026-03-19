@@ -31,7 +31,7 @@ from ..config import SELECTED_SEARCH_ENGINE, SearchEngine
 from src.utils.statistics import global_statistics, timed_step
 import re
 from uuid import uuid4
-
+import asyncio
 # -------------------------
 # 子Agent管理模块
 # TODO: check sub-agent bugs
@@ -740,8 +740,15 @@ class SubAgentManager:
             session_id = config["configurable"]["thread_id"]
             ref_docs=global_reference_map.get_session_ref_map(session_id)
             
-            final_report=cite_verify_report(final_report,ref_docs)
+            # cite_verify_report 返回 dict，包含句子列表、句子级查找表、docs 展示
+            cite_result = asyncio.run(cite_verify_report(final_report, ref_docs))
+            sentences     = cite_result["sentences"]
+            sentence_map  = cite_result["sentence_map"]
+            docs_display  = cite_result["docs_display"]
+            final_report  = "".join(sentences)
+
             logger.info(f"ref_docs{ref_docs}")
+            logger.info(f"sentence_map keys: {list(sentence_map.keys())[:10]}")
             logger.info(f"final_report after citation fix{final_report}")
             # #暴力吧
             # delete_unref_data_prompt=f"""
@@ -802,11 +809,13 @@ class SubAgentManager:
             logger.info("报告生成完成，跳转到 human_feedback 节点等待用户反馈")
             return Command(
                 update={
-                    "final_report": final_report,
-                    "original_report": original_report,  # 保存首次生成的报告作为参考
+                    "final_report":  final_report,
+                    "original_report": original_report,
                     "current_style": current_style,
-                    "wait_stage": "reporter",
-                    "current_node": "reporter",
+                    "wait_stage":    "reporter",
+                    "current_node":  "reporter",
+                    "sentence_map":  sentence_map,   # 句子级引用查找表
+                    "docs_display":  docs_display,   # 格式化文档（前端溯源用）
                 },
                 goto="human_feedback",
             )
@@ -840,8 +849,15 @@ class SubAgentManager:
                 session_id = config["configurable"]["thread_id"]
                 ref_docs=global_reference_map.get_session_ref_map(session_id)
                 
-                new_report=cite_verify_report(new_report,ref_docs)
+                # cite_verify_report 返回 dict
+                cite_result  = asyncio.run(cite_verify_report(new_report, ref_docs))
+                sentences    = cite_result["sentences"]
+                sentence_map = cite_result["sentence_map"]
+                docs_display = cite_result["docs_display"]
+                new_report   = "".join(sentences)
+
                 logger.info(f"ref_docs{ref_docs}")
+                logger.info(f"sentence_map keys: {list(sentence_map.keys())[:10]}")
                 logger.info(f"new_report after citation fix{new_report}")
                 #暴力
                 # delete_unref_data_prompt=f"""
@@ -902,10 +918,12 @@ class SubAgentManager:
                 logger.info("报告生成完成，跳转到 human_feedback 节点等待用户反馈")
                 return Command(
                     update={
-                        "final_report": new_report,
+                        "final_report":  new_report,
                         "current_style": new_style,
-                        "wait_stage": "reporter",
-                        "current_node": "reporter",
+                        "wait_stage":    "reporter",
+                        "current_node":  "reporter",
+                        "sentence_map":  sentence_map,
+                        "docs_display":  docs_display,
                     },
                     goto="human_feedback",
                 )
@@ -1224,6 +1242,7 @@ class SubAgentManager:
         # check if the plan is auto accepted
         outline_llm = get_llm_by_type(AGENT_LLM_MAP.get("outline", "default"))
         wait_stage = state.get("wait_stage", "")
+        logger.info(f"大纲层等待阶段: {wait_stage}")
         if wait_stage != "outline":
             
             #构建observation
@@ -1261,94 +1280,73 @@ class SubAgentManager:
             - 始终验证所收集信息的相关性和可信度。
             - 输出要求：你尽可能同时输出thinking内容和tool_call。当你需要结束任务时，不需要生成tool_call，只输出你总结的信息。
             """
-            # 直接调用 search_docs_with_ref 获取背景调查数据
-            bg_investigation_result = search_docs_with_ref(
-                user_query, top_k=5, config=config
-            )
-            bg_investigation = bg_investigation_result.get("docs", [])
+            # 异步执行检索
+            import asyncio
+            import json
+            from langchain_core.messages import ToolMessage
             
-            # 添加日志，确保 bg_investigation 被正确获取
-            logger.info(f"背景调查数据: {bg_investigation}")
-            logger.info(f"背景调查结果: {bg_investigation_result}")
+            async def perform_search():
+                # 直接调用 search_docs_with_ref 获取背景调查数据
+                bg_investigation_result = search_docs_with_ref(
+                    user_query, top_k=5, config=config
+                )
+                bg_investigation = bg_investigation_result.get("docs", [])
+                
+                # 添加日志，确保 bg_investigation 被正确获取
+                logger.info(f"背景调查数据: {bg_investigation}")
+                logger.info(f"背景调查结果: {bg_investigation_result}")
+                
+                return bg_investigation
+            
+            # 执行检索
+            bg_investigation = await perform_search()
             user_dst = state.get("user_dst", "")
             
-            formatted_docs = []
-            current_chars = 0
-
-            for doc in bg_investigation:
-                source = doc.get("source", "")
-                content = doc.get("content", "")
-
-                clean_content = content.replace("\n", " ")
-                doc_entry = f"{source}\n{clean_content}\n"
-
-                formatted_docs.append(doc_entry)
-                current_chars += len(clean_content)
-
-            doc_text = "\n".join(formatted_docs)
-
-            Observation_prompt = Observation_TEMPLATE \
-                .replace("{{user_query}}", user_query) \
-                .replace("{{doc}}", doc_text)
-            #这个地方增加一个生成observation吧
-
-
-
-
-
-            try:
-                #observation不要了
-                # response_observation = outline_llm.invoke(Observation_prompt, config={"tags": ["noshow"]})
-                # logger.info(f"Observation_prompt{Observation_prompt}")
-                # logger.info(f"response_observation{response_observation}")
-                # bg_observation = response_observation.content
-                messages = [
-                    HumanMessage(
-                        f"##用户原始问题\n\n{user_query}\n\n##用户补充需求\n\n{user_dst}\n\n##可能用到的相关数据\n\n{bg_investigation}\n\n"
-                    )
-                ] + apply_prompt_template("outline", state)
-                #observation不要了
-                # messages = [
-                #     HumanMessage(
-                #         f"##用户原始问题\n\n{user_query}\n\n##用户补充需求\n\n{user_dst}\n\n##可能用到的相关数据\n\n{bg_observation}\n\n"#这个地方改成observation
-                #     )
-                # ] + apply_prompt_template("outline", state)
-                
-                response = outline_llm.invoke(messages)
-                outline_response = response.content
-                outline_response = repair_json_output(outline_response)
-                if "[STYLE_ROLE]" in outline_response:
-                    outline_response = outline_response.split("[STYLE_ROLE]")[0]
-                logger.info(f"大纲生成完成: {outline_response}")
-                # 生成背景调查结果工具消息
-                import json
-                from langchain_core.messages import ToolMessage
-                
-                # 构建工具消息内容
-                tool_content = {
-                    "query": user_query,
-                    "docs": bg_investigation
-                }
-                
-                # 创建 ToolMessage
-                tool_message = ToolMessage(
-                    content=json.dumps(tool_content, ensure_ascii=False),
-                    tool_call_id="search_docs_with_ref_" + str(hash(user_query)),
-                    name="search_docs_with_ref"
-                )
-                
-                return Command(
-                    update={
-                        "messages": [tool_message],
-                        "report_outline": outline_response,
-                        "bg_investigation": bg_investigation,
-                        "wait_stage": "outline",
-                        "current_node": "outline",
-                    },
-                    goto="human_feedback",
-                )
-            except Exception as e:
-                logger.error(f"大纲生成执行失败: {str(e)}")
+            # 构建工具消息内容
+            tool_content = {
+                "query": user_query,
+                "docs": bg_investigation
+            }
+            
+            # 创建 ToolMessage
+            tool_message = ToolMessage(
+                content=json.dumps(tool_content, ensure_ascii=False),
+                tool_call_id="search_docs_with_ref_" + str(hash(user_query)),
+                name="search_docs_with_ref"
+            )
+            
+            # 异步生成大纲，不阻塞返回
+            async def generate_outline_async():
+                try:
+                    messages = [
+                        HumanMessage(
+                            f"##用户原始问题\n\n{user_query}\n\n##用户补充需求\n\n{user_dst}\n\n##可能用到的相关数据\n\n{bg_investigation}\n\n"
+                        )
+                    ] + apply_prompt_template("outline", state)
+                    logger.info(f"大纲层提示: {messages}")
+                    response = outline_llm.invoke(messages)
+                    outline_response = response.content
+                    outline_response = repair_json_output(outline_response)
+                    if "[STYLE_ROLE]" in outline_response:
+                        outline_response = outline_response.split("[STYLE_ROLE]")[0]
+                    logger.info(f"大纲生成完成: {outline_response}")
+                    # 这里可以将大纲结果存储起来，供后续使用
+                except Exception as e:
+                    logger.error(f"大纲生成失败: {e}")
+            
+            # 启动异步任务生成大纲
+            asyncio.create_task(generate_outline_async())
+            
+            # 立即返回检索结果，不等待大纲生成
+            return Command(
+                update={
+                    "messages": [tool_message],
+                    "bg_investigation": bg_investigation,
+                    "wait_stage": "outline",
+                    "current_node": "outline",
+                },
+                goto="human_feedback",
+            )
         if wait_stage == "outline":
             feedback = state.get("hitl_feedback", "")
             # if the feedback is not accepted, return the planner node

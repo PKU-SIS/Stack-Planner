@@ -521,6 +521,18 @@ async def _astream_workflow_generator_sp(
                             "content": final_report,
                         },
                     )
+                # 句子级溯源数据：sentence_map + docs_display
+                sentence_map = reporter_data.get("sentence_map")
+                docs_display = reporter_data.get("docs_display")
+                if sentence_map or docs_display:
+                    yield _make_event(
+                        "citation_map",
+                        {
+                            "thread_id": thread_id,
+                            "sentence_map": sentence_map or {},
+                            "docs_display": docs_display or {},
+                        },
+                    )
 
             continue
         message_chunk, message_metadata = cast(
