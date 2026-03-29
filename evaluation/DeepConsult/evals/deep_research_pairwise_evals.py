@@ -118,7 +118,11 @@ class DeepResearchEvaluator:
 
         # Create a list of tasks
         tasks = []
+        count=0
         for _, row in data.iterrows():
+            count=count+1
+            if count==50:
+                break
             tasks.append(
                 {
                     "question": row["question"],
@@ -242,7 +246,7 @@ def main():
     print(f"Loading data from {args.input_data}")
     df = pd.read_csv(args.input_data)
     print(f"Loaded {len(df)} examples")
-
+    
     # Initialize evaluator
     evaluator = DeepResearchEvaluator(
         model=args.model,

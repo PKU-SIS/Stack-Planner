@@ -10,7 +10,14 @@ from dotenv import load_dotenv
 import os
 
 load_dotenv("keys.env")
-client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+# client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+client = AsyncOpenAI(
+    api_key=os.getenv("OPENAI_API_KEY"),
+    base_url=os.getenv("OPENAI_BASE_URL")
+)
+
+
 
 EVAL_CRITERIA = [
     {
@@ -29,10 +36,14 @@ EVAL_CRITERIA = [
         "name": "Breadth",
         "description": "Evaluate how many distinct and relevant subtopics, perspectives, or contexts are covered. Excellent reports provide a wide-ranging yet focused exploration — e.g., including legal, historical, cultural, or ethical angles where appropriate. Simply presenting both sides of a binary debate is not sufficient for a high score.",
     },
+    # {
+    #     "name": "Support",
+    #     "description": "Evaluate the extent to which all key claims are substantiated by specific, identifiable, and credible evidence.  \n\nProviding URLs in the report is the most basic requirement. If no section (such as references or sources) provides source URLs, the score should be zero.\n\nHaving URLs only meets the minimum standard and does not merit a high score. Evaluation must be carried out strictly according to the following principles; any deficiencies should prevent a score above 8.\n\nFactual accuracy is necessary but not remotely sufficient. The following are strict, non-negotiable expectations for higher scores:\n- Every factual claim must be attributed to a verifiable source (e.g., peer-reviewed articles, government databases, reputable news organizations). Vague references (e.g., “studies show,” “experts believe”) are unacceptable.\n- Quantitative claims require precise, contextualized data, ideally with comparative benchmarks (e.g., trends over time, regional differences).\n- Qualitative claims must be supported by concrete examples, not hypotheticals or generalizations. Examples should be relevant, compelling, and clearly linked to the argument.\n- Sources must be cited explicitly and be traceable. If the source is not easily verifiable (e.g., no publication, no author, no URL), it is considered invalid.\n- Cherry-picked or misleading evidence will result in a score reduction, regardless of citation. Omission of counter-evidence where clearly relevant is penalized.\n- Original analysis or synthesis must be built on top of sourced material, not used as a substitute for it.",
+    # },
     {
         "name": "Support",
-        "description": "Evaluate the extent to which all key claims are substantiated by specific, identifiable, and credible evidence.  \n\nProviding URLs in the report is the most basic requirement. If no section (such as references or sources) provides source URLs, the score should be zero.\n\nHaving URLs only meets the minimum standard and does not merit a high score. Evaluation must be carried out strictly according to the following principles; any deficiencies should prevent a score above 8.\n\nFactual accuracy is necessary but not remotely sufficient. The following are strict, non-negotiable expectations for higher scores:\n- Every factual claim must be attributed to a verifiable source (e.g., peer-reviewed articles, government databases, reputable news organizations). Vague references (e.g., “studies show,” “experts believe”) are unacceptable.\n- Quantitative claims require precise, contextualized data, ideally with comparative benchmarks (e.g., trends over time, regional differences).\n- Qualitative claims must be supported by concrete examples, not hypotheticals or generalizations. Examples should be relevant, compelling, and clearly linked to the argument.\n- Sources must be cited explicitly and be traceable. If the source is not easily verifiable (e.g., no publication, no author, no URL), it is considered invalid.\n- Cherry-picked or misleading evidence will result in a score reduction, regardless of citation. Omission of counter-evidence where clearly relevant is penalized.\n- Original analysis or synthesis must be built on top of sourced material, not used as a substitute for it.",
-    },
+        "description":"Evaluate whether the report provides a sufficient amount of supporting references for its claims. The primary focus of this criterion is the **quantity and distribution of citations**, rather than the prestige or authority of the sources. Reports should include a substantial number of references (preferably with URLs) that broadly support the main arguments and sections of the analysis. If no URLs or source links are provided anywhere in the report, the score should be zero. Higher scores should be given when multiple citations appear throughout the document and when most sections include at least some form of reference support. It is not necessary for every factual statement to be individually attributed to a specific source, and the evaluation should not heavily penalize the absence of peer-reviewed or highly authoritative sources. Instead, emphasis should be placed on whether the report demonstrates a consistent effort to ground its discussion in a reasonable number of identifiable references. Reports with only a few scattered citations, or with references concentrated in a single section, should receive lower scores.",# "description": "Evaluate the extent to which all key claims are substantiated by specific, identifiable, and credible evidence.  \n\nProviding URLs in the report is the most basic requirement. If no section (such as references or sources) provides source URLs, the score should be zero.\n\nHaving URLs only meets the minimum standard and does not merit a high score. Evaluation must be carried out strictly according to the following principles; any deficiencies should prevent a score above 8.\n\nFactual accuracy is necessary but not remotely sufficient. The following are strict, non-negotiable expectations for higher scores:\n- Every factual claim must be attributed to a verifiable source (e.g., peer-reviewed articles, government databases, reputable news organizations). Vague references (e.g., “studies show,” “experts believe”) are unacceptable.\n- Quantitative claims require precise, contextualized data, ideally with comparative benchmarks (e.g., trends over time, regional differences).\n- Qualitative claims must be supported by concrete examples, not hypotheticals or generalizations. Examples should be relevant, compelling, and clearly linked to the argument.\n- Sources must be cited explicitly and be traceable. If the source is not easily verifiable (e.g., no publication, no author, no URL), it is considered invalid.\n- Cherry-picked or misleading evidence will result in a score reduction, regardless of citation. Omission of counter-evidence where clearly relevant is penalized.\n- Original analysis or synthesis must be built on top of sourced material, not used as a substitute for it.",
+    }, 
     {
         "name": "Insightfulness",
         "description": "Assess how insightful the answer is. Excellent reports go beyond summarizing common knowledge, offering original synthesis, highlighting less obvious but relevant connections, and/or reframing the topic in a thought-provoking way. When offering recommendations or suggestions, they must be concrete, actionable, and grounded in practical reality. Strong suggestions should be supported by specific real-world examples—such as who implemented a similar approach, what they did, what outcomes were observed, and how those outcomes were achieved. Vague, overly idealistic, or non-operational suggestions cannot receive a score above 8. Practical applicability is paramount.",
@@ -127,7 +138,16 @@ async def evaluate_query(semaphore, query_id, folder_path, model):
 
 
 async def evaluate_folder_async(subfolder_name, model, path_to_reports):
+    print("path_to_reports =", path_to_reports)
+    print("subfolder_name =", subfolder_name)
+
     folder_path = Path(path_to_reports) / subfolder_name
+
+    print("folder_path =", folder_path)
+    print("folder exists =", folder_path.exists())
+    print("files =", list(folder_path.glob("*"))[:10])
+    
+    
     output_file = folder_path / f"evaluation_results_detailed_{model}.json"
 
     all_results = {}
@@ -141,6 +161,9 @@ async def evaluate_folder_async(subfolder_name, model, path_to_reports):
 
     query_ids = [p.stem for p in folder_path.glob("*.q") if p.stem not in all_results]
     tasks = [evaluate_query(semaphore, qid, folder_path, model) for qid in query_ids]
+    print("query_ids ",query_ids )
+    print("tasks",tasks)
+    # exit()
     results = await tqdm_asyncio.gather(*tasks)
 
     for query_id, result in results:
@@ -154,10 +177,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--subfolder")
     parser.add_argument("--open_ai_model")
+    parser.add_argument("--reports_path")
     args = parser.parse_args()
 
-    path_to_reports = "/data/group_data/cx_group/deepsearch_benchmark/reports/"
-
+    # path_to_reports = "/data/group_data/cx_group/deepsearch_benchmark/reports/"
+    path_to_reports = args.reports_path
+    
     print(f"Evaluating {args.subfolder} using {args.open_ai_model}")
     results = asyncio.run(
         evaluate_folder_async(args.subfolder, args.open_ai_model, path_to_reports)

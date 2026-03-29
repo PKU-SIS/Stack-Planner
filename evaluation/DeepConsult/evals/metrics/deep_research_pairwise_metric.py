@@ -161,8 +161,9 @@ class DeepResearchPairwiseMetric:
             output_class=DeepResearchPairwisePreferenceOutput,
             model=self.eval_model,
             temperature=0,
-            max_completion_tokens=10000,
+            max_completion_tokens=30000,
         )
+        # print("output",output)
         if output is None:
             raise ValueError("Failed to get output from evaluation model")
         return DeepResearchPairwisePreferenceOutput.model_validate(output)
@@ -350,10 +351,10 @@ WEAKNESSES:
                 messages=summary_messages,
                 model=self.eval_model,
                 temperature=0,
-                max_output_tokens=10000,
+                max_output_tokens=30000,
                 timeout=240,
             )["content"]
-
+            print("explanation_summary",explanation_summary)
             return explanation_summary or "Failed to generate explanation summary"
         except Exception as e:
             print(f"Failed to generate explanation summary: {e}")

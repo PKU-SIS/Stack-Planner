@@ -55,9 +55,9 @@ import difflib
 from collections import Counter
 
 # ========= 路径 =========
-SP_PATH = "evaluation/DeepConsult/datasets/DeepConsult/SP.jsonl"
+SP_PATH = "evaluation/DeepConsult/datasets/DeepConsult/RAG.jsonl"
 BASELINE_CSV_PATH = "evaluation/DeepConsult/datasets/DeepConsult/responses_OpenAI-DeepResearch_vs_ARI_2025-05-15.csv"
-OUTPUT_CSV_PATH = "evaluation/DeepConsult/datasets/DeepConsult/responses_SP_vs_Baseline.csv"
+OUTPUT_CSV_PATH = "evaluation/DeepConsult/datasets/DeepConsult/responses_RAG_vs_Baseline.csv"
 
 SIM_THRESHOLD = 0.99
 

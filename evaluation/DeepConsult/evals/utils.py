@@ -27,6 +27,8 @@ def query_openai_model(
     response_type: Literal["text", "json_object"] = "text",
 ) -> dict:
     response_format = {"type": response_type}
+    # print("response_format",response_format)
+    # print("messages",messages)
     has_no_temperature = model.startswith("o")
     response = client.chat.completions.create(
         model=model,
@@ -48,6 +50,7 @@ def query_openai_model_structured_outputs(
     timeout: int = 120,
 ) -> Optional[BaseModel]:
     has_no_temperature = model.startswith("o")
+    # print("query_openai_model_structured_outputs messages",messages)
     completion = client.beta.chat.completions.parse(
         model=model,
         messages=messages,

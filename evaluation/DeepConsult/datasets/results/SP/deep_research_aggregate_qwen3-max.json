@@ -1,0 +1,39 @@
+{
+  "support": 101,
+  "instruction_following": {
+    "win_rate": 0.009900990099009901,
+    "tie_rate": 0.06930693069306931,
+    "lose_rate": 0.9207920792079208,
+    "avg_score": 1.7937293729372936,
+    "net_winrate": 0.010638297872340425
+  },
+  "comprehensiveness": {
+    "win_rate": 0.009900990099009901,
+    "tie_rate": 0.009900990099009901,
+    "lose_rate": 0.9801980198019802,
+    "avg_score": 1.2244224422442243,
+    "net_winrate": 0.01
+  },
+  "completeness": {
+    "win_rate": 0.009900990099009901,
+    "tie_rate": 0.039603960396039604,
+    "lose_rate": 0.9504950495049505,
+    "avg_score": 0.8712871287128713,
+    "net_winrate": 0.010309278350515464
+  },
+  "writing_quality": {
+    "win_rate": 0.009900990099009901,
+    "tie_rate": 0.0297029702970297,
+    "lose_rate": 0.9603960396039604,
+    "avg_score": 1.8415841584158417,
+    "net_winrate": 0.01020408163265306
+  },
+  "overall": {
+    "win_rate": 0.009900990099009901,
+    "tie_rate": 0.03712871287128713,
+    "lose_rate": 0.9529702970297029,
+    "avg_score": 1.4327557755775577,
+    "net_winrate": 0.010287914463877237
+  },
+  "explanation_summary": "# DIMENSION: completeness\nSTRENGTHS:\n- report_b includes some high-level metrics and data points that provide a starting point for analysis\n- report_b occasionally introduces useful frameworks (e.g., investment evaluation criteria like algorithm innovation, data moats)\n\nWEAKNESSES:\n- report_b contains multiple factual inaccuracies (e.g., claiming Insilico raised $283M in 2023 when it was actually $110M Series E)\n- report_b makes unsupported claims without evidence (e.g., \"Xaira has $10B valuation\" with no verification)\n- report_b lacks critical details on platform mechanics, clinical trial phases, and technological differentiators\n- report_b omits essential context like experimental validation loops, partnership terms, and funding milestones\n- report_b presents surface-level statements without mechanistic explanations or real-world implementation details\n- report_b's strategic recommendations lack operational detail and risk assessment\n\n# DIMENSION: comprehensiveness\nSTRENGTHS:\n- report_b covers the main topic areas requested in the prompt\n- report_b includes some useful tables for quick comparison\n\nWEAKNESSES:\n- report_b omits key subtopics that report_a addresses (e.g., macroeconomic impacts on churn, acquisition strategies, alliance dynamics)\n- report_b lacks breadth in competitive analysis, missing important players and collaborative ecosystems\n- report_b provides superficial treatment of critical areas like regulatory frameworks and compliance mechanisms\n- report_b fails to integrate cross-cutting themes and treats sections in isolation\n- report_b misses important contextual elements like infrastructure challenges, scalability limitations, and geopolitical factors\n- report_b's coverage is often checklist-like rather than providing interconnected, holistic analysis\n\n# DIMENSION: instruction_following\nSTRENGTHS:\n- report_b addresses the general requirements of the prompt\n- report_b includes the requested structural elements (three-statement model components)\n\nWEAKNESSES:\n- report_b labels key assumptions as \"unvalidated\" and explicitly states they \"require validation,\" indicating incomplete execution\n- report_b provides superficial treatment of required elements rather than the detailed, comprehensive analysis requested\n- report_b lacks depth in explaining how assumptions translate into model mechanics and dynamic linkages\n- report_b omits nuanced discussion of industry-specific drivers and forecasting techniques\n\n# DIMENSION: writing_quality\nSTRENGTHS:\n- report_b is generally concise and readable\n- report_b uses tables effectively for some comparisons\n\nWEAKNESSES:\n- report_b suffers from fragmented presentation with abrupt shifts between topics and inconsistent formatting\n- report_b over-relies on bullet points that disrupt narrative flow and read like slide deck notes\n- report_b contains unprofessional elements including Chinese characters in English reports (\"\u53c2\u8003\u6587\u732e\")\n- report_b includes vague phrasing and unsupported claims that undermine credibility\n- report_b has organizational issues with poor transitions between sections\n- report_b sometimes mixes promotional language with analytical content, creating inconsistent tone\n- report_b ends with incomplete elements like \"References\" headers with no actual citations"
+}

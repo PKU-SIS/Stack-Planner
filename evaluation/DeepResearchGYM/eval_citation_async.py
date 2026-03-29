@@ -238,17 +238,21 @@ async def evaluate_query(openai_semaphore, query_id, answer_path, model):
 async def evaluate_folder_async(subfolder_name, model, path_to_reports):
     folder_path = Path(path_to_reports) / subfolder_name
     output_file = folder_path / f"evaluation_results_citation_{model}.json"
-
+    print("folder_path",folder_path)
+    print("output_file",output_file)
+    # exit()
     all_results = {}
     if output_file.exists():
         with open(output_file, "r", encoding="utf-8") as f:
             all_results = json.load(f)
 
     print(f"Skipped {len(all_results)} queries.")
-
+    
     openai_semaphore = asyncio.Semaphore(12)
 
     query_files = list(folder_path.glob("*.a"))
+    print("query_files",query_files)
+    exit()
     tasks = []
     for file in query_files:
         query_id = file.stem
@@ -278,6 +282,7 @@ if __name__ == "__main__":
 
     path_to_reports = "/data/group_data/cx_group/deepsearch_benchmark/reports/"
     print(f"Evaluating {args.subfolder} using {args.open_ai_model}")
+
     results, avg = asyncio.run(
         evaluate_folder_async(args.subfolder, args.open_ai_model, path_to_reports)
     )

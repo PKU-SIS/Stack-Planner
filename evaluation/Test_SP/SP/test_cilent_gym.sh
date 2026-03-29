@@ -1,1 +1,1 @@
-python evaluation/Test_SP/test_factstruct.py --skip_exist --infer_num 10 --input_path evaluation/DeepResearchGYM/queries/researchy_queries_sample_doc_click_100_fix.jsonl --output_path evaluation/DeepResearchGYM/data/group_data/cx_group/deepsearch_benchmark/reports/SP/SP.jsonl
+python evaluation/Test_SP/test_factstruct.py --skip_exist --infer_num 38 --input_path evaluation/DeepResearchGYM/queries/researchy_queries_sample_doc_click_100_fix.jsonl --output_path evaluation/DeepResearchGYM/data/group_data/cx_group/deepsearch_benchmark/reports/SP/SP.jsonl
