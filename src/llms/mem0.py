@@ -29,7 +29,7 @@ def mem0_add(response):
     results = []
 
     for item in data.get("user_profiles", []):
-        messages = [{"role": "user", "content": item}]
+        messages = item
         try:
             res = m.add(
                 messages=messages,
@@ -44,7 +44,7 @@ def mem0_add(response):
             results.append(e)
 
     for item in data.get("semantic_memory", []):
-        messages = [{"role": "user", "content": item}]
+        messages = item
         try:
             res = m.add(
                 messages=messages,
@@ -60,7 +60,7 @@ def mem0_add(response):
 
     for sop in data.get("SOP", []):
         sop_text = json.dumps(sop, ensure_ascii=False)
-        messages = [{"role": "user", "content": sop_text}]
+        messages = sop_text
         try:
             res = m.add(
                 messages=messages,
@@ -83,7 +83,8 @@ async def mem0_search(querys, user_id = "dev"):
         tasks.append(
             m.search(
                 query,
-                user_id=user_id
+                user_id=user_id,
+                # filters={"category": "user_profile"}
             )
         )
     results = await asyncio.gather(*tasks, return_exceptions=True)

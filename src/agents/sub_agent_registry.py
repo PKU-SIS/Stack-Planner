@@ -53,11 +53,11 @@ sub_agents_sp_with_memory = [
         "description": "Information collection and research",
         "node": researcher_node,
     },
-    {
-        "name": SubAgentType.CODER.value,
-        "description": "Code generation and execution for math or code problems",
-        "node": coder_node,
-    },
+    # {
+    #     "name": SubAgentType.CODER.value,
+    #     "description": "Code generation and execution for math or code problems",
+    #     "node": coder_node,
+    # },
     {
         "name": SubAgentType.REPORTER.value,
         "description": "Result organization and report generation",

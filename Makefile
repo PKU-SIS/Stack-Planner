@@ -21,8 +21,12 @@ langgraph-dev:
 coverage:
 	uv run pytest --cov=src tests/ --cov-report=term-missing --cov-report=xml
 	
-run:
-	uv run main.py "我希望以后每次问你颜色是什么，你都告诉我它的对比色。紫色是什么？" --enable_memory=True
+run1:
+	uv run main.py "以后你给我解释治疗建议时直接告诉我“现在严不严重、我现在先做什么”，别一上来讲太多背景。" --enable_memory=True
+
+run11:
+	uv run main.py "我今天透析后胸闷，还有点喘，你怎么看？" --enable_memory=True
 
 run2:
-	uv run main.py "红色是什么？" --enable_memory=True
+	uv run main.py "我今天透析后胸闷，还有点喘，你怎么看？"
+	
