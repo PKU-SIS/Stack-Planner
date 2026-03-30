@@ -93,6 +93,22 @@ def build_report_context(research: dict) -> str:
     return "\n\n".join(parts)
 
 
+def build_references_section(research: dict) -> str:
+    """根据 research 字典构建 ## 参考文献 章节字符串。"""
+    if not research:
+        return ""
+    lines = ["\n\n## 参考文献\n"]
+    for idx in sorted(research.keys(), key=lambda x: int(x)):
+        doc = research[idx]
+        url = doc.get("url", "")
+        title = doc.get("title", "")
+        if url:
+            lines.append(f"[{idx}] {url} - {title}")
+        else:
+            lines.append(f"[{idx}] {title}")
+    return "\n".join(lines)
+
+
 def summarize_first_round(batch: list) -> str:
     """将首轮检索结果摘要，供 LLM 分析"""
     parts = []
@@ -120,14 +136,21 @@ Output 1-2 follow-up search queries:"""
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_content},
     ]
+    # print("messages",messages)
     response = client.chat.completions.create(
         model=API_CONFIG["model"],
         messages=messages,
         temperature=0.3,
-        max_tokens=256,
+        max_tokens=2048,
         extra_body={"enable_thinking": False},
     )
-    text = response.choices[0].message.content.strip()
+    content = response.choices[0].message.content
+    print("content",content)
+    if content is None:
+        # Some endpoints return None for content when thinking mode is active;
+        # fall back to reasoning_content if available, otherwise skip follow-ups.
+        content = getattr(response.choices[0].message, "reasoning_content", None) or ""
+    text = content.strip()
     raw = [q.strip() for q in text.split("\n") if q.strip()][:2]
     queries = []
     for q in raw:
@@ -192,6 +215,10 @@ No retrieved documents were found. Please write a report based on your knowledge
             extra_body={"enable_thinking": False},
         )
         generated_article = response.choices[0].message.content
+
+        # 自动在文章末尾追加参考文献章节
+        if research and "## 参考文献" not in generated_article[-500:]:
+            generated_article = generated_article + build_references_section(research)
 
         return {
             "id": task_id,
