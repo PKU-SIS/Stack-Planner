@@ -80,6 +80,27 @@ class MemoryStack:
         """将记忆栈转换为字典列表，便于序列化存储"""
         return [entry.to_dict() for entry in self.stack]
 
+    def load_from_dict(self, payload: Any) -> None:
+        """Restore a checkpointed stack from JSON text or primitive rows."""
+        if payload is None or payload == "":
+            self.stack = []
+            return
+        rows = json.loads(payload) if isinstance(payload, str) else payload
+        if not isinstance(rows, list):
+            raise ValueError("memory stack checkpoint must be a list")
+        restored = []
+        for row in rows:
+            if not isinstance(row, dict):
+                raise ValueError("memory stack entry must be an object")
+            restored.append(MemoryStackEntry(
+                timestamp=str(row["timestamp"]),
+                action=str(row["action"]),
+                agent_type=row.get("agent_type"),
+                content=row.get("content", ""),
+                result=row.get("result"),
+            ))
+        self.stack = restored[-self.max_size :]
+
     def size(self) -> int:
         """获取当前记忆栈大小"""
         return len(self.stack)

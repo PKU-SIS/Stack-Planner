@@ -94,20 +94,23 @@ def _create_llm_use_conf(llm_type: LLMType, conf: Dict[str, Any]) -> BaseChatMod
     if "azure_endpoint" in merged_conf or os.getenv("AZURE_OPENAI_ENDPOINT"):
         return AzureChatOpenAI(**merged_conf)
 
+    def configure_qwen_thinking(enabled: bool) -> None:
+        """Set both DashScope and vLLM/Qwen-compatible thinking controls."""
+        extra_body = dict(merged_conf.get("extra_body") or {})
+        extra_body["enable_thinking"] = enabled
+        chat_template_kwargs = dict(extra_body.get("chat_template_kwargs") or {})
+        chat_template_kwargs["enable_thinking"] = enabled
+        extra_body["chat_template_kwargs"] = chat_template_kwargs
+        merged_conf["extra_body"] = extra_body
+
     # Check if base_url is dashscope endpoint
     if "base_url" in merged_conf and "dashscope." in merged_conf["base_url"]:
-        if llm_type == "reasoning":
-            merged_conf["extra_body"] = {"enable_thinking": True}
-        else:
-            merged_conf["extra_body"] = {"enable_thinking": False}
+        configure_qwen_thinking(llm_type == "reasoning")
         return ChatDashscope(**merged_conf)
 
     # 这个地方如果是自己的 api
     elif "base_url" in merged_conf and is_private_or_ip_url(merged_conf["base_url"]):
-        if llm_type == "reasoning":
-            merged_conf["extra_body"] = {"enable_thinking": True}
-        else:
-            merged_conf["extra_body"] = {"enable_thinking": False}
+        configure_qwen_thinking(llm_type == "reasoning")
         return ChatDashscope(**merged_conf)
 
     if llm_type == "reasoning":

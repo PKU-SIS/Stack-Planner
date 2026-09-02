@@ -1,5 +1,7 @@
 from enum import Enum
 
+from src.graph.task_profiles import get_task_graph_profile
+
 
 class SubAgentType(Enum):
     """子Agent类型枚举，定义可委派的专项Agent"""
@@ -7,6 +9,7 @@ class SubAgentType(Enum):
     RESEARCHER = "researcher"  # 负责信息检索与研究
     CODER = "coder"  # 负责代码生成与执行
     REPORTER = "reporter"  # 负责结果整理与报告生成
+    CONCLUSION = "conclusion"  # 负责数学任务的简洁结论生成
     # PLANNER = "replanner"  # 负责复杂任务分解和规划
     OUTLINE = "outline"  # 负责复杂任务分解和规划
 
@@ -19,6 +22,7 @@ from src.graph.sp_nodes import (
     researcher_web_node,
     reporter_xxqg_node,
     reporter_factstruct_node,
+    conclusion_node,
     outline_node,
     outline_node_factstruct,
     sp_planner_node,
@@ -42,7 +46,6 @@ sub_agents_sp = [
         "node": reporter_node,
     },
 ]
-
 
 sub_agents_sp_xxqg = [
     # {
@@ -114,6 +117,20 @@ def get_sub_agents_by_global_type(graph_type: str):
     Returns:
         List[Dict]: 包含子Agent名称、节点和描述的列表
     """
+    task_profile = get_task_graph_profile(graph_type)
+    if task_profile is not None:
+        node_by_name = {
+            SubAgentType.CODER.value: coder_node,
+            SubAgentType.CONCLUSION.value: conclusion_node,
+        }
+        return [
+            {
+                "name": name,
+                "description": description,
+                "node": node_by_name[name],
+            }
+            for name, description in task_profile.sub_agents
+        ]
     if graph_type == "sp" or graph_type == "base":
         return sub_agents_sp
     elif graph_type == "sp_xxqg":

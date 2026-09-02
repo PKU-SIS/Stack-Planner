@@ -33,6 +33,9 @@ def _check_agents_initialized():
 async def central_agent_node(state: State, config: RunnableConfig) -> Command:
     """中枢Agent节点处理函数，触发决策流程"""
     _check_agents_initialized()
+    checkpointed_stack = state.get("memory_stack")
+    if checkpointed_stack:
+        global_central_agent.memory_stack.load_from_dict(checkpointed_stack)
     logger.info("中枢Agent节点激活")
 
     # 执行决策流程
@@ -56,6 +59,12 @@ def reporter_node(state: State, config: RunnableConfig) -> Command:
     """报告Agent节点处理函数"""
     _check_agents_initialized()
     return sub_agent_manager.execute_reporter(state, config)
+
+
+def conclusion_node(state: State, config: RunnableConfig) -> Command:
+    """Generate the terminal answer for the math-specific graph."""
+    _check_agents_initialized()
+    return sub_agent_manager.execute_math_conclusion(state, config)
 
 
 def reporter_xxqg_node(state: State, config: RunnableConfig) -> Command:

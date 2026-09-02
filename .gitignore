@@ -21,6 +21,7 @@ logs/
 references_logs/
 reports/
 reports2/
+/results/
 /node_modules
 
 # Environment variables

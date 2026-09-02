@@ -6,6 +6,7 @@ from datetime import datetime
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import Command, interrupt
+from langgraph.graph import END
 from sentence_transformers import CrossEncoder
 
 from src.agents.CoderAgent import CoderAgent
@@ -385,8 +386,68 @@ class SubAgentManager:
                 ],
                 "current_node": "central_agent",
                 "memory_stack": self.central_agent.memory_stack.to_dict(),
+                "observations": result_observations,
             },
             goto="central_agent",
+        )
+
+    @timed_step("execute_math_conclusion")
+    def execute_math_conclusion(self, state: State, config: RunnableConfig) -> Command:
+        """Verify the current math intent and emit a concise terminal answer."""
+        logger.info("数学结论Agent开始执行...")
+        context = state.get("delegation_context", {})
+        observations = state.get("observations", [])
+        evidence = "\n\n".join(str(item) for item in observations) or "No tool evidence."
+        exact_history = "\n\n".join(
+            f"[{getattr(message, 'type', 'message')}] {getattr(message, 'content', message)}"
+            for message in state.get("messages", [])
+        )
+        prompt = f"""You are the terminal conclusion agent for a math task.
+
+Read the evolving user conversation chronologically. Later corrections replace
+the corresponding earlier facts, and explicitly withdrawn temporary requests
+are inactive. Independently verify the arithmetic; the central agent's draft
+reasoning is only a hint and may be wrong.
+
+Return a concise solution, not a report: show only the necessary calculation
+steps and put the final answer in \\boxed{{}}. Obey any final active output
+constraint from the conversation.
+
+## Evolving conversation
+{exact_history}
+
+## Central draft
+{context.get('decision_reasoning', '')}
+
+## Tool evidence
+{evidence}
+"""
+        try:
+            llm = get_llm_by_type(AGENT_LLM_MAP.get("conclusion", "basic"))
+            response = llm.invoke([HumanMessage(content=prompt)])
+            final_answer = response.content
+            if not isinstance(final_answer, str) or not final_answer.strip():
+                raise RuntimeError("empty conclusion")
+        except Exception as error:
+            logger.error(f"数学结论Agent执行失败: {error}")
+            final_answer = f"Conclusion generation failed: {error}"
+
+        self.central_agent.memory_stack.push(MemoryStackEntry(
+            timestamp=datetime.now().isoformat(),
+            action="delegate",
+            agent_type="conclusion",
+            content="生成并核验数学最终结论",
+            result={"final_report": final_answer},
+        ))
+        logger.info(f"数学结论生成完成: {final_answer}")
+        return Command(
+            update={
+                "messages": [AIMessage(content=final_answer, name="conclusion")],
+                "final_report": final_answer,
+                "current_node": "conclusion",
+                "memory_stack": self.central_agent.memory_stack.to_dict(),
+            },
+            goto=END,
         )
 
     @timed_step("execute_reporter")

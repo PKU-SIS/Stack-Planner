@@ -360,7 +360,16 @@ async def _astream_workflow_generator_sp(
     from src.graph.sp_nodes import init_agents
 
     init_agents(graph_format)
-    if graph_format == "sp_xxqg":
+    from src.graph.task_profiles import get_task_graph_profile
+
+    task_profile = get_task_graph_profile(graph_format)
+    if (
+        graph_format == "sp_xxqg"
+        or (
+            task_profile is not None
+            and task_profile.supports_checkpoint_memory
+        )
+    ):
         graph = get_graph_by_format(graph_format, with_memory=True)
     else:
         graph = get_graph_by_format(graph_format, with_memory=False)

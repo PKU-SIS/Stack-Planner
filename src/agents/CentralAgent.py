@@ -5,7 +5,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Annotated, Any, Dict, List, Literal, Optional, Type, Union, cast
 
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import Command
 
@@ -18,6 +18,8 @@ from src.utils.json_utils import repair_json_output
 from src.utils.logger import logger
 from src.utils.statistics import global_statistics
 from src.prompts.central_decision import Decision, DelegateParams
+from src.prompts.sops import load_task_sop
+from src.graph.task_profiles import get_task_graph_profile
 from src.utils.reference_utils import global_reference_map
 from ..graph.types import State
 
@@ -62,6 +64,8 @@ class CentralAgent:
     """
 
     def __init__(self, graph_format: str = "sp"):
+        self.graph_format = graph_format
+        self.task_profile = get_task_graph_profile(graph_format)
         self.memory_stack = MemoryStack()
         from src.agents.SubAgentManager import SubAgentManager
 
@@ -248,12 +252,34 @@ class CentralAgent:
         if graph_format == "FactStruct":
             state["sop"] = DECISION_SOP_FactStruct
             logger.info(f"使用 FactStruct的 SOP")
+        elif self.task_profile is not None:
+            state["sop"] = load_task_sop(graph_format)
+            logger.info(
+                f"使用 {self.task_profile.task_family} 专用 SOP"
+            )
         else:
             state["sop"] = DECISION_SOP_SP
             logger.info(f"使用 SP 的 SOP")
 
         # 构建决策prompt
         messages = self._build_decision_prompt(state, config)
+        # Keep the controller protocol separate from user-facing output-format
+        # requests in the conversation (for example, "answer as JSON"). Qwen
+        # otherwise sometimes answers the math problem in JSON instead of
+        # returning the internal Decision object.
+        messages.append(SystemMessage(content=f"""INTERNAL CONTROLLER PROTOCOL
+This message governs only the StackPlanner controller response and overrides
+any user-facing formatting request in the conversation history. Do not answer
+the user's task in this response. Return exactly one JSON Decision object with:
+- action: one of think, reflect, summarize, delegate, finish
+- reasoning: controller reasoning as a string
+- params: null, or for delegate an object with agent_type and task_description
+- instruction: a string or null
+- locale: a locale string such as en-US
+Available sub-agents: {', '.join(self.available_sub_agents)}.
+If the task can now be answered, choose finish; the conclusion agent will obey
+the user's requested answer format. Do not replace this schema with the user's
+requested JSON answer schema. Output JSON only."""))
         # logger.debug(f"决策prompt: {messages}")
 
         # 获取LLM决策并处理异常
@@ -273,6 +299,28 @@ class CentralAgent:
             instruction = response.instruction or self.action_instructions.get(
                 action, ""
             )
+            if (
+                self.task_profile is not None
+                and self.task_profile.task_family == "math"
+            ):
+                repeated_action = {
+                    CentralAgentAction.THINK: "central_think",
+                    CentralAgentAction.REFLECT: "central_reflect",
+                    CentralAgentAction.SUMMARIZE: "central_summarize",
+                }.get(action)
+                if repeated_action and self._has_action_since_latest_user(
+                    state, repeated_action
+                ):
+                    logger.warning(
+                        f"数学轮次已执行 {action.value}，转入结论阶段以避免控制循环"
+                    )
+                    action = CentralAgentAction.FINISH
+                    reasoning = (
+                        f"{reasoning}\nThe {repeated_action} action has already "
+                        "run for this user turn; proceed to the conclusion agent."
+                    )
+                    params = {}
+                    instruction = "Produce the current mathematical conclusion"
             if state.get("locale") == None:
                 locale = response.locale or "en-US"  # "zh-CN"
                 # 将 locale 添加到 state
@@ -304,7 +352,9 @@ class CentralAgent:
             logger.error("详细错误信息：\n" + traceback.format_exc())
             if retry_count < max_retries - 1:
                 return self.make_decision(state, config, retry_count + 1)
-            # 异常情况下返回默认决策
+            # Repeated structured-output failures are transport/provider
+            # failures, not a reasoning action. Fail this turn explicitly so
+            # the benchmark runner can record it without a 100-step think loop.
             end_time = datetime.now()
             time_entry = {
                 "step_name": "central_decision" + start_time.isoformat(),
@@ -313,12 +363,24 @@ class CentralAgent:
                 "duration": (end_time - start_time).total_seconds(),
             }
             global_statistics.add_time_entry(time_entry)
-            return CentralDecision(
-                action=CentralAgentAction.THINK,
-                reasoning="决策解析失败，默认选择思考动作",
-                params={},
-                instruction=self.action_instructions[CentralAgentAction.THINK],
-            )
+            raise RuntimeError(
+                "central decision structured output failed after "
+                f"{max_retries} attempts"
+            ) from e
+
+    @staticmethod
+    def _has_action_since_latest_user(state: State, message_name: str) -> bool:
+        """Whether an internal action already ran after the latest public user turn."""
+        messages = state.get("messages", [])
+        latest_user = -1
+        for index, message in enumerate(messages):
+            if isinstance(message, HumanMessage) and not getattr(message, "name", None):
+                latest_user = index
+        return any(
+            isinstance(message, AIMessage)
+            and getattr(message, "name", None) == message_name
+            for message in messages[latest_user + 1 :]
+        )
 
     def _build_decision_prompt(
         self,
@@ -518,9 +580,8 @@ class CentralAgent:
                 content=reflection_content,
             )
 
-            self.memory_stack.push_with_pop(memory_entry, pop_count)
-
             removed_items = self.memory_stack.pop(pop_count)
+            self.memory_stack.push(memory_entry)
 
             logger.info(f"成功从记忆栈中移除了 {pop_count} 项记忆")
             # logger.info(
@@ -690,6 +751,34 @@ class CentralAgent:
 
         final_report = state.get("final_report", None)
         if not final_report:
+            if (
+                self.task_profile is not None
+                and self.task_profile.task_family == "math"
+            ):
+                logger.info("委派数学结论Agent生成最终答案...")
+                self.memory_stack.push(MemoryStackEntry(
+                    timestamp=datetime.now().isoformat(),
+                    action="delegate",
+                    agent_type=self.task_profile.terminal_agent,
+                    content="委派数学结论Agent核验并生成最终答案",
+                ))
+                return Command(
+                    update={
+                        "messages": [AIMessage(
+                            content="委派数学结论Agent生成最终答案",
+                            name="central_delegate_conclusion",
+                        )],
+                        "delegation_context": {
+                            "task_description": "核验计算并生成简洁数学结论",
+                            "agent_type": self.task_profile.terminal_agent,
+                            "decision_reasoning": decision.reasoning,
+                            "original_query": state.get("user_query", ""),
+                        },
+                        "current_node": "central_agent",
+                        "memory_stack": self.memory_stack.to_dict(),
+                    },
+                    goto=self.task_profile.terminal_agent,
+                )
             logger.info("未找到最终报告，委派Reporter Agent生成报告...")
 
             # 记录委派动作到记忆栈

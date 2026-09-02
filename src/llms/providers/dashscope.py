@@ -182,6 +182,14 @@ class ChatDashscope(ChatOpenAI):
     preservation of reasoning content during both streaming and non-streaming operations.
     """
 
+    def _thinking_is_disabled(self) -> bool:
+        extra_body = self.extra_body or {}
+        template_kwargs = extra_body.get("chat_template_kwargs") or {}
+        return (
+            extra_body.get("enable_thinking") is False
+            or template_kwargs.get("enable_thinking") is False
+        )
+
     def _create_chat_result(
         self,
         response: Union[Dict[str, Any], openai.BaseModel],
@@ -198,24 +206,26 @@ class ChatDashscope(ChatOpenAI):
         """
         chat_result = super()._create_chat_result(response, generation_info)
 
-        # Only process BaseModel responses (not raw dict responses)
-        if not isinstance(response, openai.BaseModel):
-            return chat_result
-
         # Extract reasoning content if available
         try:
-            if (
-                hasattr(response, "choices")
-                and response.choices
-                and hasattr(response.choices[0], "message")
-                and hasattr(response.choices[0].message, "reasoning_content")
-            ):
+            if isinstance(response, dict):
+                choices = response.get("choices") or []
+                raw_message = choices[0].get("message", {}) if choices else {}
+                reasoning_content = raw_message.get("reasoning_content")
+            else:
+                choices = getattr(response, "choices", None) or []
+                raw_message = getattr(choices[0], "message", None) if choices else None
+                reasoning_content = getattr(raw_message, "reasoning_content", None)
 
-                reasoning_content = response.choices[0].message.reasoning_content
-                if reasoning_content and chat_result.generations:
-                    chat_result.generations[0].message.additional_kwargs[
-                        "reasoning_content"
-                    ] = reasoning_content
+            if reasoning_content and chat_result.generations:
+                message = chat_result.generations[0].message
+                message.additional_kwargs["reasoning_content"] = reasoning_content
+                # Some Qwen/vLLM gateways put the final non-thinking answer in
+                # reasoning_content and leave content empty. Promote it only
+                # when this client explicitly disabled thinking.
+                if self._thinking_is_disabled() and not message.content:
+                    message.content = reasoning_content
+                    message.additional_kwargs["promoted_reasoning_content"] = True
         except (IndexError, AttributeError):
             # If reasoning content extraction fails, continue without it
             pass

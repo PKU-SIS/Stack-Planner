@@ -1,1 +1,0 @@
-python evaluation/Test_SP/test_factstruct.py --skip_exist --infer_num 10 --input_path evaluation/DeepConsult/datasets/DeepConsult/queries.jsonl --output_path evaluation/DeepConsult/datasets/DeepConsult/SP.jsonl

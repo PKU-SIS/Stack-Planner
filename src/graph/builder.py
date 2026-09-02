@@ -28,6 +28,8 @@ from .sp_nodes import (
     outline_node_factstruct,
     reporter_factstruct_node,
 )
+from .math_graph import build_math_graph
+from .task_profiles import get_task_graph_profile
 from src.agents.sub_agent_registry import get_sub_agents_by_global_type
 
 
@@ -282,6 +284,8 @@ def _build_graph_FactStruct():
 # 生成最终的多Agent系统图
 base_graph = build_graph()
 sp_graph = build_multi_agent_graph()
+sp_math_graph_builder = build_math_graph()
+sp_math_graph = sp_math_graph_builder.compile()
 xxqg_graph = build_graph_xxqg()
 
 
@@ -302,6 +306,7 @@ FactStruct_graph_builder = _build_graph_FactStruct()
 _GRAPH_BUILDER_CLASS_MAP = {
     "base": None,
     "sp": None,
+    "sp_math": sp_math_graph_builder,
     "xxqg": None,
     "sp_test": sp_test_graph_builder,
     "sp_xxqg": sp_xxqg_graph_builder,
@@ -311,6 +316,7 @@ _GRAPH_BUILDER_CLASS_MAP = {
 _GRAPH_CLASS_MAP = {
     "base": {"memory": None, "no_memory": base_graph},
     "sp": {"memory": None, "no_memory": sp_graph},
+    "sp_math": {"memory": None, "no_memory": sp_math_graph},
     "xxqg": {"memory": None, "no_memory": xxqg_graph},
     "sp_test": {"memory": None, "no_memory": sp_test_graph_builder.compile()},
     "sp_xxqg": {"memory": None, "no_memory": sp_xxqg_graph_builder.compile()},
@@ -334,10 +340,15 @@ def get_graph_by_format(graph_format: str, with_memory: bool = False):
 
     graph_builder = _GRAPH_BUILDER_CLASS_MAP[graph_format]
     if with_memory:
+        task_profile = get_task_graph_profile(graph_format)
         if (
             graph_format != "sp_xxqg"
             and graph_format != "FactStruct"
             and graph_format != "sp_test"
+            and not (
+                task_profile is not None
+                and task_profile.supports_checkpoint_memory
+            )
         ):
             logger.error("Memory功能目前仅支持 sp_xxqg 图格式")
             return _GRAPH_CLASS_MAP[graph_format]["no_memory"]

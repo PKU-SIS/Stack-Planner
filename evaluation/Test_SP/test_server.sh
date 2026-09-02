@@ -1,1 +1,0 @@
-python server.py --port 8513 --log-level debug
