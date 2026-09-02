@@ -29,6 +29,7 @@ from .sp_nodes import (
     reporter_factstruct_node,
 )
 from .math_graph import build_math_graph
+from .sql_graph import build_sql_graph
 from .task_profiles import get_task_graph_profile
 from src.agents.sub_agent_registry import get_sub_agents_by_global_type
 
@@ -286,6 +287,8 @@ base_graph = build_graph()
 sp_graph = build_multi_agent_graph()
 sp_math_graph_builder = build_math_graph()
 sp_math_graph = sp_math_graph_builder.compile()
+sp_sql_graph_builder = build_sql_graph()
+sp_sql_graph = sp_sql_graph_builder.compile()
 xxqg_graph = build_graph_xxqg()
 
 
@@ -307,6 +310,7 @@ _GRAPH_BUILDER_CLASS_MAP = {
     "base": None,
     "sp": None,
     "sp_math": sp_math_graph_builder,
+    "sp_sql": sp_sql_graph_builder,
     "xxqg": None,
     "sp_test": sp_test_graph_builder,
     "sp_xxqg": sp_xxqg_graph_builder,
@@ -317,6 +321,7 @@ _GRAPH_CLASS_MAP = {
     "base": {"memory": None, "no_memory": base_graph},
     "sp": {"memory": None, "no_memory": sp_graph},
     "sp_math": {"memory": None, "no_memory": sp_math_graph},
+    "sp_sql": {"memory": None, "no_memory": sp_sql_graph},
     "xxqg": {"memory": None, "no_memory": xxqg_graph},
     "sp_test": {"memory": None, "no_memory": sp_test_graph_builder.compile()},
     "sp_xxqg": {"memory": None, "no_memory": sp_xxqg_graph_builder.compile()},

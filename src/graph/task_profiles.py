@@ -1,8 +1,8 @@
 """Task-specific StackPlanner profiles.
 
 Each task family owns its graph, SOP, allowed sub-agents, terminal agent, and
-memory policy. Only Math is registered for now; SQL, Search, Research, and Code
-should be added as separate profiles rather than branches inside Math.
+memory policy. Task families use separate profiles rather than branching inside
+another task's graph.
 """
 
 from __future__ import annotations
@@ -31,9 +31,21 @@ MATH_PROFILE = TaskGraphProfile(
     terminal_agent="conclusion",
 )
 
+SQL_PROFILE = TaskGraphProfile(
+    graph_format="sp_sql",
+    task_family="sql",
+    sop_name="sql",
+    sub_agents=(
+        ("sql_agent", "Draft a SQLite query from the active conversational intent"),
+        ("sql_conclusion", "Return the final query in one SQL code block"),
+    ),
+    terminal_agent="sql_conclusion",
+)
+
 
 TASK_GRAPH_PROFILES = {
     MATH_PROFILE.graph_format: MATH_PROFILE,
+    SQL_PROFILE.graph_format: SQL_PROFILE,
 }
 
 

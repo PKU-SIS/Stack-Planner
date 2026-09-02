@@ -217,7 +217,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--graph-format",
         default="sp_math",
-        choices=("sp_math", "sp", "sp_xxqg"),
+        choices=("sp_math", "sp_sql", "sp", "sp_xxqg"),
     )
     parser.add_argument("--max-plan-iterations", type=int, default=1)
     parser.add_argument("--max-step-num", type=int, default=3)

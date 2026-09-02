@@ -67,6 +67,18 @@ def conclusion_node(state: State, config: RunnableConfig) -> Command:
     return sub_agent_manager.execute_math_conclusion(state, config)
 
 
+def sql_agent_node(state: State, config: RunnableConfig) -> Command:
+    """Draft a query for the SQL-specific graph without database access."""
+    _check_agents_initialized()
+    return sub_agent_manager.execute_sql_agent(state, config)
+
+
+def sql_conclusion_node(state: State, config: RunnableConfig) -> Command:
+    """Emit the terminal SQL-only response."""
+    _check_agents_initialized()
+    return sub_agent_manager.execute_sql_conclusion(state, config)
+
+
 def reporter_xxqg_node(state: State, config: RunnableConfig) -> Command:
     """报告Agent节点处理函数"""
     _check_agents_initialized()

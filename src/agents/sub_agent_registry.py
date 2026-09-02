@@ -10,6 +10,8 @@ class SubAgentType(Enum):
     CODER = "coder"  # 负责代码生成与执行
     REPORTER = "reporter"  # 负责结果整理与报告生成
     CONCLUSION = "conclusion"  # 负责数学任务的简洁结论生成
+    SQL_AGENT = "sql_agent"
+    SQL_CONCLUSION = "sql_conclusion"
     # PLANNER = "replanner"  # 负责复杂任务分解和规划
     OUTLINE = "outline"  # 负责复杂任务分解和规划
 
@@ -23,6 +25,8 @@ from src.graph.sp_nodes import (
     reporter_xxqg_node,
     reporter_factstruct_node,
     conclusion_node,
+    sql_agent_node,
+    sql_conclusion_node,
     outline_node,
     outline_node_factstruct,
     sp_planner_node,
@@ -122,6 +126,8 @@ def get_sub_agents_by_global_type(graph_type: str):
         node_by_name = {
             SubAgentType.CODER.value: coder_node,
             SubAgentType.CONCLUSION.value: conclusion_node,
+            SubAgentType.SQL_AGENT.value: sql_agent_node,
+            SubAgentType.SQL_CONCLUSION.value: sql_conclusion_node,
         }
         return [
             {

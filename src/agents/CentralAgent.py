@@ -321,6 +321,66 @@ requested JSON answer schema. Output JSON only."""))
                     )
                     params = {}
                     instruction = "Produce the current mathematical conclusion"
+            elif (
+                self.task_profile is not None
+                and self.task_profile.task_family == "sql"
+            ):
+                repeated_action = {
+                    CentralAgentAction.THINK: "central_think",
+                    CentralAgentAction.REFLECT: "central_reflect",
+                    CentralAgentAction.SUMMARIZE: "central_summarize",
+                }.get(action)
+                if repeated_action and self._has_action_since_latest_user(
+                    state, repeated_action
+                ):
+                    logger.warning(
+                        f"SQL轮次已执行 {action.value}，转入SQL生成阶段"
+                    )
+                    action = CentralAgentAction.FINISH
+                    reasoning = (
+                        f"{reasoning}\nThe {repeated_action} action has already "
+                        "run for this user turn; proceed to SQL generation."
+                    )
+                    params = {}
+                    instruction = "Produce the active SQL query"
+
+                has_sql_draft = self._has_named_message_since_latest_user(
+                    state, "sql_agent"
+                )
+                delegated_agent = getattr(params, "agent_type", None)
+                if action == CentralAgentAction.FINISH and not has_sql_draft:
+                    logger.info("SQL轮次尚未生成候选查询，先委派 SQL Agent")
+                    action = CentralAgentAction.DELEGATE
+                    params = DelegateParams(
+                        agent_type="sql_agent",
+                        task_description=(
+                            "Derive the single SQLite query active after the latest "
+                            "user turn from the full chronological conversation."
+                        ),
+                    )
+                    instruction = "Draft the active SQL query"
+                elif (
+                    action == CentralAgentAction.DELEGATE
+                    and not has_sql_draft
+                    and delegated_agent != "sql_agent"
+                ):
+                    logger.info("SQL轮次必须先委派 SQL Agent，修正委派目标")
+                    params = DelegateParams(
+                        agent_type="sql_agent",
+                        task_description=(
+                            "Derive the single SQLite query active after the latest "
+                            "user turn from the full chronological conversation."
+                        ),
+                    )
+                    instruction = "Draft the active SQL query"
+                elif (
+                    action == CentralAgentAction.DELEGATE
+                    and has_sql_draft
+                ):
+                    logger.info("SQL轮次已有候选查询，转入结论阶段")
+                    action = CentralAgentAction.FINISH
+                    params = {}
+                    instruction = "Check and emit the active SQL query"
             if state.get("locale") == None:
                 locale = response.locale or "en-US"  # "zh-CN"
                 # 将 locale 添加到 state
@@ -379,6 +439,19 @@ requested JSON answer schema. Output JSON only."""))
         return any(
             isinstance(message, AIMessage)
             and getattr(message, "name", None) == message_name
+            for message in messages[latest_user + 1 :]
+        )
+
+    @staticmethod
+    def _has_named_message_since_latest_user(state: State, message_name: str) -> bool:
+        """Whether any internal node emitted a named message this user turn."""
+        messages = state.get("messages", [])
+        latest_user = -1
+        for index, message in enumerate(messages):
+            if isinstance(message, HumanMessage) and not getattr(message, "name", None):
+                latest_user = index
+        return any(
+            getattr(message, "name", None) == message_name
             for message in messages[latest_user + 1 :]
         )
 
@@ -770,6 +843,34 @@ requested JSON answer schema. Output JSON only."""))
                         )],
                         "delegation_context": {
                             "task_description": "核验计算并生成简洁数学结论",
+                            "agent_type": self.task_profile.terminal_agent,
+                            "decision_reasoning": decision.reasoning,
+                            "original_query": state.get("user_query", ""),
+                        },
+                        "current_node": "central_agent",
+                        "memory_stack": self.memory_stack.to_dict(),
+                    },
+                    goto=self.task_profile.terminal_agent,
+                )
+            if (
+                self.task_profile is not None
+                and self.task_profile.task_family == "sql"
+            ):
+                logger.info("委派 SQL Conclusion Agent生成最终查询...")
+                self.memory_stack.push(MemoryStackEntry(
+                    timestamp=datetime.now().isoformat(),
+                    action="delegate",
+                    agent_type=self.task_profile.terminal_agent,
+                    content="委派 SQL Conclusion Agent核验并生成最终查询",
+                ))
+                return Command(
+                    update={
+                        "messages": [AIMessage(
+                            content="委派 SQL Conclusion Agent生成最终查询",
+                            name="central_delegate_sql_conclusion",
+                        )],
+                        "delegation_context": {
+                            "task_description": "核验当前意图并输出一条只读 SQLite 查询",
                             "agent_type": self.task_profile.terminal_agent,
                             "decision_reasoning": decision.reasoning,
                             "original_query": state.get("user_query", ""),

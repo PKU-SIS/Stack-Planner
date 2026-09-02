@@ -55,6 +55,46 @@ from src.factstruct import (
 )
 
 
+_SQL_BLOCK_RE = re.compile(r"```(?:sql)?\s*(.*?)```", re.IGNORECASE | re.DOTALL)
+_SQL_QUERY_RE = re.compile(r"\b(?:SELECT|WITH)\b.*", re.IGNORECASE | re.DOTALL)
+
+
+def _render_message_history(state: State) -> str:
+    return "\n\n".join(
+        f"[{getattr(message, 'type', 'message')}] "
+        f"{getattr(message, 'content', message)}"
+        for message in state.get("messages", [])
+    )
+
+
+def _extract_read_only_sql(text: str) -> str:
+    """Extract one read-only query from an agent response."""
+    if not isinstance(text, str) or not text.strip():
+        raise RuntimeError("SQL agent returned an empty response")
+    block = _SQL_BLOCK_RE.search(text)
+    candidate = block.group(1).strip() if block else text.strip()
+    query = _SQL_QUERY_RE.search(candidate)
+    if query is None:
+        raise RuntimeError("SQL agent response contains no SELECT or WITH query")
+    sql = query.group(0).strip().rstrip(";").strip()
+    syntax_only = re.sub(
+        r"'(?:''|[^'])*'|\"(?:\"\"|[^\"])*\"|`[^`]*`|\[[^]]*\]",
+        "",
+        sql,
+    )
+    if re.search(
+        r"\b(?:INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|ATTACH|DETACH)\b",
+        syntax_only,
+        re.IGNORECASE,
+    ):
+        raise RuntimeError("SQL agent produced a non-read-only statement")
+    return sql
+
+
+def _format_sql_block(text: str) -> str:
+    return f"```sql\n{_extract_read_only_sql(text)}\n```"
+
+
 # -------------------------
 # 子Agent管理模块
 # TODO: check sub-agent bugs
@@ -445,6 +485,106 @@ constraint from the conversation.
                 "messages": [AIMessage(content=final_answer, name="conclusion")],
                 "final_report": final_answer,
                 "current_node": "conclusion",
+                "memory_stack": self.central_agent.memory_stack.to_dict(),
+            },
+            goto=END,
+        )
+
+    @timed_step("execute_sql_agent")
+    def execute_sql_agent(self, state: State, config: RunnableConfig) -> Command:
+        """Draft SQLite from conversational context without database access."""
+        logger.info("SQL Agent开始执行...")
+        context = state.get("delegation_context", {})
+        prompt = f"""You are the SQL drafting agent in a multi-turn workflow.
+
+Derive the query from the evolving conversation in chronological order. Later
+corrections replace the corresponding earlier clauses. Explicitly withdrawn
+temporary constraints are inactive. Use only schema and sample rows present in
+the public conversation. You have no database execution access and must not
+assume gold SQL, labels, hidden rows, or evaluator metadata.
+
+Check selected columns, tables, join path, filters and values, grouping,
+aggregation, HAVING, ordering, LIMIT, aliases, and distinctness. Add no inferred
+status/non-null filters or DISTINCT: preserve duplicates and NULLs unless the
+active request explicitly says otherwise. Return exactly one read-only SQLite
+SELECT or WITH query in a fenced sql block, with no prose.
+
+## Central assignment
+{context.get('task_description', '')}
+
+## Evolving conversation
+{_render_message_history(state)}
+"""
+        llm = get_llm_by_type(AGENT_LLM_MAP.get("sql_agent", "basic"))
+        response = llm.invoke([HumanMessage(content=prompt)])
+        candidate = _format_sql_block(response.content)
+
+        self.central_agent.memory_stack.push(MemoryStackEntry(
+            timestamp=datetime.now().isoformat(),
+            action="delegate",
+            agent_type="sql_agent",
+            content=f"SQL draft task: {context.get('task_description', '')}",
+            result={"sql_candidate": candidate},
+        ))
+        logger.info(f"SQL draft生成完成: {candidate}")
+        return Command(
+            update={
+                "messages": [HumanMessage(content=candidate, name="sql_agent")],
+                "observations": state.get("observations", []) + [candidate],
+                "current_node": "central_agent",
+                "memory_stack": self.central_agent.memory_stack.to_dict(),
+            },
+            goto="central_agent",
+        )
+
+    @timed_step("execute_sql_conclusion")
+    def execute_sql_conclusion(self, state: State, config: RunnableConfig) -> Command:
+        """Check the latest draft against active intent and emit SQL only."""
+        logger.info("SQL Conclusion Agent开始执行...")
+        candidate = next(
+            (
+                message.content
+                for message in reversed(state.get("messages", []))
+                if getattr(message, "name", None) == "sql_agent"
+            ),
+            "No SQL draft was produced.",
+        )
+        prompt = f"""You are the terminal SQL conclusion agent.
+
+Read the evolving public conversation chronologically and produce the query
+active after the latest turn. Later corrections replace matching earlier
+clauses; withdrawn temporary requirements are inactive. Independently check the
+latest draft against the user-provided schema and active intent. Do not use or
+invent database results, gold SQL, labels, or evaluator metadata. Remove any
+unrequested status/non-null filters or DISTINCT; preserve duplicates and NULLs
+unless the active request explicitly says otherwise.
+
+Return exactly one read-only SQLite SELECT or WITH query in one ```sql code
+block. Return no explanation, alternatives, comments, or result rows.
+
+## Evolving conversation and internal routing trace
+{_render_message_history(state)}
+
+## Latest SQL draft
+{candidate}
+"""
+        llm = get_llm_by_type(AGENT_LLM_MAP.get("sql_conclusion", "basic"))
+        response = llm.invoke([HumanMessage(content=prompt)])
+        final_answer = _format_sql_block(response.content)
+
+        self.central_agent.memory_stack.push(MemoryStackEntry(
+            timestamp=datetime.now().isoformat(),
+            action="delegate",
+            agent_type="sql_conclusion",
+            content="Check active SQL intent and emit the terminal query",
+            result={"final_report": final_answer},
+        ))
+        logger.info(f"SQL结论生成完成: {final_answer}")
+        return Command(
+            update={
+                "messages": [AIMessage(content=final_answer, name="sql_conclusion")],
+                "final_report": final_answer,
+                "current_node": "sql_conclusion",
                 "memory_stack": self.central_agent.memory_stack.to_dict(),
             },
             goto=END,

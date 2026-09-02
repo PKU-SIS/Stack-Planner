@@ -50,3 +50,26 @@ Pass an explicit run directory to resume the same JSONL after interruption:
 bash evaluation/multiturn/run_math20_qwen32b.sh \
   results/sp_math_online_qwen32b_math20_<timestamp>
 ```
+
+## SQL
+
+`sp_sql` is a separate graph with only `central_agent`, `sql_agent`, and
+`sql_conclusion`. Each public turn runs the complete graph using the same
+checkpoint thread. The agent sees only the raw conversation, including schema
+and sample rows supplied in the first turn. It does not receive database paths,
+execution results, gold SQL, labels, or per-turn evaluator metadata.
+
+Run a frozen SQL cases file with Qwen3-32B:
+
+```bash
+bash evaluation/multiturn/run_sql_qwen32b.sh /path/to/operator_cases.json
+```
+
+Set `MAX_CASES=3` for a smoke run. SQL evaluation uses EvolvingIntent's official
+execution/semantic evaluator for every turn and for the final turn. A cases file
+is intentionally required because no SQL set has yet been frozen under
+`review_samples/sql/`; `.tmp` build artifacts are not silently selected.
+
+The runner uses the `sp` environment for StackPlanner and the existing
+`evolvingintent-bird` environment for SQL evaluation. Override these paths with
+`PYTHON` and `EVAL_PYTHON` when needed.
