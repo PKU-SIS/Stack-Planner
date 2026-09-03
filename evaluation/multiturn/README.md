@@ -73,3 +73,15 @@ is intentionally required because no SQL set has yet been frozen under
 The runner uses the `sp` environment for StackPlanner and the existing
 `evolvingintent-bird` environment for SQL evaluation. Override these paths with
 `PYTHON` and `EVAL_PYTHON` when needed.
+
+## Math-100
+
+Run the frozen 100-case Math set with Qwen3-32B:
+
+```bash
+bash evaluation/multiturn/run_math100_qwen32b.sh
+```
+
+The script runs every turn through `sp_math`, resumes completed task IDs, and
+retries incomplete/API-failed cases for up to three passes. Override
+`MAX_PASSES`, `RETRY_DELAY_SECONDS`, or `RUN_DIR` when needed.
